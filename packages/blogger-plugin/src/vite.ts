@@ -386,7 +386,8 @@ function useServerMiddleware(server: ViteDevServer | PreviewServer, ctx: Blogger
         !url ||
         !req.method ||
         !['GET', 'HEAD'].includes(req.method.toUpperCase()) ||
-        htmlPathnames.includes(url.pathname.replace(/\/+/g, '/'))
+        htmlPathnames.includes(url.pathname.replace(/\/+/g, '/')) ||
+        url.pathname.startsWith('/@')
       ) {
         next();
         return;
