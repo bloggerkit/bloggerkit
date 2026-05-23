@@ -1,5 +1,11 @@
 # blogger-plugin
 
+## 0.0.12
+
+### Patch Changes
+
+- [#13](https://github.com/bloggerkit/blogger-plugin/pull/13) [`b98705e`](https://github.com/bloggerkit/blogger-plugin/commit/b98705e31997005f4c5f14fda85209800c94ae54) Thanks [@kumardeo](https://github.com/kumardeo)! - Ignore Vite internal requests (/@fs/, /@vite/, etc.) in middleware
+
 ## 0.0.11
 
 ### Patch Changes
