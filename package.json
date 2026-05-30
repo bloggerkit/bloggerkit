@@ -1,5 +1,5 @@
 {
-  "name": "@blogger-plugin/root",
+  "name": "@bloggerkit/root",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.1.1",

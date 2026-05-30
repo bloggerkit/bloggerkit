@@ -1,6 +1,6 @@
-# Blogger Plugin
+# Blogger Kit
 
-Build modern web apps for Blogger blogs.
+Modern web app tooling for Blogger blogs.
 
 ## Packages
 

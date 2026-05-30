@@ -2,17 +2,19 @@ packages:
   - packages/**
   - examples/**
 
-allowBuilds:
-  "@swc/core": true
-  esbuild: true
-
-catalog:
-  "@types/node": "^25.7.0"
-  tsdown: "^0.22.0"
-
 engineStrict: true
 strictPeerDependencies: true
 shellEmulator: true
 preferWorkspacePackages: true
 linkWorkspacePackages: true
 enablePrePostScripts: true
+
+minimumReleaseAge: 1440
+
+catalog:
+  "@types/node": "^25.7.0"
+  tsdown: "^0.22.0"
+
+allowBuilds:
+  "@swc/core": true
+  esbuild: true
