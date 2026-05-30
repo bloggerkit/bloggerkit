@@ -12,8 +12,10 @@ enablePrePostScripts: true
 minimumReleaseAge: 1440
 
 catalog:
-  "@types/node": "^25.7.0"
-  tsdown: "^0.22.0"
+  "@types/node": "^25.9.1"
+  tsdown: "^0.22.1"
+  vite: "^8.0.14"
+  vitest: "^4.1.7"
 
 allowBuilds:
   "@swc/core": true

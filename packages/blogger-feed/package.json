@@ -1,0 +1,63 @@
+{
+  "name": "blogger-feed",
+  "version": "0.0.0",
+  "description": "A Blogger feed API client.",
+  "keywords": [
+    "blogger",
+    "blogger-feed"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Deo Kumar",
+    "email": "deo@fineshopdesign.com",
+    "url": "https://github.com/kumardeo"
+  },
+  "homepage": "https://github.com/bloggerkit/bloggerkit/tree/main/packages/blogger-feed#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bloggerkit/bloggerkit",
+    "directory": "packages/blogger-feed"
+  },
+  "bugs": {
+    "url": "https://github.com/bloggerkit/bloggerkit/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "lint": "biome lint ./src",
+    "check": "biome check ./src",
+    "check:types": "tsc --noEmit",
+    "build": "NODE_ENV=production tsdown",
+    "dev": "NODE_ENV=development tsdown --watch",
+    "playground": "vite ./playground",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "devDependencies": {
+    "tsdown": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}
