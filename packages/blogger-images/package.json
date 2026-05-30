@@ -1,0 +1,61 @@
+{
+  "name": "blogger-images",
+  "version": "0.0.0",
+  "description": "Transform Blogger or Google images URL",
+  "keywords": [
+    "blogger-image",
+    "google-image"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Deo Kumar",
+    "email": "deo@fineshopdesign.com",
+    "url": "https://github.com/kumardeo"
+  },
+  "homepage": "https://github.com/bloggerkit/bloggerkit/tree/main/packages/blogger-images#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bloggerkit/bloggerkit",
+    "directory": "packages/blogger-images"
+  },
+  "bugs": {
+    "url": "https://github.com/bloggerkit/bloggerkit/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "lint": "biome lint ./src",
+    "check": "biome check ./src",
+    "check:types": "tsc --noEmit",
+    "build": "NODE_ENV=production tsdown",
+    "dev": "NODE_ENV=development tsdown --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "devDependencies": {
+    "tsdown": "catalog:",
+    "vitest": "catalog:"
+  }
+}

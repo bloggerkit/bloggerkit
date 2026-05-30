@@ -131,6 +131,15 @@ importers:
         specifier: 'catalog:'
         version: 4.1.7(@types/node@25.9.1)(vite@8.0.14(@types/node@25.9.1)(jiti@2.6.1))
 
+  packages/blogger-images:
+    devDependencies:
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.1(typescript@6.0.3)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.7(@types/node@25.9.1)(vite@8.0.14(@types/node@25.9.1)(jiti@2.6.1))
+
   packages/blogger-plugin:
     dependencies:
       minify-xml:
