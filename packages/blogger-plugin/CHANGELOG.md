@@ -1,5 +1,11 @@
 # blogger-plugin
 
+## 0.0.13
+
+### Patch Changes
+
+- [#17](https://github.com/bloggerkit/bloggerkit/pull/17) [`ca7d3dd`](https://github.com/bloggerkit/bloggerkit/commit/ca7d3dded3cc69eb65654dbbc88937863fd52660) Thanks [@kumardeo](https://github.com/kumardeo)! - refactor: replace sync fs operations with fs/promises
+
 ## 0.0.12
 
 ### Patch Changes
