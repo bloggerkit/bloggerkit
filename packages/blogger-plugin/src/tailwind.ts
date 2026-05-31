@@ -1,76 +1,92 @@
-import * as fs from 'node:fs';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { getTailwindClasses } from 'tailwindcss-iso';
+import { fsExists } from './utils';
 
-const TAILWIND_CACHE_FILE = '.tailwind-classes.json';
+export class TailwindCache {
+  private readonly _file: string;
 
-function readFileContent(file: string): string | null {
-  if (!fs.existsSync(file)) {
-    return null;
-  }
-  return fs.readFileSync(file, 'utf-8');
-}
-
-function writeFileContent(file: string, content: string): boolean {
-  const dirname = path.dirname(file);
-
-  if (!fs.existsSync(dirname)) {
-    fs.mkdirSync(dirname, { recursive: true });
+  constructor(file: string) {
+    this._file = path.resolve(file);
   }
 
-  const current = readFileContent(file);
-  if (current === null || content !== current) {
-    fs.writeFileSync(file, content, 'utf8');
+  private async _readContent(): Promise<string | null> {
+    const exists = await fsExists(this._file);
+
+    if (!exists) {
+      return null;
+    }
+
+    return fs.readFile(this._file, 'utf-8');
+  }
+
+  private async _writeContent(content: string): Promise<boolean> {
+    const dirname = path.dirname(this._file);
+
+    const exists = await fsExists(dirname);
+
+    if (!exists) {
+      await fs.mkdir(dirname, { recursive: true });
+    }
+
+    const current = await this._readContent();
+    if (current === null || content !== current) {
+      await fs.writeFile(this._file, content, 'utf8');
+      return true;
+    }
+
+    return false;
+  }
+
+  async remove(): Promise<boolean> {
+    const exists = await fsExists(this._file);
+
+    if (!exists) {
+      return false;
+    }
+
+    await fs.rm(this._file);
     return true;
   }
 
-  return false;
-}
+  async read(): Promise<string[] | null> {
+    const content = await this._readContent();
 
-function removeFile(file: string): boolean {
-  if (!fs.existsSync(file)) {
-    return false;
+    if (!content) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(content);
+    } catch {
+      return null;
+    }
   }
-  fs.rmSync(file);
-  return true;
-}
 
-function getTailwindCacheFile(root: string): string {
-  return path.resolve(root, TAILWIND_CACHE_FILE);
-}
-
-export function readTailwindCache(root: string): string[] | null {
-  const content = readFileContent(getTailwindCacheFile(root));
-  if (!content) {
-    return null;
+  async write(classes: string[]): Promise<boolean> {
+    const content = JSON.stringify(classes, null, 2);
+    return this._writeContent(content);
   }
-  try {
-    return JSON.parse(content);
-  } catch {
-    return null;
+
+  async clear(): Promise<void> {
+    await this.write([]);
   }
-}
 
-export function writeTailwindCache(root: string, classes: string[]): { updated: boolean; content: string } {
-  const file = getTailwindCacheFile(root);
-  const content = JSON.stringify(classes, null, 2);
-  const updated = writeFileContent(file, content);
-  return { updated, content };
-}
+  async add(classes: string[]): Promise<string[]> {
+    const existing = (await this.read()) ?? [];
+    const merged = [...new Set([...existing, ...classes])];
 
-export function clearTailwindCache(root: string): void {
-  writeTailwindCache(root, []);
-}
+    await this.write(merged);
 
-export function removeTailwindCache(root: string): void {
-  removeFile(getTailwindCacheFile(root));
-}
+    return merged;
+  }
 
-export async function updateTailwindCache(root: string, content: string, extension?: string): Promise<void> {
-  const classes = (await getTailwindClasses({
-    content,
-    extension,
-  })) as string[];
+  async update(content: string, extension?: string): Promise<string[]> {
+    const classes = (await getTailwindClasses({
+      content,
+      extension,
+    })) as string[];
 
-  writeTailwindCache(root, [...new Set([...(readTailwindCache(root) ?? []), ...classes])]);
+    return this.add(classes);
+  }
 }

@@ -1,11 +1,20 @@
-import * as fs from 'node:fs';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { type MinifyOptions, minify } from 'minify-xml';
 import type { MinimalPluginContextWithoutEnvironment, Plugin, PreviewServer, ResolvedConfig, UserConfig, ViteDevServer } from 'vite';
-import { DEFAULT_MODULES, DEFAULT_TEMPLATES, VITE_BUNDLER_KEY } from './constants';
-import { clearTailwindCache, removeTailwindCache, updateTailwindCache } from './tailwind';
+import {
+  DEFAULT_MODULE_FILES,
+  DEFAULT_TEMPLATE_FILES,
+  TAILWIND_CACHE_FILE,
+  TEMPLATE_MINIFIED_OUT_FILE,
+  TEMPLATE_OUT_FILE,
+  TEMPLATE_TAGS_OUT_FILE,
+  VITE_BUNDLER_KEY,
+} from './constants';
+import { TailwindCache } from './tailwind';
 import {
   errorHtml,
+  fsExists,
   getBloggerPluginHeadComment,
   getRequestUrl,
   isTailwindPlugin,
@@ -33,9 +42,9 @@ export default function blogger(userOptions: BloggerPluginOptions): Plugin {
 
   return {
     name: '@blogger-plugin/vite',
-    config(config) {
+    async config(config) {
       // resolve plugin context
-      ctx.resolve(config);
+      await ctx.resolve(config);
 
       // modify vite config
       config.build ||= {};
@@ -49,24 +58,32 @@ export default function blogger(userOptions: BloggerPluginOptions): Plugin {
         bundlerOptions.input = ctx.input;
       }
 
-      const originalTemplateXmlContent = fs.readFileSync(ctx.template, 'utf8');
       // remove contents between comments from template
+      const originalTemplateXmlContent = await fs.readFile(ctx.template, 'utf8');
       const modifiedTemplateXmlContent = replaceBloggerPluginHeadComment(replaceBloggerPluginHeadComment(originalTemplateXmlContent, ''), '', true);
 
-      fs.writeFileSync(ctx.template, modifiedTemplateXmlContent, 'utf-8');
+      await fs.writeFile(ctx.template, modifiedTemplateXmlContent, 'utf-8');
     },
-    configResolved(config) {
+    async configResolved(config) {
       ctx.viteConfig = config;
-      ctx.tailwind = config.plugins.flat(Number.POSITIVE_INFINITY).some((plugin) => isTailwindPlugin(plugin));
 
-      if (ctx.tailwind) {
-        clearTailwindCache(ctx.root);
+      const hasTailwindPlugin = config.plugins.flat(Number.POSITIVE_INFINITY).some((plugin) => isTailwindPlugin(plugin));
+      const tailwindCache = new TailwindCache(path.resolve(ctx.root, TAILWIND_CACHE_FILE));
+
+      if (hasTailwindPlugin) {
+        ctx.tailwindCache = tailwindCache;
+      }
+
+      if (hasTailwindPlugin) {
+        await tailwindCache.clear();
 
         if (config.command === 'build') {
-          updateTailwindCache(ctx.root, unescapeHTML(fs.readFileSync(ctx.template, 'utf-8'), true), 'xml');
+          const xmlContent = await fs.readFile(ctx.template, 'utf-8');
+          const unescapedXmlContent = unescapeHTML(xmlContent, true);
+          await tailwindCache.update(unescapedXmlContent, 'xml');
         }
       } else {
-        removeTailwindCache(ctx.root);
+        await tailwindCache.remove();
       }
     },
     resolveId(source) {
@@ -101,7 +118,7 @@ Without this, your assets may fail to load in Blogger.
 ----------------------`);
       }
     },
-    writeBundle(_, bundle) {
+    async writeBundle(_, bundle) {
       if (!(ctx.input in bundle)) {
         return;
       }
@@ -153,10 +170,10 @@ Without this, your assets may fail to load in Blogger.
         // trim overall
         .trim();
 
-      const originalTemplateXmlContent = fs.readFileSync(ctx.template, 'utf8');
+      const originalTemplateXmlContent = await fs.readFile(ctx.template, 'utf8');
       const modifiedTemplateXmlContent = replaceBloggerPluginHeadComment(originalTemplateXmlContent, headContent, true);
 
-      fs.writeFileSync(path.resolve(ctx.viteConfig.build.outDir, 'template.xml'), modifiedTemplateXmlContent);
+      await fs.writeFile(path.resolve(ctx.viteConfig.build.outDir, TEMPLATE_OUT_FILE), modifiedTemplateXmlContent);
 
       if (ctx.xml.tags) {
         const templateTagsXmlContent = `<?xml version="1.0" encoding="UTF-8" ?>
@@ -181,7 +198,7 @@ Without this, your assets may fail to load in Blogger.
   <!--body:beforeend:end-->
 </body>
 </html>`;
-        fs.writeFileSync(path.resolve(ctx.viteConfig.build.outDir, 'template.tags.xml'), templateTagsXmlContent);
+        await fs.writeFile(path.resolve(ctx.viteConfig.build.outDir, TEMPLATE_TAGS_OUT_FILE), templateTagsXmlContent);
       }
 
       if (ctx.xml.minify) {
@@ -192,13 +209,16 @@ Without this, your assets may fail to load in Blogger.
           removeUnusedDefaultNamespace: false,
           ignoreCData: true,
         } as MinifyOptions);
-        fs.writeFileSync(path.resolve(ctx.viteConfig.build.outDir, 'template.min.xml'), minifiedTemplateXmlContent);
+        await fs.writeFile(path.resolve(ctx.viteConfig.build.outDir, TEMPLATE_MINIFIED_OUT_FILE), minifiedTemplateXmlContent);
       }
     },
-    closeBundle() {
+    async closeBundle() {
       const htmlDir = path.resolve(ctx.viteConfig.build.outDir, 'virtual:blogger-plugin');
-      if (fs.existsSync(htmlDir)) {
-        fs.rmSync(htmlDir, { recursive: true });
+
+      const exists = await fsExists(htmlDir);
+
+      if (exists) {
+        await fs.rm(htmlDir, { recursive: true });
       }
     },
     configureServer(server) {
@@ -220,7 +240,7 @@ class BloggerPluginContext {
   proxyBlog: URL;
   xml: Required<XMLOptions>;
   viteConfig: ResolvedConfig;
-  tailwind: boolean;
+  tailwindCache: TailwindCache | null;
   input: string;
   html: string;
   headTags: string[];
@@ -257,13 +277,13 @@ class BloggerPluginContext {
       minify: options.xml?.minify ?? false,
     };
     this.viteConfig = undefined as unknown as ResolvedConfig;
-    this.tailwind = false;
+    this.tailwindCache = null;
     this.input = undefined as unknown as string;
     this.headTags = [];
     this.html = undefined as unknown as string;
   }
 
-  resolve(config: UserConfig) {
+  async resolve(config: UserConfig): Promise<void> {
     this.root = config.root ? path.resolve(config.root) : this.root;
 
     if (this.options.modules) {
@@ -273,16 +293,16 @@ class BloggerPluginContext {
         if (this.modules.includes(modulePath)) {
           continue;
         }
-        if (fs.existsSync(modulePath)) {
+        if (await fsExists(modulePath)) {
           this.modules.push(modulePath);
         } else {
           throw new Error(`The path provided at modules[${i}] does not exist: ${modulePath}`);
         }
       }
     } else {
-      for (const module of DEFAULT_MODULES) {
+      for (const module of DEFAULT_MODULE_FILES) {
         const modulePath = path.resolve(this.root, module);
-        if (fs.existsSync(modulePath)) {
+        if (await fsExists(modulePath)) {
           this.modules.push(modulePath);
           break;
         }
@@ -296,7 +316,7 @@ class BloggerPluginContext {
         if (this.styles.includes(stylePath)) {
           continue;
         }
-        if (fs.existsSync(stylePath)) {
+        if (await fsExists(stylePath)) {
           this.styles.push(stylePath);
         } else {
           throw new Error(`The path provided at styles[${i}] does not exist: ${stylePath}`);
@@ -306,15 +326,15 @@ class BloggerPluginContext {
 
     if (this.options.template) {
       const templatePath = path.resolve(this.root, this.options.template);
-      if (fs.existsSync(templatePath)) {
+      if (await fsExists(templatePath)) {
         this.template = templatePath;
       } else {
         throw new Error(`Provided template file does not exist: ${templatePath}`);
       }
     } else {
-      for (const file of DEFAULT_TEMPLATES) {
+      for (const file of DEFAULT_TEMPLATE_FILES) {
         const fullPath = path.resolve(this.root, file);
-        if (fs.existsSync(fullPath)) {
+        if (await fsExists(fullPath)) {
           this.template = fullPath;
           break;
         }
@@ -323,7 +343,7 @@ class BloggerPluginContext {
       if (!this.template) {
         throw new Error(
           'No template file found.\n' +
-            `Tried: ${DEFAULT_TEMPLATES.join(', ')}\n` +
+            `Tried: ${[...DEFAULT_TEMPLATE_FILES].join(', ')}\n` +
             '👉 Tip: You can pass a custom template as shown:\n' +
             '   blogger({ template: "src/my-template.xml" })',
         );
@@ -352,7 +372,11 @@ class BloggerPluginContext {
   }
 }
 
-function useServerMiddleware(server: ViteDevServer | PreviewServer, ctx: BloggerPluginContext, _this: MinimalPluginContextWithoutEnvironment) {
+function useServerMiddleware(
+  server: ViteDevServer | PreviewServer,
+  ctx: BloggerPluginContext,
+  _this: MinimalPluginContextWithoutEnvironment,
+): () => void {
   const input = ctx.viteConfig.build[VITE_BUNDLER_KEY].input;
   const htmlPathnames: string[] = [];
   for (const entry of Array.isArray(input) ? input : typeof input === 'object' ? Object.values(input) : typeof input === 'string' ? [input] : []) {
@@ -451,8 +475,8 @@ function useServerMiddleware(server: ViteDevServer | PreviewServer, ctx: Blogger
 
           const secFetchDestHeader = req.headers['sec-fetch-dest'];
           const secFetchModeHeader = req.headers['sec-fetch-mode'];
-          if (ctx.tailwind && isViteDevServer(server) && secFetchDestHeader === 'document' && secFetchModeHeader === 'navigate') {
-            await updateTailwindCache(ctx.root, htmlTemplateContent, 'html');
+          if (ctx.tailwindCache && isViteDevServer(server) && secFetchDestHeader === 'document' && secFetchModeHeader === 'navigate') {
+            await ctx.tailwindCache.update(htmlTemplateContent, 'html');
           }
 
           htmlTemplateContent = replaceHost(htmlTemplateContent, proxyUrl.host, url.host, url.protocol);
@@ -466,7 +490,7 @@ function useServerMiddleware(server: ViteDevServer | PreviewServer, ctx: Blogger
 
             res.end(template);
           } else {
-            const xmlTemplateContent = fs.readFileSync(path.resolve(ctx.viteConfig.build.outDir, 'template.xml'), 'utf8');
+            const xmlTemplateContent = await fs.readFile(path.resolve(ctx.viteConfig.build.outDir, TEMPLATE_OUT_FILE), 'utf8');
 
             const htmlTagsStr = getBloggerPluginHeadComment(xmlTemplateContent, true);
 

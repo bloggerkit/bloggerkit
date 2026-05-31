@@ -1,5 +1,13 @@
+import * as fs from 'node:fs/promises';
 import type { IncomingHttpHeaders, OutgoingHttpHeaders } from 'node:http';
 import type { Connect } from 'vite';
+
+export async function fsExists(path: string): Promise<boolean> {
+  return fs.access(path, fs.constants.F_OK).then(
+    () => true,
+    () => false,
+  );
+}
 
 export function escapeHtml(str: string): string {
   if (str === '') return '';
@@ -48,7 +56,7 @@ export function unescapeHTML(str: string, xml = false): string {
 }
 
 export function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
 }
 
 export function toWebHeaders(httpHeaders: IncomingHttpHeaders | OutgoingHttpHeaders): Headers {
