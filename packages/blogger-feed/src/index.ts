@@ -1,20 +1,20 @@
 export { BloggerFeed, type BloggerFeedOptions } from './blogger-feed';
 
 export {
-  SDKError,
-  SDKRequestError,
+	SDKError,
+	SDKRequestError,
 } from './errors';
 
 export { parseFeed } from './feed-parser';
 export type { WithPagination } from './methods';
 export type {
-  Author,
-  Blog,
-  Comment,
-  Extended,
-  Feed,
-  Geo,
-  Link,
-  Post,
-  PostCommentInfo,
+	Author,
+	Blog,
+	Comment,
+	Extended,
+	Feed,
+	Geo,
+	Link,
+	Post,
+	PostCommentInfo,
 } from './types';

@@ -3,137 +3,169 @@ import type { IncomingHttpHeaders, OutgoingHttpHeaders } from 'node:http';
 import type { Connect } from 'vite';
 
 export async function fsExists(path: string): Promise<boolean> {
-  return fs.access(path, fs.constants.F_OK).then(
-    () => true,
-    () => false,
-  );
+	return fs.access(path, fs.constants.F_OK).then(
+		() => true,
+		() => false,
+	);
 }
 
 export function escapeHtml(str: string): string {
-  if (str === '') return '';
-  return str.replace(/[&<>"'`]/g, (ch) => {
-    switch (ch) {
-      case '&':
-        return '&amp;';
-      case '<':
-        return '&lt;';
-      case '>':
-        return '&gt;';
-      case '"':
-        return '&quot;';
-      case "'":
-        return '&#39;';
-      case '`':
-        return '&#96;';
-      default:
-        return ch;
-    }
-  });
+	if (str === '') return '';
+	return str.replace(/[&<>"'`]/g, (ch) => {
+		switch (ch) {
+			case '&':
+				return '&amp;';
+			case '<':
+				return '&lt;';
+			case '>':
+				return '&gt;';
+			case '"':
+				return '&quot;';
+			case "'":
+				return '&#39;';
+			case '`':
+				return '&#96;';
+			default:
+				return ch;
+		}
+	});
 }
 
 export function unescapeHTML(str: string, xml = false): string {
-  if (str === '') return '';
-  const regex = new RegExp(`&(?:amp|lt|gt|quot${xml ? '|apos' : ''}|#39|#96);`, 'g');
-  return str.replace(regex, (entity) => {
-    switch (entity) {
-      case '&amp;':
-        return '&';
-      case '&lt;':
-        return '<';
-      case '&gt;':
-        return '>';
-      case '&quot;':
-        return '"';
-      case '&apos;':
-      case '&#39;':
-        return "'";
-      case '&#96;':
-        return '`';
-      default:
-        return entity;
-    }
-  });
+	if (str === '') return '';
+	const regex = new RegExp(
+		`&(?:amp|lt|gt|quot${xml ? '|apos' : ''}|#39|#96);`,
+		'g',
+	);
+	return str.replace(regex, (entity) => {
+		switch (entity) {
+			case '&amp;':
+				return '&';
+			case '&lt;':
+				return '<';
+			case '&gt;':
+				return '>';
+			case '&quot;':
+				return '"';
+			case '&apos;':
+			case '&#39;':
+				return "'";
+			case '&#96;':
+				return '`';
+			default:
+				return entity;
+		}
+	});
 }
 
 export function escapeRegex(str: string): string {
-  return str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
+	return str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
 }
 
-export function toWebHeaders(httpHeaders: IncomingHttpHeaders | OutgoingHttpHeaders): Headers {
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(httpHeaders)) {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        headers.append(name, item);
-      }
-    } else {
-      headers.set(name, String(value ?? ''));
-    }
-  }
-  return headers;
+export function toWebHeaders(
+	httpHeaders: IncomingHttpHeaders | OutgoingHttpHeaders,
+): Headers {
+	const headers = new Headers();
+	for (const [name, value] of Object.entries(httpHeaders)) {
+		if (Array.isArray(value)) {
+			for (const item of value) {
+				headers.append(name, item);
+			}
+		} else {
+			headers.set(name, String(value ?? ''));
+		}
+	}
+	return headers;
 }
 
-export const BLOGGER_PLUGIN_HEAD_COMMENT_REGEX = /(<!--blogger-plugin:head:begin-->)([\s\S]*?)(<!--blogger-plugin:head:end-->)/;
+export const BLOGGER_PLUGIN_HEAD_COMMENT_REGEX =
+	/(<!--blogger-plugin:head:begin-->)([\s\S]*?)(<!--blogger-plugin:head:end-->)/;
 
 export const BLOGGER_PLUGIN_HEAD_BCOMMENT_REGEX =
-  /(<b:comment><!--blogger-plugin:head:begin--><\/b:comment>)([\s\S]*?)(<b:comment><!--blogger-plugin:head:end--><\/b:comment>)/;
+	/(<b:comment><!--blogger-plugin:head:begin--><\/b:comment>)([\s\S]*?)(<b:comment><!--blogger-plugin:head:end--><\/b:comment>)/;
 
-export function replaceBloggerPluginHeadComment(input: string, replacement: string, bcomment = false): string {
-  if (bcomment) {
-    return input.replace(BLOGGER_PLUGIN_HEAD_BCOMMENT_REGEX, (_, start: string, _content: string, end: string) => `${start}${replacement}${end}`);
-  }
-  return input.replace(BLOGGER_PLUGIN_HEAD_COMMENT_REGEX, (_, start: string, _content: string, end: string) => `${start}${replacement}${end}`);
+export function replaceBloggerPluginHeadComment(
+	input: string,
+	replacement: string,
+	bcomment = false,
+): string {
+	if (bcomment) {
+		return input.replace(
+			BLOGGER_PLUGIN_HEAD_BCOMMENT_REGEX,
+			(_, start: string, _content: string, end: string) =>
+				`${start}${replacement}${end}`,
+		);
+	}
+	return input.replace(
+		BLOGGER_PLUGIN_HEAD_COMMENT_REGEX,
+		(_, start: string, _content: string, end: string) =>
+			`${start}${replacement}${end}`,
+	);
 }
 
-export function getBloggerPluginHeadComment(input: string, bcomment = false): string | null {
-  if (bcomment) {
-    return input.match(BLOGGER_PLUGIN_HEAD_BCOMMENT_REGEX)?.[2] ?? null;
-  }
-  return input.match(BLOGGER_PLUGIN_HEAD_COMMENT_REGEX)?.[2] ?? null;
+export function getBloggerPluginHeadComment(
+	input: string,
+	bcomment = false,
+): string | null {
+	if (bcomment) {
+		return input.match(BLOGGER_PLUGIN_HEAD_BCOMMENT_REGEX)?.[2] ?? null;
+	}
+	return input.match(BLOGGER_PLUGIN_HEAD_COMMENT_REGEX)?.[2] ?? null;
 }
 
-export function replaceHost(input: string, oldHost: string, newHost: string, newProtocol?: string): string {
-  return input.replace(
-    new RegExp(`(https?:)?(\\/\\/|\\\\/\\\\/)${escapeRegex(oldHost)}`, 'g'),
-    (_, protocol, slash) => `${protocol ? (newProtocol ?? protocol) : ''}${slash ?? ''}${newHost}`,
-  );
+export function replaceHost(
+	input: string,
+	oldHost: string,
+	newHost: string,
+	newProtocol?: string,
+): string {
+	return input.replace(
+		new RegExp(`(https?:)?(\\/\\/|\\\\/\\\\/)${escapeRegex(oldHost)}`, 'g'),
+		(_, protocol, slash) =>
+			`${protocol ? (newProtocol ?? protocol) : ''}${slash ?? ''}${newHost}`,
+	);
 }
 
 export function getRequestUrl(req: Connect.IncomingMessage): URL | null {
-  const xForwardedProtoHeader = req.headers['x-forwarded-proto'];
-  const xForwardedHostHeader = req.headers['x-forwarded-host'];
-  const hostHeader = req.headers.host;
+	const xForwardedProtoHeader = req.headers['x-forwarded-proto'];
+	const xForwardedHostHeader = req.headers['x-forwarded-host'];
+	const hostHeader = req.headers.host;
 
-  const protocol = Array.isArray(xForwardedProtoHeader)
-    ? xForwardedProtoHeader[0]
-    : (xForwardedProtoHeader ?? (req.socket && 'encrypted' in req.socket && req.socket.encrypted ? 'https' : 'http'));
-  const host = Array.isArray(xForwardedHostHeader) ? xForwardedHostHeader[0] : (xForwardedHostHeader ?? hostHeader);
+	const protocol = Array.isArray(xForwardedProtoHeader)
+		? xForwardedProtoHeader[0]
+		: (xForwardedProtoHeader ??
+			(req.socket && 'encrypted' in req.socket && req.socket.encrypted
+				? 'https'
+				: 'http'));
+	const host = Array.isArray(xForwardedHostHeader)
+		? xForwardedHostHeader[0]
+		: (xForwardedHostHeader ?? hostHeader);
 
-  if (host && req.originalUrl) {
-    return new URL(`${protocol}://${host}${req.originalUrl}`);
-  }
+	if (host && req.originalUrl) {
+		return new URL(`${protocol}://${host}${req.originalUrl}`);
+	}
 
-  return null;
+	return null;
 }
 
 export function isBloggerPath(path: string): boolean {
-  return (
-    path === '/' ||
-    path === '/search' ||
-    /^\/search\/label(\/[^/]+)?\/?$/.test(path) ||
-    /^p\/.+\.html$/.test(path) ||
-    /^\/\d{4}\/\d{2}(\/?|\/[^/\s]+\.html)$/.test(path)
-  );
+	return (
+		path === '/' ||
+		path === '/search' ||
+		/^\/search\/label(\/[^/]+)?\/?$/.test(path) ||
+		/^p\/.+\.html$/.test(path) ||
+		/^\/\d{4}\/\d{2}(\/?|\/[^/\s]+\.html)$/.test(path)
+	);
 }
 
 const TAILWIND_PLUGIN_NAMES = new Set(['@tailwindcss/vite:scan']);
 
 export function isTailwindPlugin(plugin: { name: string }): boolean {
-  return TAILWIND_PLUGIN_NAMES.has(plugin.name);
+	return TAILWIND_PLUGIN_NAMES.has(plugin.name);
 }
 
 export function errorHtml(reqUrl: string): string {
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html>
 
 <head>
