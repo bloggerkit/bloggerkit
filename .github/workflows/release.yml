@@ -37,8 +37,8 @@ jobs:
 
       - name: Setup Git user
         run: |
-          git config user.name "fineshopbot"
-          git config user.email "167434392+fineshopbot@users.noreply.github.com"
+          git config user.name "ahrixbot"
+          git config user.email "173301862+ahrixbot@users.noreply.github.com"
 
       - name: Use pnpm
         uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
@@ -61,6 +61,6 @@ jobs:
           version: pnpm version-packages
           setupGitUser: false
         env:
-          GITHUB_TOKEN: ${{ secrets.FINESHOP_BOT_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.AHRIX_BOT_GITHUB_TOKEN }}
           # Use OIDC for npm authentication instead of NPM_TOKEN
           NPM_TOKEN: "" # https://github.com/changesets/changesets/issues/1152#issuecomment-3190884868
