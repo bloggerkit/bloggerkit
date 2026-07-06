@@ -1,26 +1,41 @@
-# dependencies
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Local configuration
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.zed/*
+!.zed/settings.json
+.idea/*
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Dependencies
 node_modules/
 
-# production
-build/
+# Build output
 dist/
+dist-ssr/
+build/
+.output/
+.svelte-kit/
 
-# turbo
-.turbo
+# Cache
+.turbo/
 
-# misc
-.DS_Store
-
-# cert
-.cert
-
-# debugs
-npm-debug.log
-yarn-error.log
-yarn.lock
-.yarnclean
-
-# private
-*.log
-*.key
-*.crt
+# Generated project files
+.tailwind-classes.json
