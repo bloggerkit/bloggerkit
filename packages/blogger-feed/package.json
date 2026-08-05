@@ -1,6 +1,6 @@
 {
   "name": "blogger-feed",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A Blogger feed API client.",
   "keywords": [
     "blogger",
