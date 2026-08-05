@@ -2,7 +2,7 @@
   "name": "@bloggerkit/root",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.10.0",
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
     "format": "biome format --max-diagnostics=100 --log-kind=compact",
     "format:all": "pnpm run format .",
@@ -14,7 +14,7 @@
     "check:all": "biome check --max-diagnostics=150 --log-kind=compact .",
     "check:fix": "pnpm run check:all --write",
     "check:types": "FORCE_COLOR=1 turbo check:types",
-    "upgrade": "pnpm dlx npm-check-updates --root --workspaces --peer --interactive --format group",
+    "upgrade": "pnpm dlx npm-check-updates@latest --workspaces --root --peer --interactive --format group,cooldown,time",
     "build": "FORCE_COLOR=1 turbo run build --filter='./packages/*'",
     "dev": "FORCE_COLOR=1 turbo run dev --concurrency=24 --filter='./packages/*'",
     "test": "FORCE_COLOR=1 turbo run test",
@@ -22,11 +22,11 @@
     "version-packages": "changeset version && pnpm run format:write"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.2",
+    "@biomejs/biome": "^2.5.7",
     "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^2.31.1",
     "@changesets/config": "^3.1.4",
-    "turbo": "^2.10.3",
+    "turbo": "^2.10.8",
     "typescript": "^6.0.3"
   }
 }

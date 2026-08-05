@@ -1,14 +1,14 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-	entry: ['src/index.ts', 'src/vite.ts'],
-	format: ['esm', 'cjs'],
+	entry: ['src/**/*.{js,ts}', '!src/**/*.{test,spec}.{js,ts}'],
+	format: 'esm',
 	platform: 'node',
 	target: 'es2018',
 	sourcemap: true,
 	unbundle: true,
 	deps: {
-		skipNodeModulesBundle: true,
+		neverBundle: true,
 	},
 	dts: true,
 	clean: true,
