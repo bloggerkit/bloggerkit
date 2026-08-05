@@ -120,10 +120,23 @@ describe('BloggerImage', () => {
 	test('throws for invalid numeric, boolean, and hex inputs', () => {
 		const image = new BloggerImage(supportedUrl);
 
-		expect(() => image.width('100' as any)).toThrow(TypeError);
-		expect(() => image.noUpscaling('true' as any)).toThrow(Error);
-		expect(() => image.color('ff0000' as any)).toThrow(
-			"Argument 'value' must be of format '0xrrggbb' or '0xaarrggbb'",
+		expect(() => image.width('100' as any)).toThrow(
+			new TypeError(
+				"Argument 'value' must be of type number | null, but got: string",
+			),
+		);
+		expect(() => image.noUpscaling('true' as any)).toThrow(
+			new TypeError(
+				"Argument 'value' must be of type boolean, but got: string",
+			),
+		);
+		expect(() => image.color(100 as any)).toThrow(
+			new TypeError(
+				"Argument 'value' must be of type string | null, but got: number",
+			),
+		);
+		expect(() => image.color('ff0000')).toThrow(
+			"Expected argument 'value' to be of format '0xrrggbb' or '0xaarrggbb', but got: 'ff0000'",
 		);
 	});
 
@@ -132,7 +145,7 @@ describe('BloggerImage', () => {
 
 		expect(image.isSupported()).toBe(false);
 		expect(() => image.url()).toThrow(
-			'Image url is not supported for transformations',
+			'Image URL is not supported for transformations',
 		);
 	});
 
@@ -186,6 +199,10 @@ describe('BloggerImage', () => {
 	});
 
 	test('uses the constructor error path for invalid url types', () => {
-		expect(() => new BloggerImage(123 as any)).toThrow(TypeError);
+		expect(() => new BloggerImage(123 as any)).toThrow(
+			new TypeError(
+				"Argument 'url' must be of type string | URL, but got: number",
+			),
+		);
 	});
 });

@@ -1,45 +1,163 @@
-export const HOSTS_REGEX =
-	/^(https?:)?(\/\/)[^/]*.(googleusercontent\.com|blogspot\.com)/;
+export const HOST_REGEX =
+	/^(?:https?:)?\/\/((?:[^/]+\.)?(?:blogspot\.com|googleusercontent\.com))(?:\/|$)/;
+
 export const PARAMS_REGEX =
 	/[^/]+(?=\/[^/]+\.[^/?]+(?:\?|$))|(?<==)[^=&?/]+(?=\?|$)/;
-export const PARAM_REGEX =
-	/^(rj|rp|rw|rwa|rg|rh|nw|h|g|k|x|y|z|a|d|b|r|n|s|c|o|p|cc|dv|vm|no|ip|sm|fg|pg|ft|ng|lo|fv|ci|al|df|fh|pf|pp|gd|il|lf|md|mo|mv|nc|nd|ns|nu|nt0|pa|rwu|sg|sm)$|^(w|h|s|b|e|r|l|v|m|a|ba|pd|br|cp|iv|pc|sc|vb)(\d+)$|^(c|bc|pc)(0x[0-9A-Fa-f]{6,8})$|^(fcrop64)(=1,[0-9A-Fa-f]{6,16})$|^(fSoften)(=\d+,\d+,\d+)$|^(mm)(,[0-9A-Za-z]+)$|^(t|q)([0-9A-Za-z]+)$/;
 
-export function getParamInfo(
-	param: string,
-): [number, string, boolean | number | string] | null {
-	const matches = param.match(PARAM_REGEX);
+export const BOOLEAN_PARAMS = new Set([
+	'rj',
+	'rp',
+	'rw',
+	'rwa',
+	'rg',
+	'rh',
+	'nw',
+	'h',
+	'g',
+	'k',
+	'x',
+	'y',
+	'z',
+	'a',
+	'd',
+	'b',
+	'r',
+	'n',
+	's',
+	'c',
+	'o',
+	'p',
+	'cc',
+	'dv',
+	'vm',
+	'no',
+	'ip',
+	'sm',
+	'fg',
+	'pg',
+	'ft',
+	'ng',
+	'lo',
+	'fv',
+	'ci',
+	'al',
+	'df',
+	'fh',
+	'pf',
+	'pp',
+	'gd',
+	'il',
+	'lf',
+	'md',
+	'mo',
+	'mv',
+	'nc',
+	'nd',
+	'ns',
+	'nu',
+	'nt0',
+	'pa',
+	'rwu',
+	'sg',
+]);
 
-	if (!matches) {
-		return null;
+export const NUMBER_PARAMS = new Set([
+	'w',
+	'h',
+	's',
+	'b',
+	'e',
+	'r',
+	'l',
+	'v',
+	'm',
+	'a',
+	'ba',
+	'pd',
+	'br',
+	'cp',
+	'iv',
+	'pc',
+	'sc',
+	'vb',
+]);
+
+export const HEX_PARAMS = new Set(['c', 'bc', 'pc']);
+
+const NUMBER_PARAM_REGEX = new RegExp(
+	`^(${[...NUMBER_PARAMS].join('|')})(\\d+)$`,
+);
+const HEX_PARAM_REGEX = new RegExp(
+	`^(${[...HEX_PARAMS].join('|')})(0x[0-9A-Fa-f]{6,8})$`,
+);
+const FCROP_PARAM_REGEX = /^(fcrop64)(=1,[0-9A-Fa-f]{6,16})$/;
+const FSOFTEN_PARAM_REGEX = /^(fSoften)(=\d+,\d+,\d+)$/;
+const UNKNOWN1_PARAM_REGEX = /^(mm)(,[0-9A-Za-z]+)$/;
+const UNKNOWN2_PARAM_REGEX = /^(t|q)([0-9A-Za-z]+)$/;
+
+export const BOOLEAN_PARAM = 0;
+export const NUMBER_PARAM = 1;
+export const HEX_PARAM = 2;
+export const FCROP_PARAM = 3;
+export const FSOFTEN_PARAM = 4;
+export const UNKNOWN1_PARAM = 5;
+export const UNKNOWN2_PARAM = 6;
+
+export type ParsedParam =
+	| [typeof BOOLEAN_PARAM, string, boolean]
+	| [typeof NUMBER_PARAM, string, number]
+	| [
+			(
+				| typeof HEX_PARAM
+				| typeof FCROP_PARAM
+				| typeof FSOFTEN_PARAM
+				| typeof UNKNOWN1_PARAM
+				| typeof UNKNOWN2_PARAM
+			),
+			string,
+			string,
+	  ];
+
+export function parseParam(param: string): ParsedParam | null {
+	// Boolean param
+	if (BOOLEAN_PARAMS.has(param)) {
+		return [BOOLEAN_PARAM, param, true];
 	}
 
-	// boolean param
-	if (matches[1]) {
-		return [0, matches[1], true];
+	// Number param
+	let match = param.match(NUMBER_PARAM_REGEX);
+	if (match) {
+		return [NUMBER_PARAM, match[1], +match[2]];
 	}
-	// number param
-	if (matches[2] && matches[3]) {
-		return [1, matches[2], Number(matches[3])];
+
+	// HEX param
+	match = param.match(HEX_PARAM_REGEX);
+	if (match) {
+		return [HEX_PARAM, match[1], match[2]];
 	}
-	// hex param
-	if (matches[4] && matches[5]) {
-		return [2, matches[4], matches[5]];
+
+	// Free crop param
+	match = param.match(FCROP_PARAM_REGEX);
+	if (match) {
+		return [FCROP_PARAM, match[1], match[2]];
 	}
-	// free crop param
-	if (matches[6] && matches[7]) {
-		return [3, matches[6], matches[7]];
+
+	// Free soften param
+	match = param.match(FSOFTEN_PARAM_REGEX);
+	if (match) {
+		return [FSOFTEN_PARAM, match[1], match[2]];
 	}
-	// free soften param
-	if (matches[8] && matches[9]) {
-		return [4, matches[8], matches[9]];
+
+	// Unknown 1 param
+	match = param.match(UNKNOWN1_PARAM_REGEX);
+	if (match) {
+		return [UNKNOWN1_PARAM, match[1], match[2]];
 	}
-	// unknown param
-	if (matches[10] && matches[11]) {
-		return [5, matches[10], matches[11]];
-	}
-	if (matches[12] && matches[13]) {
-		return [6, matches[12], matches[13]];
+
+	// Unknown 2 param
+	match = param.match(UNKNOWN2_PARAM_REGEX);
+	if (match) {
+		return [UNKNOWN2_PARAM, match[1], match[2]];
 	}
 
 	return null;

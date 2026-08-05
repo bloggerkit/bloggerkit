@@ -2,7 +2,19 @@
  * Based on https://gist.github.com/Sauerstoffdioxid/2a0206da9f44dde1fdfce290f38d2703
  */
 
-import { getParamInfo, HOSTS_REGEX, PARAMS_REGEX } from './utils';
+import {
+	BOOLEAN_PARAM,
+	HEX_PARAM,
+	HOST_REGEX,
+	NUMBER_PARAM,
+	PARAMS_REGEX,
+	parseParam,
+} from './utils';
+
+const FORMAT_PARAMS = ['rj', 'rp', 'rw', 'rwa', 'rg', 'rh', 'nw'];
+
+export type RotateValue = 90 | 180 | 270;
+export type SymbolValue = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
 export interface BloggerImageOptions {
 	/**
@@ -35,17 +47,18 @@ export class BloggerImage {
 	 * @param url The image url
 	 * @param options Options
 	 */
-	constructor(
-		url: string | URL,
-		{ existing = true, passThrough = false }: BloggerImageOptions = {},
-	) {
+	constructor(url: string | URL, options: BloggerImageOptions = {}) {
+		const { existing = true, passThrough = false } = options;
+
 		let imageUrl: string;
 		if (url instanceof URL) {
 			imageUrl = url.toString();
 		} else if (typeof url === 'string') {
 			imageUrl = url;
 		} else {
-			throw new TypeError("Argument 'url' must be of type string | URL");
+			throw new TypeError(
+				`Argument 'url' must be of type string | URL, but got: ${typeof url}`,
+			);
 		}
 
 		this._url = imageUrl;
@@ -53,31 +66,31 @@ export class BloggerImage {
 		this._match = null;
 		this._params = {};
 
-		if (!HOSTS_REGEX.test(imageUrl)) {
+		if (!HOST_REGEX.test(imageUrl)) {
 			return;
 		}
 
-		const matches = imageUrl.match(PARAMS_REGEX);
+		const match = imageUrl.match(PARAMS_REGEX);
 
-		if (!matches?.[0] || !matches.index) {
+		if (!match?.[0] || !match.index) {
 			return;
 		}
 
-		this._match = [matches[0], matches.index];
+		this._match = [match[0], match.index];
 
 		if (!existing) {
 			return;
 		}
 
-		for (const param of matches[0].split('-')) {
+		for (const param of match[0].split('-')) {
 			if (!param) {
 				continue;
 			}
-			const info = getParamInfo(param);
-			if (!info) {
+			const parsed = parseParam(param);
+			if (!parsed) {
 				continue;
 			}
-			this._params[`${info[0]}${info[1]}`] = info[2];
+			this._params[`${parsed[0]}${parsed[1]}`] = parsed[2];
 		}
 	}
 
@@ -86,7 +99,7 @@ export class BloggerImage {
 			return true;
 		}
 		if (!this._passThrough) {
-			throw new Error('Image url is not supported for transformations');
+			throw new Error('Image URL is not supported for transformations');
 		}
 		return false;
 	}
@@ -98,7 +111,7 @@ export class BloggerImage {
 	): boolean | this {
 		const ok = this._check();
 
-		const key = `${0}${param}`;
+		const key = `${BOOLEAN_PARAM}${param}`;
 
 		// get
 		if (value === undefined) {
@@ -119,7 +132,7 @@ export class BloggerImage {
 			if (ok) {
 				if (removeBeforeAdding) {
 					for (const remove of removeBeforeAdding) {
-						const other = `${0}${remove}`;
+						const other = `${BOOLEAN_PARAM}${remove}`;
 						if (other in this._params) {
 							delete this._params[other];
 						}
@@ -128,7 +141,9 @@ export class BloggerImage {
 				this._params[key] = true;
 			}
 		} else {
-			throw new Error("Argument 'value' must be of type boolean");
+			throw new TypeError(
+				`Argument 'value' must be of type boolean, but got: ${typeof value}`,
+			);
 		}
 
 		return this;
@@ -137,7 +152,7 @@ export class BloggerImage {
 	private _number(param: string, value?: number | null): number | null | this {
 		const ok = this._check();
 
-		const key = `${1}${param}`;
+		const key = `${NUMBER_PARAM}${param}`;
 
 		// get
 		if (value === undefined) {
@@ -159,7 +174,9 @@ export class BloggerImage {
 				this._params[key] = value;
 			}
 		} else {
-			throw new TypeError("Argument 'value' must be of type number | null");
+			throw new TypeError(
+				`Argument 'value' must be of type number | null, but got: ${typeof value}`,
+			);
 		}
 
 		return this;
@@ -170,7 +187,7 @@ export class BloggerImage {
 
 		const regex = /^0x[0-9A-Fa-f]{6,8}$/;
 
-		const key = `${2}${param}`;
+		const key = `${HEX_PARAM}${param}`;
 
 		// get
 		if (value === undefined) {
@@ -190,35 +207,29 @@ export class BloggerImage {
 		else if (typeof value === 'string') {
 			if (!regex.test(value)) {
 				throw new Error(
-					"Argument 'value' must be of format '0xrrggbb' or '0xaarrggbb'",
+					`Expected argument 'value' to be of format '0xrrggbb' or '0xaarrggbb', but got: '${value}'`,
 				);
 			}
 			if (ok) {
 				this._params[key] = value;
 			}
 		} else {
-			throw new TypeError("Argument 'value' must be of type number | null");
+			throw new TypeError(
+				`Argument 'value' must be of type string | null, but got: ${typeof value}`,
+			);
 		}
 
 		return this;
 	}
 
 	private _format(param: string, value?: boolean): boolean | this {
-		return this._boolean(param, value, [
-			'rj',
-			'rp',
-			'rw',
-			'rwa',
-			'rg',
-			'rh',
-			'nw',
-		]);
+		return this._boolean(param, value, FORMAT_PARAMS);
 	}
 
 	/**
-	 * To check whether image url is supported for transformations
+	 * Checks whether image URL is supported for transformations
 	 *
-	 * @returns `true` if image url is supported otherwise `false`
+	 * @returns `true` if image URL is supported otherwise `false`
 	 */
 	isSupported() {
 		return !!this._match;
@@ -303,17 +314,15 @@ export class BloggerImage {
 
 	rotate(): number | null;
 	rotate(value: undefined): number | null;
-	rotate(value: 90 | 180 | 270 | null): this;
-	rotate(value?: 90 | 180 | 270 | null): number | null | this {
+	rotate(value: RotateValue | null): this;
+	rotate(value?: RotateValue | null): number | null | this {
 		return this._number('r', value);
 	}
 
 	symbol(): number | null;
 	symbol(value: undefined): number | null;
-	symbol(value: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | null): this;
-	symbol(
-		value?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | null,
-	): number | null | this {
+	symbol(value: SymbolValue | null): this;
+	symbol(value?: SymbolValue | null): number | null | this {
 		return this._number('ba', value);
 	}
 
@@ -456,11 +465,11 @@ export class BloggerImage {
 	url() {
 		this._check();
 
-		const originalUrl = this._url;
-		const matches = this._match;
+		const url = this._url;
+		const match = this._match;
 
-		if (!matches) {
-			return originalUrl;
+		if (!match) {
+			return url;
 		}
 
 		const newParams: string[] = [];
@@ -470,12 +479,12 @@ export class BloggerImage {
 			const value = this._params[key];
 
 			if (typeof value === 'string' || typeof value === 'number') {
-				newParams.push(prefix + value);
+				newParams.push(`${prefix}${value}`);
 			} else if (typeof value === 'boolean') {
 				newParams.push(prefix);
 			}
 		}
 
-		return `${originalUrl.slice(0, matches[1])}${newParams.join('-') || 's0'}${originalUrl.slice(matches[1] + matches[0].length)}`;
+		return `${url.slice(0, match[1])}${newParams.join('-') || 's0'}${url.slice(match[1] + match[0].length)}`;
 	}
 }
