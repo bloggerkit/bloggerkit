@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2024-present Deo Kumar
+Copyright (c) 2024-present Deo Kumar <https://github.com/kumardeo>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

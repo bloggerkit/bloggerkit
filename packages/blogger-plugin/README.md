@@ -108,20 +108,24 @@ The `blogger()` plugin accepts the following options:
 
 ### Tailwind CSS Support
 
-The plugin **automatically detects and supports Tailwind CSS**. When Tailwind is configured in your project, the plugin:
+The plugin **automatically detects and supports Tailwind CSS**. When Tailwind is configured in your project, it:
 
-1. **During development:** Extracts Tailwind classes from the HTML content of your proxied Blogger blog as you navigate and preview pages, caching them in `.tailwind-classes.json`
-2. **During build:** Extracts Tailwind classes **only from your template XML** file to ensure all classes used in your template are included in the production CSS
-3. **Optimizes compilation** by providing Tailwind with the discovered classes
+1. **During development:** Extracts Tailwind classes from the HTML of your proxied Blogger blog as you navigate and preview pages, caching them in `.tailwind-classes.json`.
+2. **During build:** Regenerates `.tailwind-classes.json` using **only your template XML**, ensuring the production stylesheet contains exactly the classes used by your template.
+3. **Optimizes compilation** by providing Tailwind with the discovered classes.
 
-To use Tailwind CSS with the blogger-plugin:
+To use Tailwind CSS with the plugin:
 
-1. **Install Tailwind CSS** and configure it as usual in your project
-2. The plugin will **automatically detect** your Tailwind setup — no additional configuration needed!
-3. **During development:** Navigate through your blog preview to allow Tailwind to extract classes from your blog's HTML
-4. **During build:** Make sure your template XML includes all the Tailwind classes you're using, as only the template is scanned for production
+1. Install and configure Tailwind CSS as usual.
+2. Add the generated cache file as a source in your CSS:
 
-The plugin gathers Tailwind classes from your proxied blog during development and from your template during the build for complete coverage in production.
+   ```css
+   @source "./path/to/.tailwind-classes.json";
+   ```
+
+3. No additional plugin configuration is required.
+
+During development, browse your proxied blog to allow the plugin to discover Tailwind classes. During production builds, the cache is regenerated from your template XML, so make sure all required Tailwind classes are present in the template.
 
 > [!TIP]
 > Add `.tailwind-classes.json` to your `.gitignore` — it's a generated cache file that will be recreated during development and build.
@@ -188,16 +192,3 @@ VITE_BASE="https://cdn.jsdelivr.net/gh/username/repo@version/" pnpm run build
 ```
 
 This ensures all injected asset tags inside the generated `template.xml` point to your CDN-hosted files.
-
-## 📌 Example
-
-A fully working example using **React**, **jsDelivr**, and **GitHub Actions** is available in this GitHub repository:
-
-https://github.com/kumardeo/react-blogger-template
-
-The GitHub Actions workflow automatically:
-
-1. Runs on commits to the `release` branch.
-2. Builds the React app and generates `dist/template.xml`.
-3. Commits all built assets and `template.xml` to the `static` branch.
-4. Creates a new tag for jsDelivr so assets can be served via CDN.

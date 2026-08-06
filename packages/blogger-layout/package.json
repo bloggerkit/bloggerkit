@@ -1,10 +1,9 @@
 {
-  "name": "blogger-feed",
-  "version": "0.0.2",
-  "description": "A lightweight and type-safe Blogger Feed API client.",
+  "name": "blogger-layout",
+  "version": "0.0.0",
+  "description": "Reusable layout styles for Blogger themes.",
   "keywords": [
-    "blogger",
-    "blogger-feed"
+    "blogger-theme"
   ],
   "license": "MIT",
   "author": {
@@ -12,11 +11,11 @@
     "email": "deo@fineshopdesign.com",
     "url": "https://github.com/kumardeo"
   },
-  "homepage": "https://github.com/bloggerkit/bloggerkit/tree/main/packages/blogger-feed#readme",
+  "homepage": "https://github.com/bloggerkit/bloggerkit/tree/main/packages/blogger-layout#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/bloggerkit/bloggerkit",
-    "directory": "packages/blogger-feed"
+    "directory": "packages/blogger-layout"
   },
   "bugs": {
     "url": "https://github.com/bloggerkit/bloggerkit/issues"
@@ -30,10 +29,7 @@
     "check": "biome check ./src",
     "check:types": "tsc --noEmit",
     "build": "NODE_ENV=production tsdown",
-    "dev": "NODE_ENV=development tsdown --watch",
-    "playground": "vite ./playground",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "dev": "NODE_ENV=development tsdown --watch"
   },
   "files": [
     "dist"
@@ -44,14 +40,15 @@
   "types": "./dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
+    "./modern.css": "./dist/modern.css",
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
   },
   "devDependencies": {
-    "tsdown": "catalog:",
-    "vite": "catalog:",
-    "vitest": "catalog:"
+    "@tsdown/css": "catalog:",
+    "@types/node": "catalog:",
+    "tsdown": "catalog:"
   }
 }

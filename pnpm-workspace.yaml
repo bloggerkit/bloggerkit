@@ -14,6 +14,7 @@ dedupePeers: true
 minimumReleaseAge: 1440
 
 catalog:
+  "@tsdown/css": "^0.22.14"
   "@types/node": "^26.1.2"
   tsdown: "^0.22.14"
   vite: "^8.2.0"

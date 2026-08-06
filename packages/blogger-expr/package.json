@@ -1,10 +1,10 @@
 {
-  "name": "blogger-feed",
-  "version": "0.0.2",
-  "description": "A lightweight and type-safe Blogger Feed API client.",
+  "name": "blogger-expr",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Parser and evaluator for Blogger theme XML expressions.",
   "keywords": [
-    "blogger",
-    "blogger-feed"
+    "blogger-theme"
   ],
   "license": "MIT",
   "author": {
@@ -12,18 +12,14 @@
     "email": "deo@fineshopdesign.com",
     "url": "https://github.com/kumardeo"
   },
-  "homepage": "https://github.com/bloggerkit/bloggerkit/tree/main/packages/blogger-feed#readme",
+  "homepage": "https://github.com/bloggerkit/bloggerkit/tree/main/packages/blogger-expr#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/bloggerkit/bloggerkit",
-    "directory": "packages/blogger-feed"
+    "directory": "packages/blogger-expr"
   },
   "bugs": {
     "url": "https://github.com/bloggerkit/bloggerkit/issues"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   },
   "scripts": {
     "lint": "biome lint ./src",
@@ -31,7 +27,6 @@
     "check:types": "tsc --noEmit",
     "build": "NODE_ENV=production tsdown",
     "dev": "NODE_ENV=development tsdown --watch",
-    "playground": "vite ./playground",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -50,8 +45,8 @@
     }
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "tsdown": "catalog:",
-    "vite": "catalog:",
     "vitest": "catalog:"
   }
 }

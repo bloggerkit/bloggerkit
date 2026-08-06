@@ -1,6 +1,6 @@
 # blogger-feed
 
-A lightweight, type-safe Blogger feed API client for fetching Blogger blog metadata, posts, pages, comments, and pagination data.
+A lightweight, type-safe Blogger Feed API client for fetching Blogger blog metadata, posts, pages, comments, and pagination data.
 
 ## Features
 
