@@ -6,6 +6,10 @@ Modern web app tooling for Blogger blogs.
 
 This monorepo contains the following packages:
 
+### [blogger-expr](./packages/blogger-expr)
+
+Parser and evaluator for Blogger theme XML expressions.
+
 ### [blogger-feed](./packages/blogger-feed)
 
 A lightweight, type-safe Blogger feed API client for fetching Blogger blog metadata, posts, pages, comments, and pagination data.
@@ -13,6 +17,10 @@ A lightweight, type-safe Blogger feed API client for fetching Blogger blog metad
 ### [blogger-images](./packages/blogger-images)
 
 Utilities for detecting and transforming Blogger-hosted image URLs.
+
+### [blogger-layout](./packages/blogger-layout)
+
+Reusable layout styles for Blogger themes.
 
 ### [blogger-plugin](./packages/blogger-plugin)
 
