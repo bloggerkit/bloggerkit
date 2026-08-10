@@ -25,3 +25,9 @@ Reusable layout styles for Blogger themes.
 ### [blogger-plugin](./packages/blogger-plugin)
 
 A plugin that allows you to use modern frontend frameworks inside a Blogger template.
+
+## Disclaimer
+
+Blogger Kit is an independent, community-developed project providing tools and utilities for working with Blogger and developing Blogger themes. It is **not affiliated with, endorsed by, sponsored by, or otherwise associated with Google LLC or Blogger**.
+
+"Blogger" and related names are trademarks of Google LLC.
