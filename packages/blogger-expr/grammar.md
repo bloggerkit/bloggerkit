@@ -11,8 +11,8 @@ Covers the grammar used inside:
 ```
   expr        := conditional
   conditional := logicalOr ( "?:" conditional | "?" expr ":" conditional )?
-  logicalOr   := logicalAnd ( ("or") logicalAnd )*
-  logicalAnd  := membership ( ("and") membership )*
+  logicalOr   := logicalAnd ( ("||" | "or") logicalAnd )*
+  logicalAnd  := membership ( ("&&" | "and") membership )*
   membership  := equality ( (("not")? ("in" | "contains")) equality )*
   equality    := relational ( ("==" | "!=" | "eq" | "ne") relational )*
   relational  := additive ( ("<" | ">" | "<=" | ">=" | "lt" | "gt" | "lte" | "gte") additive )*
