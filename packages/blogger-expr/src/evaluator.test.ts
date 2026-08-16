@@ -44,6 +44,8 @@ test('logical operators short-circuit and return operand values', () => {
 		evaluate('data:x or data:y', { data: { x: '', y: 'fallback' } }),
 		'fallback',
 	);
+	assert.equal(evaluate('true && false'), false);
+	assert.equal(evaluate('false || true'), true);
 });
 
 test('ternary and elvis', () => {

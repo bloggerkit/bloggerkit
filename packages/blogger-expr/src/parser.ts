@@ -368,7 +368,7 @@ class Parser {
 	private parseLogicalOr(): Node {
 		const start = this.peek().start;
 		let left = this.parseLogicalAnd();
-		while (this.isKeyword('or')) {
+		while (this.isKeyword('or') || this.isOp('||')) {
 			this.advance();
 			const right = this.parseLogicalAnd();
 			left = this.makeLogical('or', left, right, start);
@@ -379,7 +379,7 @@ class Parser {
 	private parseLogicalAnd(): Node {
 		const start = this.peek().start;
 		let left = this.parseMembership();
-		while (this.isKeyword('and')) {
+		while (this.isKeyword('and') || this.isOp('&&')) {
 			this.advance();
 			const right = this.parseMembership();
 			left = this.makeLogical('and', left, right, start);

@@ -37,7 +37,16 @@ const isIdentPart = (c: string): boolean => /[A-Za-z0-9_$]/.test(c);
 const isSpace = (c: string): boolean =>
 	c === ' ' || c === '\t' || c === '\n' || c === '\r';
 
-const MULTI_CHAR_OPERATORS = ['==', '!=', '<=', '>=', '?:', '=>'];
+const MULTI_CHAR_OPERATORS = new Set([
+	'==',
+	'!=',
+	'<=',
+	'>=',
+	'?:',
+	'=>',
+	'&&',
+	'||',
+]);
 const SINGLE_CHAR_OPERATORS = new Set([
 	'+',
 	'-',
@@ -159,7 +168,7 @@ export function tokenize(source: string): Token[] {
 
 		// Multi-char operators
 		const two = source.slice(i, i + 2);
-		if (MULTI_CHAR_OPERATORS.includes(two)) {
+		if (MULTI_CHAR_OPERATORS.has(two)) {
 			tokens.push({ type: 'OP', value: two, start: i, end: i + 2 });
 			i += 2;
 			continue;
