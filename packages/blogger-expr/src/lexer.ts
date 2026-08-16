@@ -106,10 +106,14 @@ export function tokenize(source: string): Token[] {
 		// notation (1e5, 1.5e-3, ...) is not.
 		if (isDigit(c) || (c === '.' && isDigit(source[i + 1] ?? ''))) {
 			const start = i;
-			while (i < n && isDigit(source[i] as string)) i++;
+			while (i < n && isDigit(source[i] as string)) {
+				i++;
+			}
 			if (source[i] === '.' && isDigit(source[i + 1] ?? '')) {
 				i++;
-				while (i < n && isDigit(source[i] as string)) i++;
+				while (i < n && isDigit(source[i] as string)) {
+					i++;
+				}
 			}
 			tokens.push({
 				type: 'NUMBER',
@@ -123,7 +127,9 @@ export function tokenize(source: string): Token[] {
 		// Identifier / keyword / `data:` prefix
 		if (isIdentStart(c)) {
 			const start = i;
-			while (i < n && isIdentPart(source[i] as string)) i++;
+			while (i < n && isIdentPart(source[i] as string)) {
+				i++;
+			}
 			const word = source.slice(start, i);
 
 			// `data:` must be immediately followed by `:` with no space. Everything
@@ -138,7 +144,9 @@ export function tokenize(source: string): Token[] {
 			if (word === 'data' && source[i] === ':') {
 				const pathStart = i + 1;
 				let j = pathStart;
-				while (j < n && /[A-Za-z0-9_$.-]/.test(source[j] as string)) j++;
+				while (j < n && /[A-Za-z0-9_$.-]/.test(source[j] as string)) {
+					j++;
+				}
 				const path = source.slice(pathStart, j);
 				i = j;
 				tokens.push({ type: 'DATA', value: path, start, end: i });

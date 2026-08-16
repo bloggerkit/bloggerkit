@@ -206,14 +206,17 @@ class Parser {
 
 	private peek(offset = 0): Token {
 		const token = this.tokens[this.pos + offset];
-		if (!token)
+		if (!token) {
 			throw new ParseError('Unexpected end of input', this.source.length);
+		}
 		return token;
 	}
 
 	private advance(): Token {
 		const token = this.peek();
-		if (token.type !== 'EOF') this.pos++;
+		if (token.type !== 'EOF') {
+			this.pos++;
+		}
 		return token;
 	}
 
@@ -265,7 +268,9 @@ class Parser {
 		for (let i = 0; i < args.length; i++) {
 			const validator = sig.args[i];
 			const arg = args[i];
-			if (!validator || !arg) continue;
+			if (!validator || !arg) {
+				continue;
+			}
 			const error = validator(arg);
 			if (error) {
 				throw new ParseError(
@@ -473,7 +478,9 @@ class Parser {
 		let left = this.parseRelational();
 		for (;;) {
 			const op = this.matchBinaryOp(['==', '!='], ['eq', 'ne']);
-			if (!op) break;
+			if (!op) {
+				break;
+			}
 			const right = this.parseRelational();
 			left = {
 				type: 'BinaryExpression',
@@ -494,7 +501,9 @@ class Parser {
 				['<=', '>=', '<', '>'],
 				['lte', 'gte', 'lt', 'gt'],
 			);
-			if (!op) break;
+			if (!op) {
+				break;
+			}
 			const right = this.parseAdditive();
 			left = {
 				type: 'BinaryExpression',
@@ -512,7 +521,9 @@ class Parser {
 		let left = this.parseMultiplicative();
 		for (;;) {
 			const op = this.matchBinaryOp(['+', '-'], []);
-			if (!op) break;
+			if (!op) {
+				break;
+			}
 			const right = this.parseMultiplicative();
 			left = {
 				type: 'BinaryExpression',
@@ -530,7 +541,9 @@ class Parser {
 		let left = this.parseUnary();
 		for (;;) {
 			const op = this.matchBinaryOp(['*', '/', '%'], []);
-			if (!op) break;
+			if (!op) {
+				break;
+			}
 			const right = this.parseUnary();
 			left = {
 				type: 'BinaryExpression',
@@ -721,7 +734,9 @@ class Parser {
 
 	private parseArgList(): Node[] {
 		const args: Node[] = [];
-		if (this.isPunct(')')) return args;
+		if (this.isPunct(')')) {
+			return args;
+		}
 		args.push(this.parseRestrictedValue('a function argument'));
 		while (this.isPunct(',')) {
 			this.advance();

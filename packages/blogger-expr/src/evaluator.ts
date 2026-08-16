@@ -86,7 +86,9 @@ export class Evaluator {
 				// variable both bare (`l.name`) and as `data:l.name` interchangeably,
 				// so lambda scope takes priority over the root data object.
 				const scoped = this.lookupScope(node.name);
-				if (scoped.found) return scoped.value;
+				if (scoped.found) {
+					return scoped.value;
+				}
 				const val = (this.data as Record<string, unknown>)[node.name];
 				return this.toValue(val, node);
 			}
@@ -97,7 +99,9 @@ export class Evaluator {
 				// error), so this should always resolve. The throw below is a
 				// defensive fallback, not an expected runtime path.
 				const scoped = this.lookupScope(node.name);
-				if (scoped.found) return scoped.value;
+				if (scoped.found) {
+					return scoped.value;
+				}
 				throw new EvaluateError(`'${node.name}' is not in scope`, node);
 			}
 
@@ -117,8 +121,12 @@ export class Evaluator {
 
 			case 'UnaryExpression': {
 				const arg = this.evaluate(node.argument);
-				if (node.operator === '!') return !isTruthy(arg);
-				if (node.operator === '-') return -this.toNumber(arg, node);
+				if (node.operator === '!') {
+					return !isTruthy(arg);
+				}
+				if (node.operator === '-') {
+					return -this.toNumber(arg, node);
+				}
 				throw new EvaluateError(
 					`Unknown unary operator '${node.operator}'`,
 					node,
@@ -387,13 +395,19 @@ export class Evaluator {
 			return null;
 		}
 		if (Array.isArray(obj)) {
-			if (property === 'length') return obj.length;
-			if (property === 'first')
+			if (property === 'length') {
+				return obj.length;
+			}
+			if (property === 'first') {
 				return obj.length > 0 ? (obj[0] as Value) : null;
-			if (property === 'last')
+			}
+			if (property === 'last') {
 				return obj.length > 0 ? (obj[obj.length - 1] as Value) : null;
+			}
 			const idx = Number(property);
-			if (Number.isInteger(idx)) return this.fromMaybeMissing(obj[idx], node);
+			if (Number.isInteger(idx)) {
+				return this.fromMaybeMissing(obj[idx], node);
+			}
 			return null;
 		}
 		if (typeof obj === 'object') {
@@ -416,7 +430,9 @@ export class Evaluator {
 
 	private fromMaybeMissing(v: Value | undefined, node: Node): Value {
 		if (v === undefined) {
-			if (this.strict) throw new EvaluateError('Value is undefined', node);
+			if (this.strict) {
+				throw new EvaluateError('Value is undefined', node);
+			}
 			return null;
 		}
 		return v;
@@ -424,18 +440,24 @@ export class Evaluator {
 
 	private toValue(v: unknown, node: Node): Value {
 		if (v === undefined) {
-			if (this.strict) throw new EvaluateError('Value is undefined', node);
+			if (this.strict) {
+				throw new EvaluateError('Value is undefined', node);
+			}
 			return null;
 		}
 		return v as Value;
 	}
 
 	private toNumber(v: Value, node: Node): number {
-		if (typeof v === 'number') return v;
+		if (typeof v === 'number') {
+			return v;
+		}
 		if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) {
 			return Number(v);
 		}
-		if (typeof v === 'boolean') return v ? 1 : 0;
+		if (typeof v === 'boolean') {
+			return v ? 1 : 0;
+		}
 		if (this.strict) {
 			throw new EvaluateError(
 				`Cannot coerce ${JSON.stringify(v)} to a number`,
@@ -446,25 +468,45 @@ export class Evaluator {
 	}
 
 	private stringify(v: Value): string {
-		if (v === null) return '';
-		if (typeof v === 'string') return v;
-		if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+		if (v === null) {
+			return '';
+		}
+		if (typeof v === 'string') {
+			return v;
+		}
+		if (typeof v === 'number' || typeof v === 'boolean') {
+			return String(v);
+		}
 		return JSON.stringify(v);
 	}
 }
 
 export function isTruthy(v: Value): boolean {
-	if (v === null || v === undefined) return false;
-	if (typeof v === 'boolean') return v;
-	if (typeof v === 'number') return v !== 0 && !Number.isNaN(v);
-	if (typeof v === 'string') return v.length > 0;
-	if (Array.isArray(v)) return true;
+	if (v === null || v === undefined) {
+		return false;
+	}
+	if (typeof v === 'boolean') {
+		return v;
+	}
+	if (typeof v === 'number') {
+		return v !== 0 && !Number.isNaN(v);
+	}
+	if (typeof v === 'string') {
+		return v.length > 0;
+	}
+	if (Array.isArray(v)) {
+		return true;
+	}
 	return true; // non-null object
 }
 
 export function valuesEqual(a: Value, b: Value): boolean {
-	if (a === b) return true;
-	if (a === null || b === null) return a === b;
+	if (a === b) {
+		return true;
+	}
+	if (a === null || b === null) {
+		return a === b;
+	}
 	if (Array.isArray(a) && Array.isArray(b)) {
 		return (
 			a.length === b.length && a.every((v, i) => valuesEqual(v, b[i] as Value))
@@ -478,7 +520,9 @@ export function valuesEqual(a: Value, b: Value): boolean {
 	) {
 		const aKeys = Object.keys(a);
 		const bKeys = Object.keys(b);
-		if (aKeys.length !== bKeys.length) return false;
+		if (aKeys.length !== bKeys.length) {
+			return false;
+		}
 		return aKeys.every((k) =>
 			valuesEqual(
 				(a as Record<string, Value>)[k] as Value,
@@ -487,8 +531,12 @@ export function valuesEqual(a: Value, b: Value): boolean {
 		);
 	}
 	// Loose numeric/string equality
-	if (typeof a === 'number' && typeof b === 'string') return String(a) === b;
-	if (typeof a === 'string' && typeof b === 'number') return a === String(b);
+	if (typeof a === 'number' && typeof b === 'string') {
+		return String(a) === b;
+	}
+	if (typeof a === 'string' && typeof b === 'number') {
+		return a === String(b);
+	}
 	return false;
 }
 

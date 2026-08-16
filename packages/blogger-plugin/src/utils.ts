@@ -10,7 +10,9 @@ export async function fsExists(path: string): Promise<boolean> {
 }
 
 export function escapeHtml(str: string): string {
-	if (str === '') return '';
+	if (str === '') {
+		return '';
+	}
 	return str.replace(/[&<>"'`]/g, (ch) => {
 		switch (ch) {
 			case '&':
@@ -32,7 +34,9 @@ export function escapeHtml(str: string): string {
 }
 
 export function unescapeHTML(str: string, xml = false): string {
-	if (str === '') return '';
+	if (str === '') {
+		return '';
+	}
 	const regex = new RegExp(
 		`&(?:amp|lt|gt|quot${xml ? '|apos' : ''}|#39|#96);`,
 		'g',

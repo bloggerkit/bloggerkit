@@ -159,7 +159,9 @@ function maybeWrap(text: string, condition: boolean): string {
  * a.hello) or a == data:b`).
  */
 function containsLambdaOperator(node: Node): boolean {
-	if (node.type === 'LambdaExpression') return true;
+	if (node.type === 'LambdaExpression') {
+		return true;
+	}
 	switch (node.type) {
 		case 'StringLiteral':
 		case 'NumberLiteral':
@@ -299,8 +301,12 @@ class Printer {
 	 * Callers wrap the result in their own open/close bracket text.
 	 */
 	private breakList(items: string[], depth: number): string {
-		if (items.length === 0) return '';
-		if (this.indentSize === 0) return items.join(', ');
+		if (items.length === 0) {
+			return '';
+		}
+		if (this.indentSize === 0) {
+			return items.join(', ');
+		}
 		const inner = items
 			.map((item) => `${this.pad(depth + 1)}${item}`)
 			.join(',\n');
@@ -459,9 +465,13 @@ class Printer {
 						node,
 					);
 				}
-				if (node.entries.length === 0) return '{}';
+				if (node.entries.length === 0) {
+					return '{}';
+				}
 				const items = node.entries.map((e) => this.printMapEntry(e, depth + 1));
-				if (this.indentSize === 0) return `{ ${items.join(', ')} }`;
+				if (this.indentSize === 0) {
+					return `{ ${items.join(', ')} }`;
+				}
 				return `{${this.breakList(items, depth)}}`;
 			}
 
@@ -479,7 +489,9 @@ class Printer {
 
 			case 'CallExpression': {
 				const items = node.args.map((a) => this.printRestricted(a, depth + 1));
-				if (items.length === 0) return `${node.callee}()`;
+				if (items.length === 0) {
+					return `${node.callee}()`;
+				}
 				return `${node.callee}(${this.breakList(items, depth)})`;
 			}
 

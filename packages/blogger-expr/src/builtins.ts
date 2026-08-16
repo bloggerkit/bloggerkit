@@ -11,15 +11,25 @@ import type { Value } from './evaluator';
 export type BuiltinFunction = (...args: Value[]) => Value;
 
 function asString(v: Value, fnName: string, argIndex: number): string {
-	if (typeof v === 'string') return v;
-	if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-	if (v === null) return '';
+	if (typeof v === 'string') {
+		return v;
+	}
+	if (typeof v === 'number' || typeof v === 'boolean') {
+		return String(v);
+	}
+	if (v === null) {
+		return '';
+	}
 	throw new TypeError(`${fnName}(): argument ${argIndex} must be a string`);
 }
 
 function asNumber(v: Value, fnName: string, argIndex: number): number {
-	if (typeof v === 'number') return v;
-	if (typeof v === 'string' && v.trim() !== '') return Number(v);
+	if (typeof v === 'number') {
+		return v;
+	}
+	if (typeof v === 'string' && v.trim() !== '') {
+		return Number(v);
+	}
 	throw new TypeError(`${fnName}(): argument ${argIndex} must be a number`);
 }
 
@@ -28,13 +38,16 @@ function asMap(
 	fnName: string,
 	argIndex: number,
 ): Record<string, Value> {
-	if (v && typeof v === 'object' && !Array.isArray(v))
+	if (v && typeof v === 'object' && !Array.isArray(v)) {
 		return v as Record<string, Value>;
+	}
 	throw new TypeError(`${fnName}(): argument ${argIndex} must be a map`);
 }
 
 function asList(v: Value, fnName: string, argIndex: number): Value[] {
-	if (Array.isArray(v)) return v;
+	if (Array.isArray(v)) {
+		return v;
+	}
 	throw new TypeError(`${fnName}(): argument ${argIndex} must be a list`);
 }
 
@@ -131,7 +144,9 @@ const snippet: BuiltinFunction = (...args) => {
 		: text.replace(/\s+/g, ' ');
 	text = text.trim();
 
-	if (text.length <= length) return text;
+	if (text.length <= length) {
+		return text;
+	}
 	const truncated = text.slice(0, length);
 	const lastSpace = truncated.lastIndexOf(' ');
 	const cut = lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated;
@@ -177,15 +192,20 @@ const format: BuiltinFunction = (...args) => {
 	const raw = args[0];
 	const pattern = asString(args[1] ?? 'YYYY-MM-DD', 'format', 1);
 	let date: Date;
-	if (raw instanceof Date) date = raw;
-	else if (typeof raw === 'number') date = new Date(raw);
-	else if (typeof raw === 'string') date = new Date(raw);
-	else
+	if (raw instanceof Date) {
+		date = raw;
+	} else if (typeof raw === 'number') {
+		date = new Date(raw);
+	} else if (typeof raw === 'string') {
+		date = new Date(raw);
+	} else {
 		throw new TypeError(
 			'format(): argument 1 must be a date, timestamp, or ISO string',
 		);
-	if (Number.isNaN(date.getTime()))
+	}
+	if (Number.isNaN(date.getTime())) {
 		throw new TypeError('format(): invalid date');
+	}
 
 	const hours24 = date.getHours();
 	const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
@@ -242,10 +262,16 @@ function resolveHeight(
 	width: number,
 	ratioArg: Value | undefined,
 ): number | null {
-	if (ratioArg === undefined || ratioArg === null) return null;
-	if (typeof ratioArg === 'number') return Math.round(ratioArg);
+	if (ratioArg === undefined || ratioArg === null) {
+		return null;
+	}
+	if (typeof ratioArg === 'number') {
+		return Math.round(ratioArg);
+	}
 	const match = /^(\d+):(\d+)$/.exec(String(ratioArg));
-	if (!match) return null;
+	if (!match) {
+		return null;
+	}
 	const w = Number(match[1]);
 	const h = Number(match[2]);
 	return Math.round((width * h) / w);
