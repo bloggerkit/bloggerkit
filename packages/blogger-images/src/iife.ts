@@ -1,4 +1,4 @@
-import { BloggerImage } from './index';
+import { BloggerImage } from './blogger-image';
 
 const GLOBAL_NAME = 'BloggerImage';
 

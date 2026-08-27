@@ -95,16 +95,16 @@ const FSOFTEN_PARAM_REGEX = /^(fSoften)(=\d+,\d+,\d+)$/;
 const UNKNOWN1_PARAM_REGEX = /^(mm)(,[0-9A-Za-z]+)$/;
 const UNKNOWN2_PARAM_REGEX = /^(t|q)([0-9A-Za-z]+)$/;
 
-export const BOOLEAN_PARAM = 0;
-export const NUMBER_PARAM = 1;
-export const HEX_PARAM = 2;
-export const FCROP_PARAM = 3;
-export const FSOFTEN_PARAM = 4;
-export const UNKNOWN1_PARAM = 5;
-export const UNKNOWN2_PARAM = 6;
+export const BOOLEAN_PARAM = '00_';
+export const NUMBER_PARAM = '01_';
+export const HEX_PARAM = '02_';
+export const FCROP_PARAM = '03_';
+export const FSOFTEN_PARAM = '04_';
+export const UNKNOWN1_PARAM = '05_';
+export const UNKNOWN2_PARAM = '06_';
 
 export type ParsedParam =
-	| [typeof BOOLEAN_PARAM, string, boolean]
+	| [typeof BOOLEAN_PARAM, string, true]
 	| [typeof NUMBER_PARAM, string, number]
 	| [
 			(

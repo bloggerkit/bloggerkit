@@ -1,14 +1,32 @@
 import { describe, expect, test } from 'vitest';
-import { BloggerImage } from './index';
-
-const supportedUrl = 'https://1.bp.blogspot.com/-abc/s1600/placeholder.jpg';
-const supportedUrlWithParams =
-	'https://1.bp.blogspot.com/-abc/s500-w200-h100-c/placeholder.jpg';
-const unsupportedUrl = 'https://example.com/image.jpg';
+import { BloggerImage } from './blogger-image';
 
 describe('BloggerImage', () => {
-	test('recognizes supported image URLs and preserves existing params', () => {
-		const image = new BloggerImage(supportedUrl);
+	describe('recognizes supported urls', () => {
+		const supportedUrls = [
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s1600/image.png',
+
+			'https://lh3.googleusercontent.com/a/abc_def=s1600',
+
+			'https://blogger.googleusercontent.com/img/a/abc-def=s1600',
+			'https://blogger.googleusercontent.com/img/b/abc/abc-def_ghi/s1600/image.png',
+			'//blogger.googleusercontent.com/img/b/abc/abc-def_ghi/s1600/image.png',
+		];
+
+		test.each(supportedUrls)("supports '%s'", (url) => {
+			const image = new BloggerImage(url);
+
+			expect(image.isSupported()).toBe(true);
+			expect(image.size()).toBe(1600);
+			expect(image.url()).toContain('s1600');
+		});
+	});
+
+	test('supports URL object input', () => {
+		const url = new URL(
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s1600/image.png',
+		);
+		const image = new BloggerImage(url);
 
 		expect(image.isSupported()).toBe(true);
 		expect(image.size()).toBe(1600);
@@ -16,7 +34,9 @@ describe('BloggerImage', () => {
 	});
 
 	test('parses existing size, width, height and crop params', () => {
-		const image = new BloggerImage(supportedUrlWithParams);
+		const image = new BloggerImage(
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s500-w200-h100-c/image.png',
+		);
 
 		expect(image.isSupported()).toBe(true);
 		expect(image.size()).toBe(500);
@@ -30,27 +50,25 @@ describe('BloggerImage', () => {
 	});
 
 	test('removes all existing params when existing option is disabled', () => {
-		const image = new BloggerImage(supportedUrlWithParams, { existing: false });
+		const image = new BloggerImage(
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s500-w200-h100-c/image.png',
+			{ existing: false },
+		);
 
 		expect(image.isSupported()).toBe(true);
 		expect(image.size()).toBeNull();
 		expect(image.width()).toBeNull();
 		expect(image.height()).toBeNull();
 		expect(image.crop()).toBe(false);
-		expect(image.url()).toContain('/s0/placeholder.jpg');
+		expect(image.url()).toContain('/s0/image.png');
 		expect(image.url()).not.toContain('s500');
 		expect(image.url()).not.toContain('-w200');
 	});
 
-	test('supports URL object input', () => {
-		const image = new BloggerImage(new URL(supportedUrl));
-
-		expect(image.isSupported()).toBe(true);
-		expect(image.url()).toContain('s1600');
-	});
-
 	test('returns s0 when no params remain after clearing', () => {
-		const image = new BloggerImage(supportedUrlWithParams)
+		const image = new BloggerImage(
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s500-w200-h100-c/image.png',
+		)
 			.width(null)
 			.height(null)
 			.size(null)
@@ -60,11 +78,15 @@ describe('BloggerImage', () => {
 		expect(image.height()).toBeNull();
 		expect(image.size()).toBeNull();
 		expect(image.crop()).toBe(false);
-		expect(image.url()).toContain('/s0/placeholder.jpg');
+		expect(image.url()).toContain('/s0/image.png');
 	});
 
 	test('sets output format and removes previous format flags', () => {
-		const image = new BloggerImage(supportedUrlWithParams).png(true).gif(true);
+		const image = new BloggerImage(
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s500-w200-h100-c/image.png',
+		)
+			.png(true)
+			.gif(true);
 
 		expect(image.png()).toBe(false);
 		expect(image.gif()).toBe(true);
@@ -74,7 +96,9 @@ describe('BloggerImage', () => {
 	});
 
 	test('checks mutually exclusive crop flags and keeps only the last set crop style', () => {
-		const image = new BloggerImage(supportedUrlWithParams)
+		const image = new BloggerImage(
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s500-w200-h100-c/image.png',
+		)
 			.crop(true)
 			.circularCrop(true)
 			.alternateCrop(true);
@@ -89,7 +113,9 @@ describe('BloggerImage', () => {
 	});
 
 	test('sets and removes hex color values correctly', () => {
-		const image = new BloggerImage(supportedUrlWithParams)
+		const image = new BloggerImage(
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s500-w200-h100-c/image.png',
+		)
 			.color('0xFFAABB')
 			.backgroundColor('0xaabbccdd')
 			.padColor('0x000000');
@@ -107,7 +133,9 @@ describe('BloggerImage', () => {
 	});
 
 	test('toggles button and noButton flags with removal behavior', () => {
-		const image = new BloggerImage(supportedUrlWithParams)
+		const image = new BloggerImage(
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s500-w200-h100-c/image.png',
+		)
 			.button(true)
 			.noButton(true);
 
@@ -118,7 +146,9 @@ describe('BloggerImage', () => {
 	});
 
 	test('throws for invalid numeric, boolean, and hex inputs', () => {
-		const image = new BloggerImage(supportedUrl);
+		const image = new BloggerImage(
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s1600/image.png',
+		);
 
 		expect(() => image.width('100' as any)).toThrow(
 			new TypeError(
@@ -141,7 +171,7 @@ describe('BloggerImage', () => {
 	});
 
 	test('throws when generating URL for unsupported image without passThrough', () => {
-		const image = new BloggerImage(unsupportedUrl);
+		const image = new BloggerImage('https://example.com/image.jpg');
 
 		expect(image.isSupported()).toBe(false);
 		expect(() => image.url()).toThrow(
@@ -150,18 +180,22 @@ describe('BloggerImage', () => {
 	});
 
 	test('returns original URL and default getters when unsupported and passThrough option is enabled', () => {
-		const image = new BloggerImage(unsupportedUrl, { passThrough: true });
+		const image = new BloggerImage('https://example.com/image.jpg', {
+			passThrough: true,
+		});
 
 		expect(image.isSupported()).toBe(false);
 		expect(image.width()).toBeNull();
 		expect(image.crop()).toBe(false);
 		expect(image.noUpscaling()).toBe(false);
 		expect(image.color()).toBeNull();
-		expect(image.url()).toBe(unsupportedUrl);
+		expect(image.url()).toBe('https://example.com/image.jpg');
 	});
 
 	test('sets multiple numeric and boolean transformation params', () => {
-		const image = new BloggerImage(supportedUrlWithParams)
+		const image = new BloggerImage(
+			'https://1.bp.blogspot.com/-abcd/efgh/AAAAA/ij_kl/s500-w200-h100-c/image.png',
+		)
 			.noUpscaling(true)
 			.forceScaling(true)
 			.rotate(90)
