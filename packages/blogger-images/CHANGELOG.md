@@ -1,5 +1,15 @@
 # blogger-images
 
+## 0.0.4
+
+### Patch Changes
+
+- [`3070225`](https://github.com/bloggerkit/bloggerkit/commit/30702259f178988df12025a1aa1c77f468bced5c) Thanks [@kumardeo](https://github.com/kumardeo)! - refactor: split `ImageParams` out of `BloggerImage`
+
+  Move all param getters/setters into a standalone `ImageParams` base class.
+  `BloggerImage` now extends `ImageParams` and only handles URL matching
+  and serialization, keeping param logic reusable.
+
 ## 0.0.3
 
 ### Patch Changes
