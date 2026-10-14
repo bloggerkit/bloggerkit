@@ -1,5 +1,11 @@
 # blogger-hbs
 
+## 0.0.3
+
+### Patch Changes
+
+- [#29](https://github.com/bloggerkit/bloggerkit/pull/29) [`29dff62`](https://github.com/bloggerkit/bloggerkit/commit/29dff62d1493b837e778908132e1f2c20e21e032) Thanks [@kumardeo](https://github.com/kumardeo)! - Exit watch mode without `process.exit` on Ctrl+C, so rspack's native bindings no longer warn `ObjectRef is not unref, it considered as a memory leak`
+
 ## 0.0.2
 
 ### Patch Changes
