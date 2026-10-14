@@ -425,7 +425,10 @@ async function watchBuild(root: string | undefined, flags: BuildFlags) {
 	const stop = async () => {
 		stopWatchers();
 		await watcher?.close();
-		process.exit(0);
+		// the process ends once nothing is left running: `process.exit` would skip
+		// the cleanup of rspack's native bindings, which then warn about leaks,
+		// so it is only a fallback for something left running, a plugin's timer
+		setTimeout(() => process.exit(0), 3000).unref();
 	};
 	process.once('SIGINT', stop);
 	process.once('SIGTERM', stop);
