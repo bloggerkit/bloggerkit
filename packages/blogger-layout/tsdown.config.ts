@@ -10,6 +10,10 @@ export default defineConfig(async () => {
 		sourcemap: true,
 		ignoreWatch: ['.turbo'],
 	};
+	const cssOptions: UserConfig['css'] = {
+		// browsers without CSS nesting, so the nested rules are flattened
+		target: ['chrome100', 'edge100', 'firefox100', 'safari15'],
+	};
 
 	return [
 		{
@@ -25,6 +29,7 @@ export default defineConfig(async () => {
 			},
 			dts: true,
 			clean: true,
+			css: cssOptions,
 		},
 		...(await Array.fromAsync(
 			fs.glob('*.{css,scss}', { cwd: 'src' }),
@@ -42,6 +47,7 @@ export default defineConfig(async () => {
 						alwaysBundle: /./,
 					},
 					css: {
+						...cssOptions,
 						minify: true,
 						fileName: path.join(
 							path.dirname(file),
