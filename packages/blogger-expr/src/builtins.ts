@@ -1,3 +1,4 @@
+import { BloggerImage } from 'blogger-images';
 import type { FunctionName } from './ast';
 import type { Value } from './evaluator';
 
@@ -20,7 +21,7 @@ function asString(v: Value, fnName: string, argIndex: number): string {
 	if (v === null) {
 		return '';
 	}
-	throw new TypeError(`${fnName}(): argument ${argIndex} must be a string`);
+	throw new TypeError(`${fnName}(): argument ${argIndex + 1} must be a string`);
 }
 
 function asNumber(v: Value, fnName: string, argIndex: number): number {
@@ -30,7 +31,7 @@ function asNumber(v: Value, fnName: string, argIndex: number): number {
 	if (typeof v === 'string' && v.trim() !== '') {
 		return Number(v);
 	}
-	throw new TypeError(`${fnName}(): argument ${argIndex} must be a number`);
+	throw new TypeError(`${fnName}(): argument ${argIndex + 1} must be a number`);
 }
 
 function asMap(
@@ -41,63 +42,87 @@ function asMap(
 	if (v && typeof v === 'object' && !Array.isArray(v)) {
 		return v as Record<string, Value>;
 	}
-	throw new TypeError(`${fnName}(): argument ${argIndex} must be a map`);
+	throw new TypeError(`${fnName}(): argument ${argIndex + 1} must be a map`);
 }
 
 function asList(v: Value, fnName: string, argIndex: number): Value[] {
 	if (Array.isArray(v)) {
 		return v;
 	}
-	throw new TypeError(`${fnName}(): argument ${argIndex} must be a list`);
+	throw new TypeError(`${fnName}(): argument ${argIndex + 1} must be a list`);
+}
+
+/** Splits a URL at its first `#`, which starts the fragment. */
+function splitHash(url: string): [string, string] {
+	const index = url.indexOf('#');
+	return index === -1 ? [url, ''] : [url.slice(0, index), url.slice(index)];
+}
+
+/** Splits a URL without a fragment at its first `?`, which starts the query. */
+function splitQuery(url: string): [string, string] {
+	const index = url.indexOf('?');
+	return index === -1 ? [url, ''] : [url.slice(0, index), url.slice(index + 1)];
 }
 
 /**
- * `path(url, "segment")`
+ * `path(url, "path")`
  *
- * Joins a base URL and a path segment with exactly one `/` between them, e.g.
- * `path(data:blog.homepageUrl.canonical, "p/about.html")`.
+ * Replaces the path of `url`, keeping its query and fragment, e.g.
+ * `path(data:blog.homepageUrl.canonical, "search")` -> `https://.../search`.
  */
 const path: BuiltinFunction = (...args) => {
-	const base = asString(args[0] ?? '', 'path', 0);
-	const segment = asString(args[1] ?? '', 'path', 1);
-	return `${base.replace(/\/+$/, '')}/${segment.replace(/^\/+/, '')}`;
+	const url = asString(args[0] ?? '', 'path', 0);
+	const newPath = asString(args[1] ?? '', 'path', 1);
+	const [rest, hash] = splitHash(url);
+	const [base, query] = splitQuery(rest);
+	// the scheme and the host, if any
+	const origin = /^(?:[a-z][a-z0-9+.-]*:)?\/\/[^/]*/i.exec(base)?.[0] ?? '';
+	return `${origin}/${newPath.replace(/^\/+/, '')}${query ? `?${query}` : ''}${hash}`;
 };
 
-function mergeParams(url: string, extra: Record<string, Value>): string {
-	const [base, hash] = url.split('#');
-	const [pathPart, query = ''] = (base ?? '').split('?');
-	const searchParams = new URLSearchParams(query);
+function withParams(
+	url: string,
+	extra: Record<string, Value>,
+	append: boolean,
+): string {
+	const [rest, hash] = splitHash(url);
+	const [base, query] = splitQuery(rest);
+	// appended after the parameters of the URL, or instead of them
+	const searchParams = new URLSearchParams(append ? query : '');
 	for (const [key, value] of Object.entries(extra)) {
-		searchParams.set(key, value === null ? '' : String(value));
+		if (value !== null && typeof value === 'object') {
+			throw new TypeError(
+				`The value of the parameter '${key}' must be a string, a number or a boolean`,
+			);
+		}
+		searchParams.append(key, value === null ? '' : String(value));
 	}
 	const qs = searchParams.toString();
-	return `${pathPart}${qs ? `?${qs}` : ''}${hash ? `#${hash}` : ''}`;
+	return `${base}${qs ? `?${qs}` : ''}${hash}`;
 }
 
 /**
  * `appendParams(url, { key: value, ... })`
  *
- * Adds the given query parameters to `url`, overwriting any that already
- * share the same key (there's no publicly documented distinction between
- * this and `params` beyond the name Blogger templates use for each).
+ * Appends the given query parameters to the ones of `url`, e.g.
+ * `appendParams(data:post.commentFormIframeSrc, { skin: "contempo" })`.
  */
 const appendParams: BuiltinFunction = (...args) => {
 	const url = asString(args[0] ?? '', 'appendParams', 0);
 	const extra = asMap(args[1] ?? {}, 'appendParams', 1);
-	return mergeParams(url, extra);
+	return withParams(url, extra, true);
 };
 
 /**
  * `params(url, { key: value, ... })`
  *
- * Replaces `url`'s query parameters with the given ones (existing keys not
- * present in the map are left alone; matching keys are overwritten), e.g.
- * `params(data:view.url, { amp: "1" })`.
+ * Replaces the query parameters of `url` with the given ones, e.g.
+ * `params(data:view.url, { amp: "1" })` -> `...?amp=1`.
  */
 const params: BuiltinFunction = (...args) => {
 	const url = asString(args[0] ?? '', 'params', 0);
 	const extra = asMap(args[1] ?? {}, 'params', 1);
-	return mergeParams(url, extra);
+	return withParams(url, extra, false);
 };
 
 /**
@@ -105,12 +130,13 @@ const params: BuiltinFunction = (...args) => {
  *
  * Returns `url` with its `#fragment` replaced by `name`, e.g.
  * `fragment(data:post.url.canonical, "comment")` -> `.../post.html#comment`.
+ * An empty name removes the fragment.
  */
 const fragment: BuiltinFunction = (...args) => {
 	const url = asString(args[0] ?? '', 'fragment', 0);
 	const name = asString(args[1] ?? '', 'fragment', 1);
-	const base = url.split('#')[0];
-	return `${base}#${name}`;
+	const [base] = splitHash(url);
+	return name ? `${base}#${name}` : base;
 };
 
 /**
@@ -120,28 +146,38 @@ const fragment: BuiltinFunction = (...args) => {
  * - `length` (number, default 150): truncate to this many characters, at a
  *   whole-word boundary.
  * - `ellipsis` (boolean, default true): append "..." when truncated.
- * - `links` (boolean, default false): when false, strips `<a>` tags (keeping
+ * - `links` (boolean, default true): when false, strips `<a>` tags (keeping
  *   their text). When true, links are left as-is.
- * - `linebreaks` (boolean, default false): when false, collapses all
- *   whitespace/newlines to single spaces. When true, blank lines become
- *   `<br/>`.
+ * - `linebreaks` (boolean, default true): when false, collapses all
+ *   whitespace/newlines to single spaces. When true, line breaks (`<br>`,
+ *   the end of a paragraph, blank lines) become `<br/>`.
  */
 const snippet: BuiltinFunction = (...args) => {
 	const raw = asString(args[0] ?? '', 'snippet', 0);
 	const options = args.length > 1 ? asMap(args[1] as Value, 'snippet', 1) : {};
 	const length =
 		options.length !== undefined ? asNumber(options.length, 'snippet', 1) : 150;
-	const links = options.links === true;
-	const linebreaks = options.linebreaks === true;
+	if (!Number.isFinite(length) || length < 0) {
+		throw new TypeError(
+			"snippet(): option 'length' must be a number of characters",
+		);
+	}
+	const links = options.links !== false;
+	const linebreaks = options.linebreaks !== false;
 	const ellipsis = options.ellipsis !== false;
 
-	let text = links ? raw : raw.replace(/<a\b[^>]*>|<\/a>/gi, '');
+	// a line break in the markup is a blank line, or a space without breaks,
+	// before the tags are removed
+	let text = raw.replace(/<br\s*\/?>|<\/p>/gi, linebreaks ? '\n\n' : ' ');
+	text = links ? text : text.replace(/<a\b[^>]*>|<\/a>/gi, '');
 	text = text.replace(/<[^>]*>/g, (tag) =>
 		links && /^<\/?a\b/i.test(tag) ? tag : '',
 	);
-	text = linebreaks
-		? text.replace(/\n{2,}/g, '<br/>')
-		: text.replace(/\s+/g, ' ');
+	if (linebreaks) {
+		// blank lines become a break, with the spaces around them
+		text = text.replace(/\s*\n[ \t]*\n\s*/g, '<br/>');
+	}
+	text = text.replace(/\s+/g, ' ');
 	text = text.trim();
 
 	if (text.length <= length) {
@@ -153,8 +189,9 @@ const snippet: BuiltinFunction = (...args) => {
 	return ellipsis ? `${cut}...` : cut;
 };
 
+/** Blogger's (Java) date pattern letters, and text in single quotes. */
 const DATE_TOKEN_PATTERN =
-	/YYYY|YY|MMMM|MMM|MM|M|DD|D|dddd|ddd|HH|H|hh|h|mm|m|ss|s|A|a/g;
+	/'[^']*'|yyyy|YYYY|yy|YY|MMMM|MMM|MM|M|dd|d|EEEE|EEE|HH|H|hh|h|mm|m|ss|s|a/g;
 const MONTHS = [
 	'January',
 	'February',
@@ -183,14 +220,15 @@ const pad2 = (n: number): string => String(n).padStart(2, '0');
 /**
  * `format(date, "pattern")`
  *
- * Formats a date-like value (ISO string, epoch millis, or `Date`) using a
- * subset of common date-format tokens, e.g.
+ * Formats a date-like value (ISO string, epoch millis, or `Date`) in UTC
+ * with Blogger's (Java) pattern letters, e.g.
  * `format(data:post.date, "MMMM d, YYYY")` -> "January 5, 2026".
- * Supported tokens: YYYY, YY, MMMM, MMM, MM, M, DD, D, dddd, ddd, HH, H, hh, h, mm, m, ss, s, A, a.
+ * Supported: yyyy/YYYY, yy/YY, MMMM, MMM, MM, M, dd, d, EEEE, EEE, HH, H, hh,
+ * h, mm, m, ss, s, a. Text in single quotes is kept as it is, `''` is a quote.
  */
 const format: BuiltinFunction = (...args) => {
 	const raw = args[0];
-	const pattern = asString(args[1] ?? 'YYYY-MM-DD', 'format', 1);
+	const pattern = asString(args[1] ?? 'yyyy-MM-dd', 'format', 1);
 	let date: Date;
 	if (raw instanceof Date) {
 		date = raw;
@@ -207,87 +245,104 @@ const format: BuiltinFunction = (...args) => {
 		throw new TypeError('format(): invalid date');
 	}
 
-	const hours24 = date.getHours();
+	const hours24 = date.getUTCHours();
 	const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+	const year = String(date.getUTCFullYear());
+	const month = MONTHS[date.getUTCMonth()] as string;
+	const day = DAYS[date.getUTCDay()] as string;
 	const replacements: Record<string, string> = {
-		YYYY: String(date.getFullYear()),
-		YY: String(date.getFullYear()).slice(-2),
-		MMMM: MONTHS[date.getMonth()] as string,
-		MMM: (MONTHS[date.getMonth()] as string).slice(0, 3),
-		MM: pad2(date.getMonth() + 1),
-		M: String(date.getMonth() + 1),
-		DD: pad2(date.getDate()),
-		D: String(date.getDate()),
-		dddd: DAYS[date.getDay()] as string,
-		ddd: (DAYS[date.getDay()] as string).slice(0, 3),
+		yyyy: year,
+		YYYY: year,
+		yy: year.slice(-2),
+		YY: year.slice(-2),
+		MMMM: month,
+		MMM: month.slice(0, 3),
+		MM: pad2(date.getUTCMonth() + 1),
+		M: String(date.getUTCMonth() + 1),
+		dd: pad2(date.getUTCDate()),
+		d: String(date.getUTCDate()),
+		EEEE: day,
+		EEE: day.slice(0, 3),
 		HH: pad2(hours24),
 		H: String(hours24),
 		hh: pad2(hours12),
 		h: String(hours12),
-		mm: pad2(date.getMinutes()),
-		m: String(date.getMinutes()),
-		ss: pad2(date.getSeconds()),
-		s: String(date.getSeconds()),
-		A: hours24 < 12 ? 'AM' : 'PM',
-		a: hours24 < 12 ? 'am' : 'pm',
+		mm: pad2(date.getUTCMinutes()),
+		m: String(date.getUTCMinutes()),
+		ss: pad2(date.getUTCSeconds()),
+		s: String(date.getUTCSeconds()),
+		a: hours24 < 12 ? 'AM' : 'PM',
 	};
-	return pattern.replace(
-		DATE_TOKEN_PATTERN,
-		(token) => replacements[token] ?? token,
-	);
+	return pattern.replace(DATE_TOKEN_PATTERN, (token) => {
+		if (token.startsWith("'")) {
+			return token === "''" ? "'" : token.slice(1, -1);
+		}
+		return replacements[token] ?? token;
+	});
 };
 
 /**
- * `resizeImage(image, width, [ratioOrHeight])`
+ * `resizeImage(image, width, [ratio])`
  *
- * Approximates Blogger's Google-hosted image resizing (`googleusercontent.com`
- * / `blogger.googleusercontent.com` URLs), which encode size in a suffix on
- * the URL. Blogger's exact internal encoding isn't publicly specified, so
- * this implements the commonly observed `=w{width}-h{height}-c` convention.
- * `ratioOrHeight` may be a `"W:H"` ratio string (e.g. `"16:9"`) or a plain
- * number (an explicit height).
+ * Resizes a Blogger hosted image (`blogger.googleusercontent.com`,
+ * `bp.blogspot.com`) to `width`, cropped to the ratio when one is given:
+ * `...=w640-h360-p-k-no-nu`. `ratio` is a `"W:H"` string, e.g. `"16:9"`.
+ * Other URLs are returned unchanged.
  */
 const resizeImage: BuiltinFunction = (...args) => {
 	const url = asString(args[0] ?? '', 'resizeImage', 0);
 	const width = Math.round(asNumber(args[1] ?? 0, 'resizeImage', 1));
-	const height = resolveHeight(width, args[2]);
-	const suffix = height ? `w${width}-h${height}` : `w${width}`;
-	// Strip any existing Google image-serving size suffix (e.g. "=s0", "=w200-h200-c")
-	// before appending the new one.
-	const stripped = url.replace(/=[a-z0-9-]+$/i, '');
-	return `${stripped}=${suffix}-c`;
+	if (!Number.isFinite(width) || width < 1) {
+		throw new TypeError('resizeImage(): argument 2 must be a positive number');
+	}
+	const height = resolveHeight(width, args[2], 'resizeImage');
+
+	// the size of the URL is replaced, other URLs are left as they are
+	const image = new BloggerImage(url, { existing: false, passThrough: true });
+	if (!image.isSupported()) {
+		return url;
+	}
+	image.width(width);
+	if (height) {
+		image.height(height).alternateCrop(true);
+	}
+	return image.disableAnimation(true).noButton(true).noUpscaling(true).url();
 };
 
+/** The height for `width` at a `"W:H"` ratio, e.g. `"16:9"`, if one is given. */
 function resolveHeight(
 	width: number,
 	ratioArg: Value | undefined,
+	fnName: string,
 ): number | null {
 	if (ratioArg === undefined || ratioArg === null) {
 		return null;
 	}
-	if (typeof ratioArg === 'number') {
-		return Math.round(ratioArg);
+	const match =
+		typeof ratioArg === 'string' ? /^(\d+):(\d+)$/.exec(ratioArg) : null;
+	const w = Number(match?.[1]);
+	const h = Number(match?.[2]);
+	if (!match || w === 0 || h === 0) {
+		throw new TypeError(
+			`${fnName}(): argument 3 must be a ratio like "16:9", got: ${JSON.stringify(ratioArg)}`,
+		);
 	}
-	const match = /^(\d+):(\d+)$/.exec(String(ratioArg));
-	if (!match) {
-		return null;
-	}
-	const w = Number(match[1]);
-	const h = Number(match[2]);
 	return Math.round((width * h) / w);
 }
 
 /**
- * `sourceSet(image, [width1, width2, ...], [ratioOrHeight])`
+ * `sourceSet(image, [width1, width2, ...], [ratio])`
  *
  * Builds an `srcset`-style string by calling `resizeImage` for each width in
  * the list, e.g. `sourceSet(data:post.featuredImage, [400, 800, 1200],
- * "16:9")` -> `"...=w400-h225-c 400w, ...=w800-h450-c 800w, ...=w1200-h675-c 1200w"`.
+ * "16:9")` -> `"...=w400-h225-p-k-no-nu 400w, ...=w800-h450-p-k-no-nu 800w, ..."`.
  */
 const sourceSet: BuiltinFunction = (...args) => {
 	const image = asString(args[0] ?? '', 'sourceSet', 0);
 	const widths = asList(args[1] ?? [], 'sourceSet', 1);
 	const ratioArg = args[2];
+	// checked here, for the error to name this function
+	resolveHeight(1, ratioArg, 'sourceSet');
 	return widths
 		.map((w) => {
 			const width = Math.round(asNumber(w, 'sourceSet', 1));

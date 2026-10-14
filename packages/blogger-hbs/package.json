@@ -1,0 +1,68 @@
+{
+  "name": "blogger-hbs",
+  "version": "0.0.0",
+  "description": "Build Blogger themes from Handlebars templates, with bundled scripts and styles.",
+  "keywords": [
+    "blogger",
+    "blogger-theme",
+    "handlebars"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Deo Kumar",
+    "email": "deo@fineshopdesign.com",
+    "url": "https://github.com/kumardeo"
+  },
+  "homepage": "https://github.com/bloggerkit/bloggerkit/tree/main/packages/blogger-hbs#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bloggerkit/bloggerkit",
+    "directory": "packages/blogger-hbs"
+  },
+  "bugs": {
+    "url": "https://github.com/bloggerkit/bloggerkit/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "lint": "biome lint ./src ./test",
+    "check": "biome check ./src ./test",
+    "check:types": "tsc --noEmit",
+    "build": "NODE_ENV=production tsdown",
+    "dev": "NODE_ENV=development tsdown --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "type": "module",
+  "bin": {
+    "blogger-hbs": "./bin/blogger-hbs.js"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@rsbuild/core": "^2.2.11",
+    "cac": "^7.1.0",
+    "handlebars": "^4.7.9",
+    "normalize-path": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/normalize-path": "^3.0.2",
+    "tsdown": "catalog:",
+    "vitest": "catalog:"
+  }
+}

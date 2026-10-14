@@ -8,11 +8,15 @@ This monorepo contains the following packages:
 
 ### [blogger-expr](./packages/blogger-expr)
 
-Parser and evaluator for Blogger theme XML expressions.
+Parser and evaluator for Blogger theme XML expressions. **Experimental.**
 
 ### [blogger-feed](./packages/blogger-feed)
 
 A lightweight, type-safe Blogger feed API client for fetching Blogger blog metadata, posts, pages, comments, and pagination data.
+
+### [blogger-hbs](./packages/blogger-hbs)
+
+Build Blogger themes from Handlebars templates, with bundled scripts and styles. **Experimental.**
 
 ### [blogger-images](./packages/blogger-images)
 

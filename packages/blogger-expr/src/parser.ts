@@ -8,6 +8,13 @@ import type {
 	Node,
 	Span,
 } from './ast';
+import {
+	checkCall,
+	FUNCTION_NAMES,
+	INFIX_FUNCTION_NAMES,
+	LAMBDA_OPERATORS,
+	REQUIRES_WRAPPING,
+} from './grammar';
 import { type Token, tokenize } from './lexer';
 
 export class ParseError extends Error {
@@ -28,130 +35,6 @@ const KEYWORD_BINARY_OPS: Record<string, BinaryOperator> = {
 	lte: '<=',
 	gte: '>=',
 };
-
-const LAMBDA_OPERATORS = new Set<LambdaOperator>([
-	'filter',
-	'map',
-	'any',
-	'all',
-	'none',
-]);
-
-const FUNCTION_NAMES = new Set<FunctionName>([
-	'path',
-	'appendParams',
-	'params',
-	'snippet',
-	'fragment',
-	'resizeImage',
-	'sourceSet',
-	'format',
-]);
-
-const INFIX_FUNCTION_NAMES = new Set<InfixFunctionName>([
-	'path',
-	'appendParams',
-	'params',
-	'snippet',
-	'fragment',
-	'format',
-]);
-
-const SNIPPET_OPTION_TYPES: Record<string, 'NumberLiteral' | 'BooleanLiteral'> =
-	{
-		length: 'NumberLiteral',
-		links: 'BooleanLiteral',
-		linebreaks: 'BooleanLiteral',
-		ellipsis: 'BooleanLiteral',
-	};
-
-const LITERAL_TYPES = new Set<Node['type']>([
-	'StringLiteral',
-	'NumberLiteral',
-	'BooleanLiteral',
-	'ListLiteral',
-	'MapLiteral',
-	'SetLiteral',
-	'EmptyDataReference',
-]);
-const isLiteral = (n: Node): boolean => LITERAL_TYPES.has(n.type);
-
-type ArgValidator = (n: Node) => string | null;
-
-const anyType: ArgValidator = () => null;
-const stringType: ArgValidator = (n) =>
-	isLiteral(n) && n.type !== 'StringLiteral'
-		? 'must be a string literal'
-		: null;
-const numberType: ArgValidator = (n) =>
-	isLiteral(n) && n.type !== 'NumberLiteral'
-		? 'must be a number literal'
-		: null;
-const mapType: ArgValidator = (n) =>
-	isLiteral(n) && n.type !== 'MapLiteral'
-		? 'must be a map literal, e.g. { key: value }'
-		: null;
-const listType: ArgValidator = (n) =>
-	isLiteral(n) && n.type !== 'ListLiteral'
-		? 'must be a list literal, e.g. [1, 2, 3]'
-		: null;
-const stringOrNumberType: ArgValidator = (n) =>
-	isLiteral(n) && n.type !== 'StringLiteral' && n.type !== 'NumberLiteral'
-		? 'must be a string or number literal'
-		: null;
-
-interface FunctionSignature {
-	readonly min: number;
-	readonly max: number;
-	readonly args: readonly ArgValidator[];
-}
-
-const FUNCTION_SIGNATURES: Record<FunctionName, FunctionSignature> = {
-	path: { min: 2, max: 2, args: [stringType, stringType] },
-	appendParams: { min: 2, max: 2, args: [stringType, mapType] },
-	params: { min: 2, max: 2, args: [stringType, mapType] },
-	snippet: { min: 1, max: 2, args: [stringType, mapType] },
-	fragment: { min: 2, max: 2, args: [stringType, stringType] },
-	resizeImage: {
-		min: 2,
-		max: 3,
-		args: [stringType, numberType, stringOrNumberType],
-	},
-	sourceSet: {
-		min: 2,
-		max: 3,
-		args: [stringType, listType, stringOrNumberType],
-	},
-	format: { min: 2, max: 2, args: [anyType, stringType] },
-};
-
-/**
- * Node types that are not allowed to appear *bare* in a "restricted value"
- * position (function-call argument, list/set-literal element, map-literal
- * value, or infix-function operand) — they must be fully wrapped in parens
- * instead, e.g. `path(data:url, (data:num + 1))`. See `parseRestrictedValue`.
- *
- * In practice `BinaryExpression`/`LogicalExpression`/`MembershipExpression`/
- * `ConditionalExpression`/`ElvisExpression` can only ever reach the top of a
- * restricted-value parse via an explicit paren group in the first place
- * (nothing in the unary/postfix/primary chain that `parseRestrictedValue`
- * uses can construct them otherwise), so for those five this check is a
- * defensive backstop rather than the primary mechanism — the primary
- * mechanism is that leftover, un-consumed operator tokens make the
- * surrounding `)`/`]`/`}`/`,` expectation fail on its own. `LambdaExpression`
- * and `NamedOperatorExpression`, by contrast, *are* constructed directly by
- * the postfix loop with no parens at all (`data:x path "y"`,
- * `data:x filter (i => i.ok)`), so for those two this check is load-bearing.
- */
-const REQUIRES_WRAPPING = new Set<Node['type']>([
-	'BinaryExpression',
-	'LogicalExpression',
-	'MembershipExpression',
-	'ConditionalExpression',
-	'ElvisExpression',
-	'NamedOperatorExpression',
-	'LambdaExpression',
-]);
 
 function describeNode(node: Node): string {
 	switch (node.type) {
@@ -256,55 +139,12 @@ class Parser {
 	}
 
 	private validateArgs(name: FunctionName, args: Node[], span: Span): void {
-		const sig = FUNCTION_SIGNATURES[name];
-		if (args.length < sig.min || args.length > sig.max) {
-			const arity =
-				sig.min === sig.max ? `${sig.min}` : `${sig.min}-${sig.max}`;
+		const problem = checkCall(name, args);
+		if (problem) {
 			throw new ParseError(
-				`${name}() expects ${arity} argument(s), got ${args.length}`,
-				span.start,
+				problem.message,
+				problem.node?.span.start ?? span.start,
 			);
-		}
-		for (let i = 0; i < args.length; i++) {
-			const validator = sig.args[i];
-			const arg = args[i];
-			if (!validator || !arg) {
-				continue;
-			}
-			const error = validator(arg);
-			if (error) {
-				throw new ParseError(
-					`${name}(): argument ${i + 1} ${error}`,
-					arg.span.start,
-				);
-			}
-		}
-		if (
-			name === 'snippet' &&
-			args.length === 2 &&
-			args[1]?.type === 'MapLiteral'
-		) {
-			this.validateSnippetOptions(args[1]);
-		}
-	}
-
-	private validateSnippetOptions(
-		options: Extract<Node, { type: 'MapLiteral' }>,
-	): void {
-		for (const entry of options.entries) {
-			const expected = SNIPPET_OPTION_TYPES[entry.key];
-			if (!expected) {
-				throw new ParseError(
-					`snippet(): unsupported option '${entry.key}' (expected one of: ${Object.keys(SNIPPET_OPTION_TYPES).join(', ')})`,
-					entry.value.span.start,
-				);
-			}
-			if (isLiteral(entry.value) && entry.value.type !== expected) {
-				throw new ParseError(
-					`snippet(): option '${entry.key}' must be a ${expected === 'NumberLiteral' ? 'number' : 'boolean'}`,
-					entry.value.span.start,
-				);
-			}
 		}
 	}
 
