@@ -13,9 +13,9 @@ describe('formatXml', () => {
 	test('puts start tags on a single line with sorted attributes', () => {
 		assert.strictEqual(
 			formatXml(
-				`${HEAD}<html\n  xmlns='x'\n  b:version='2'\n  expr:lang='l'>\n</html>`,
+				`${HEAD}<html\n  xmlns='x'\n  b:version='2'\n  expr:lang='data:l'>\n</html>`,
 			),
-			`${HEAD}<html b:version='2' expr:lang='l' xmlns='x'>\n</html>`,
+			`${HEAD}<html b:version='2' expr:lang='data:l' xmlns='x'>\n</html>`,
 		);
 	});
 
@@ -33,10 +33,48 @@ describe('formatXml', () => {
 		);
 	});
 
-	test('keeps the quotes and the entities of values', () => {
+	test('quotes values with single quotes, keeping their entities', () => {
 		assert.strictEqual(
-			formatXml(`${HEAD}<a b="x &amp; y" a='&#39;'/>`),
-			`${HEAD}<a a='&#39;' b="x &amp; y"/>`,
+			formatXml(
+				`${HEAD}<a b="x &amp; y" a='&#39;' c="it's &quot;q&quot;" d='&quot;'/>`,
+			),
+			`${HEAD}<a a='&#39;' b='x &amp; y' c='it&apos;s "q"' d='&quot;'/>`,
+		);
+	});
+
+	test('prints expressions on a single line, in single quotes', () => {
+		assert.strictEqual(
+			formatXml(
+				`${HEAD}<b:if cond='data:a&amp;&amp;(data:b eq "x")\n  || data:c &lt;2'><a expr:href="data:url  path &quot;y&quot;" expr:title='"it&apos;s"'/></b:if>`,
+			),
+			`${HEAD}<b:if cond='data:a and data:b == "x" or data:c &lt; 2'><a expr:href='data:url path "y"' expr:title='"it&apos;s"'/></b:if>`,
+		);
+	});
+
+	test('leaves other attributes as they are', () => {
+		assert.strictEqual(
+			formatXml(
+				`${HEAD}<b:include cond='data:a&amp;&amp;data:b' data='post' name='a  and'/>`,
+			),
+			`${HEAD}<b:include cond='data:a and data:b' data='post' name='a  and'/>`,
+		);
+	});
+
+	test('formats ranges in b:loop values', () => {
+		assert.strictEqual(
+			formatXml(
+				`${HEAD}<a><b:loop values='1..20' var='i'/><b:loop values='-2..3' var='j'/></a>`,
+			).split('\n')[2],
+			`<a><b:loop values='1..20' var='i'/><b:loop values='-2..3' var='j'/></a>`,
+		);
+	});
+
+	test('formats b:include data, leaving bare names as they are', () => {
+		assert.strictEqual(
+			formatXml(
+				`${HEAD}<a><b:include data='data:posts  filter (p =&gt; p.id)' name='x'/><b:include data='post.labels' name='y'/></a>`,
+			),
+			`${HEAD}<a><b:include data='data:posts filter (p => p.id)' name='x'/><b:include data='post.labels' name='y'/></a>`,
 		);
 	});
 
@@ -140,6 +178,22 @@ describe('validateXml', () => {
 		validateXml(formatXml('<html><p/></html>'));
 	});
 
+	test('checks the contents of the declarations', () => {
+		const cases: [string, RegExp][] = [
+			[`<?xml version="1.1"?>\n${DOCTYPE}\n<html/>`, /version="1.0"/],
+			[
+				`<?xml version="1.0" encoding="ISO-8859-1"?>\n${DOCTYPE}\n<html/>`,
+				/encoding 'ISO-8859-1'/,
+			],
+			[`${XML_DECLARATION}\n<!DOCTYPE svg>\n<html/>`, /doctype has to be/],
+		];
+		for (const [xml, message] of cases) {
+			assert.throws(() => validateXml(xml), XmlError);
+			assert.throws(() => validateXml(xml), message);
+		}
+		validateXml(`<?xml version='1.0'?>\n${DOCTYPE}\n<html/>`);
+	});
+
 	test('requires the declarations on the first two lines', () => {
 		assert.throws(() => validateXml('<html/>'), /first line has to be/);
 		assert.throws(
@@ -173,6 +227,48 @@ describe('validateXml', () => {
 			assert.throws(() => validateXml(HEAD + body), XmlError);
 			assert.throws(() => validateXml(HEAD + body), message);
 		}
+	});
+
+	test('accepts valid expressions, with their entities decoded', () => {
+		validateXml(
+			`${HEAD}<html expr:lang='data:blog.locale'>
+  <b:if cond='data:a &amp;&amp; data:b &lt; 2'><b:elseif cond="data:c == &quot;x&quot;"/></b:if>
+  <b:loop values='data:posts' var='post'><b:eval expr='data:post.title'/></b:loop>
+  <b:with value='[1, 2]' var='list'><b:switch var='data:blog.pageType'/></b:with>
+  <b:include data='post' name='x' cond='data:post'/>
+  <b:section id='s' cond='data:view.isHomepage'/>
+</html>`,
+		);
+	});
+
+	test('reports invalid expressions where they are', () => {
+		const cases: [string, RegExp][] = [
+			[
+				`<b:if cond='data:a and'/>`,
+				/Invalid expression in the attribute 'cond' of <b:if>: .* \(3:23\)/,
+			],
+			[`<a expr:href='data:a +'/>`, /'expr:href' of <a>/],
+			[`<b:section id='s' cond='data:a and'/>`, /'cond' of <b:section>/],
+			[`<b:include data='data:a +' name='x'/>`, /'data' of <b:include>/],
+			[`<b:include data='post title' name='x'/>`, /'data' of <b:include>/],
+			[`<b:loop values='foo' var='x'/>`, /'values' of <b:loop>/],
+			[`<b:loop values='1..data:n' var='x'/>`, /'values' of <b:loop>/],
+			[
+				`<b:loop values='1 .. 20' var='x'/>`,
+				/range in the attribute 'values' of <b:loop>, it can not have spaces: '1\.\.20' \(3:17\)/,
+			],
+			[`<b:loop values=' 1..20' var='x'/>`, /can not have spaces/],
+			[`<b:eval expr='&quot;x'/>`, /'expr' of <b:eval>.*\(3:15\)/],
+		];
+		for (const [body, message] of cases) {
+			assert.throws(() => validateXml(HEAD + body), XmlError);
+			assert.throws(() => validateXml(HEAD + body), message);
+			assert.throws(() => formatXml(HEAD + body), message);
+		}
+	});
+
+	test('leaves other attributes alone', () => {
+		validateXml(`${HEAD}<b:include data='post' name='a and'/>`);
 	});
 
 	test('XmlError has the position', () => {

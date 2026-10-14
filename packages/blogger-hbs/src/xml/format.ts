@@ -1,6 +1,12 @@
 import {
+	formatExpression,
+	type ParsedExpression,
+	parseExpressions,
+} from './expressions';
+import {
 	createLocate,
 	type Position,
+	type ScannedAttribute,
 	type ScannedDeclaration,
 	type ScannedStartTag,
 	XmlScanner,
@@ -27,7 +33,9 @@ export const DOCTYPE = '<!DOCTYPE html>';
 
 /**
  * Throws an `XmlError` unless `xml` is a well-formed document starting with
- * the XML declaration on the first line and the doctype on the second.
+ * the XML declaration on the first line and the doctype on the second, both
+ * as `formatXml` requires them (XML 1.0 in UTF-8, an `html` doctype), whose
+ * expressions (`b:if cond`, `expr:*`, ...) parse with `blogger-expr`.
  */
 export function validateXml(xml: string): void {
 	const { declarations } = scanDocument(xml);
@@ -58,6 +66,10 @@ export function validateXml(xml: string): void {
 			doctype?.position ?? { line: 2, column: 0 },
 		);
 	}
+
+	// their contents are checked as when formatting
+	formatXmlDeclaration(xmlDeclaration);
+	formatDoctype(doctype);
 }
 
 /**
@@ -66,19 +78,21 @@ export function validateXml(xml: string): void {
  * - the XML declaration on the first line and the doctype on the second, added
  *   when missing and moved there when elsewhere
  * - start tags on a single line, line breaks in attribute values collapsed to
- *   a space and the attributes sorted by name
+ *   a space, the attributes sorted by name and quoted with single quotes
+ * - expressions (`b:if cond`, `expr:*`, ...) printed by `blogger-expr` on a
+ *   single line, `data:a&amp;&amp;data:b` as `data:a and data:b`
  *
  * Everything else is left as it is.
  */
 export function formatXml(xml: string): string {
-	const { tags, declarations } = scanDocument(xml);
+	const { tags, declarations, expressions } = scanDocument(xml);
 
 	// the declarations are taken out, they are written at the top
 	const edits: { start: number; end: number; text: string }[] = [
 		...tags.map((tag) => ({
 			start: tag.start,
 			end: tag.end,
-			text: formatStartTag(tag),
+			text: formatStartTag(tag, expressions),
 		})),
 		...indentChildren(xml, tags),
 		...declarations.map((item) => ({
@@ -149,14 +163,25 @@ function indentationOf(xml: string, offset: number): string {
 interface Scanned {
 	tags: ScannedStartTag[];
 	declarations: ScannedDeclaration[];
+	/** The expressions of the attributes, parsed while scanning. */
+	expressions: Map<ScannedAttribute, ParsedExpression>;
 }
 
 function scanDocument(xml: string): Scanned {
 	const locate = createLocate(xml);
-	const scanned: Scanned = { tags: [], declarations: [] };
+	const scanned: Scanned = {
+		tags: [],
+		declarations: [],
+		expressions: new Map(),
+	};
 	const scanner = new XmlScanner({
 		document: true,
-		onStartTag: (tag) => scanned.tags.push(tag),
+		onStartTag: (tag) => {
+			scanned.tags.push(tag);
+			for (const [attribute, expression] of parseExpressions(tag)) {
+				scanned.expressions.set(attribute, expression);
+			}
+		},
 		onDeclaration: (declaration) => scanned.declarations.push(declaration),
 	});
 
@@ -267,20 +292,32 @@ function formatDoctype({ content, position }: ScannedDeclaration): string {
 	return identifiers ? `<!DOCTYPE html ${identifiers}>` : DOCTYPE;
 }
 
-function formatStartTag({
-	name,
-	attributes,
-	selfClosing,
-}: ScannedStartTag): string {
+function formatStartTag(
+	{ name: tagName, attributes, selfClosing }: ScannedStartTag,
+	expressions: Map<ScannedAttribute, ParsedExpression>,
+): string {
 	const formatted = [...attributes]
 		.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-		.map(
-			({ name, value, quote }) =>
-				` ${name}=${quote}${collapseLineBreaks(value)}${quote}`,
-		)
+		.map((attribute) => {
+			const parsed = expressions.get(attribute);
+			const value =
+				(parsed && formatExpression(parsed)) ??
+				singleQuoted(attribute, collapseLineBreaks(attribute.value));
+			return ` ${attribute.name}='${value}'`;
+		})
 		.join('');
 
-	return `<${name}${formatted}${selfClosing ? '/>' : '>'}`;
+	return `<${tagName}${formatted}${selfClosing ? '/>' : '>'}`;
+}
+
+/**
+ * A value written in double quotes, rewritten for single quotes: `'` escaped
+ * as `&apos;` and `&quot;` unescaped. Other entities are left as they are.
+ */
+function singleQuoted({ quote }: ScannedAttribute, value: string): string {
+	return quote === "'"
+		? value
+		: value.replace(/'/g, '&apos;').replace(/&quot;/g, '"');
 }
 
 /** Every line break becomes a space, the spaces around it stay as they are. */

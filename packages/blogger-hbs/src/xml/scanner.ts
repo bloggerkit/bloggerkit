@@ -33,6 +33,22 @@ export interface ScannedAttribute {
 	/** The value as it is written, entities are not decoded. */
 	value: string;
 	quote: '"' | "'";
+	/**
+	 * Whether the name or the value has output unknown until rendering, a
+	 * Handlebars expression or block, `value` is then only the text around it.
+	 */
+	dynamic: boolean;
+	/** Position of the character of `value` at `index`, of the closing quote at its length. */
+	positionOf(index: number): Position;
+}
+
+/** Where a piece of an attribute value is in the text it was fed with. */
+interface ValueSegment {
+	/** Index in the value of its first character. */
+	index: number;
+	locate: Locate;
+	/** Index in the text fed of its first character. */
+	textIndex: number;
 }
 
 export interface ScannedStartTag {
@@ -53,7 +69,10 @@ export interface ScannerOptions {
 	 * is a fragment, which can have anything at its top.
 	 */
 	document?: boolean;
-	/** Called with every start tag, only when the text is fed in one piece. */
+	/**
+	 * Called with every start tag. Its offsets are only right when the text is
+	 * fed in one piece, `ScannedAttribute.positionOf` always is.
+	 */
 	onStartTag?(tag: ScannedStartTag): void;
 	/** Called with the XML declaration and the doctype, like `onStartTag`. */
 	onDeclaration?(declaration: ScannedDeclaration): void;
@@ -140,6 +159,8 @@ export class XmlScanner {
 	private attrName = '';
 	private attrDynamic = false;
 	private attrValue = '';
+	private attrValueDynamic = false;
+	private attrValueSegments: ValueSegment[] = [];
 	private quote: '"' | "'" = '"';
 	/** Whether whitespace (or an expression) separates the next attribute. */
 	private separated = false;
@@ -159,6 +180,7 @@ export class XmlScanner {
 			stack: [...this.stack],
 			attributes: [...this.attributes],
 			attributeNames: new Set(this.attributeNames),
+			attrValueSegments: [...this.attrValueSegments],
 		});
 		return copy;
 	}
@@ -194,6 +216,15 @@ export class XmlScanner {
 
 	/** Scans `text`, `base` is added to the offsets of `onStartTag`. */
 	feed(text: string, locate: Locate, base = 0): void {
+		if (this.mode === 'attrValue') {
+			this.addValueSegment(this.attrValue.length, locate, 0);
+		} else if (this.mode === 'entity' && this.entityReturn === 'attrValue') {
+			this.addValueSegment(
+				this.attrValue.length + this.buffer.length,
+				locate,
+				0,
+			);
+		}
 		for (let i = 0; i < text.length; i++) {
 			this.step(text[i], i, locate, base);
 		}
@@ -208,8 +239,10 @@ export class XmlScanner {
 			new XmlSyntaxError(`${label} ${message}`, position);
 
 		switch (this.mode) {
-			case 'text':
 			case 'attrValue':
+				this.attrValueDynamic = true;
+				return;
+			case 'text':
 			case 'comment':
 			case 'cdata':
 			case 'pi':
@@ -238,6 +271,16 @@ export class XmlScanner {
 				);
 			default:
 				throw error(`can not be inside ${DESCRIPTIONS[this.mode]}`);
+		}
+	}
+
+	/**
+	 * Marks the attribute value being scanned as dynamic, when a block is in
+	 * it. Its content is scanned on a copy, so `unknown` is not called.
+	 */
+	dynamicValue(): void {
+		if (this.mode === 'attrValue') {
+			this.attrValueDynamic = true;
 		}
 	}
 
@@ -371,6 +414,9 @@ export class XmlScanner {
 					this.mode = 'attrValue';
 					this.quote = char;
 					this.attrValue = '';
+					this.attrValueDynamic = false;
+					this.attrValueSegments = [];
+					this.addValueSegment(0, locate, i + 1);
 				} else if (!WHITESPACE.test(char)) {
 					fail(
 						`The value of the attribute '${this.attrName}' of <${this.tagName}> has to be quoted`,
@@ -553,6 +599,10 @@ export class XmlScanner {
 		});
 	}
 
+	private addValueSegment(index: number, locate: Locate, textIndex: number) {
+		this.attrValueSegments.push({ index, locate, textIndex });
+	}
+
 	private startEntity(from: 'text' | 'attrValue', position: Position): void {
 		this.mode = 'entity';
 		this.entityReturn = from;
@@ -577,6 +627,8 @@ export class XmlScanner {
 			name: this.attrName,
 			value: this.attrValue,
 			quote: this.quote,
+			dynamic: this.attrDynamic || this.attrValueDynamic,
+			positionOf: positionInSegments(this.attrValueSegments),
 		});
 		this.mode = 'inTag';
 		this.separated = false;
@@ -639,6 +691,14 @@ export class XmlScanner {
 
 function describeElement({ name, position }: OpenElement): string {
 	return `<${name}> (opened at ${position.line}:${position.column + 1})`;
+}
+
+function positionInSegments(segments: ValueSegment[]) {
+	return (index: number): Position => {
+		const segment =
+			segments.findLast((item) => item.index <= index) ?? segments[0];
+		return segment.locate(segment.textIndex + index - segment.index);
+	};
 }
 
 /** Positions in a single text, computed from the offsets of its line starts. */

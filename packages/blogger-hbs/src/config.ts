@@ -36,7 +36,8 @@ export interface OutputConfig {
 	clean?: boolean;
 	/**
 	 * Whether the rendered template is validated as a Blogger theme: well-formed
-	 * XML with the XML declaration and the doctype on the first two lines.
+	 * XML with the XML declaration and the doctype on the first two lines, and
+	 * expressions (`b:if cond`, `expr:*`, ...) that parse with `blogger-expr`.
 	 * `true` by default, formatting needs it. The templates and the partials of
 	 * plugins are validated when compiling either way.
 	 */
@@ -44,8 +45,10 @@ export interface OutputConfig {
 	/**
 	 * Whether the rendered template is formatted as Blogger saves it: the
 	 * declarations added or moved to the top, start tags on a single line, line
-	 * breaks in attribute values collapsed and the attributes sorted. `true` by
-	 * default, nothing is formatted without validation.
+	 * breaks in attribute values collapsed, the attributes sorted and quoted
+	 * with single quotes, and the
+	 * expressions printed by `blogger-expr` on a single line. `true` by default,
+	 * nothing is formatted without validation.
 	 */
 	format?: boolean;
 }
