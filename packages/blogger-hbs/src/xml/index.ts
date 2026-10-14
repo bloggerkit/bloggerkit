@@ -1,3 +1,4 @@
+export { parseExpressions } from './expressions';
 export * from './format';
 export {
 	createLocate,

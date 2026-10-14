@@ -42,6 +42,27 @@ describe('validateTemplateXml', () => {
 		],
 		['handlebars comments', '<p>{{!-- <unclosed --}}</p>'],
 		['a fragment with several roots and text', 'text <a/> <b/> more'],
+		[
+			'valid Blogger expressions',
+			`<b:if cond='data:a &amp;&amp; data:b'><a expr:href='data:url path "x"'/></b:if>`,
+		],
+		['a range in b:loop values', `<b:loop values='1..20' var='i'/>`],
+		[
+			'b:include data, as an expression or a bare name',
+			`<b:include data='data:post' name='a'/><b:include data='post' name='b'/>`,
+		],
+		[
+			'Blogger expressions with Handlebars in them',
+			`<b:if cond='data:{{name}} and'/><a expr:href='{{#if a}}data:a{{/if}} +'/>`,
+		],
+		[
+			'a Blogger expression attribute with a dynamic name',
+			`<a expr:{{n}}='+'/>`,
+		],
+		[
+			'a Blogger expression split by a Handlebars comment',
+			`<b:if cond='data:a {{! c }}and data:b'/>`,
+		],
 	])('accepts %s', (_, source) => {
 		validate(source);
 	});
@@ -115,6 +136,26 @@ describe('validateTemplateXml', () => {
 			'an unbalanced import block',
 			`{{#import "./layout.hbs"}}<main>{{/import}}`,
 			/<main> .* is not closed/,
+		],
+		[
+			'an invalid Blogger expression',
+			`<p>\n  <b:if cond='data:a and'/></p>`,
+			/index\.hbs:2:25, invalid expression in the attribute 'cond' of <b:if>: /,
+		],
+		[
+			'an invalid Blogger expression after a Handlebars comment',
+			`<a expr:href='data:a {{! c }}+'/>`,
+			/index\.hbs:1:31, invalid expression in the attribute 'expr:href' of <a>/,
+		],
+		[
+			'an invalid b:include data',
+			`<b:include data='data:posts[' name='x'/>`,
+			/invalid expression in the attribute 'data' of <b:include>/,
+		],
+		[
+			'an invalid Blogger expression in a block',
+			`{{#each items}}<b:eval expr='data:a +'/>{{/each}}`,
+			/invalid expression in the attribute 'expr' of <b:eval>/,
 		],
 	])('rejects %s', (_, source, message) => {
 		assert.throws(() => validate(source), message);

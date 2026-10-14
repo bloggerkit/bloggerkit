@@ -55,6 +55,7 @@
   },
   "dependencies": {
     "@rsbuild/core": "^2.2.11",
+    "blogger-expr": "workspace:*",
     "cac": "^7.1.0",
     "handlebars": "^4.7.9",
     "normalize-path": "^3.0.0"

@@ -2,6 +2,7 @@ import {
 	createLocate,
 	type Locate,
 	type Position,
+	parseExpressions,
 	XmlScanner,
 	XmlSyntaxError,
 } from '../xml';
@@ -30,6 +31,10 @@ const CONDITIONALS = new Set(['if', 'unless']);
  * `{{#import}}`, `{{#> partial}}` and `{{#*inline}}` blocks is rendered
  * elsewhere and checked on its own.
  *
+ * Blogger expressions (`b:if cond`, `expr:*`, ...) are parsed with
+ * `blogger-expr`, unless their value has Handlebars in it, which is only known
+ * once rendered.
+ *
  * `label` names the template in errors, a path or the name of a partial.
  */
 export function validateTemplateXml(program: Program, label: string): void {
@@ -47,7 +52,9 @@ export function validateTemplateXml(program: Program, label: string): void {
 }
 
 function validateFragment(program: Program): void {
-	const scanner = new XmlScanner();
+	const scanner = new XmlScanner({
+		onStartTag: parseExpressions,
+	});
 	visitProgram(program, scanner);
 	scanner.finish(endOf(program));
 }
@@ -151,6 +158,8 @@ function visitBlock(block: BlockStatement, scanner: XmlScanner): void {
 	}
 
 	scanner.assign(program);
+	// a block in an attribute value renders what is in it, or not
+	scanner.dynamicValue();
 }
 
 function locateContent(content: ContentStatement): Locate {

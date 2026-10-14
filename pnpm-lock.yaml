@@ -314,6 +314,9 @@ importers:
       '@rsbuild/core':
         specifier: ^2.2.11
         version: 2.2.12
+      blogger-expr:
+        specifier: workspace:*
+        version: link:../blogger-expr
       cac:
         specifier: ^7.1.0
         version: 7.1.0
