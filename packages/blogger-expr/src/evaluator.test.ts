@@ -203,3 +203,73 @@ test('builtins: snippet, params, path, fragment, format', () => {
 		'2026',
 	);
 });
+
+test('builtins: fixed behaviors', () => {
+	// path replaces the path, keeping the query and the fragment
+	assert.equal(
+		evaluate('path("https://example.com/a/b.html?q=1#top", "search")'),
+		'https://example.com/search?q=1#top',
+	);
+	// params replaces the query, appendParams adds to it, the fragment is kept
+	assert.equal(
+		evaluate('params("https://example.com/?amp=1&page=2#a#b", { amp: "0" })'),
+		'https://example.com/?amp=0#a#b',
+	);
+	assert.equal(
+		evaluate('appendParams("https://example.com/?skin=a", { skin: "b" })'),
+		'https://example.com/?skin=a&skin=b',
+	);
+	assert.equal(
+		evaluate('fragment("https://example.com/post.html#old", "")'),
+		'https://example.com/post.html',
+	);
+	// Blogger's date patterns, in UTC, with quoted text
+	assert.equal(
+		evaluate('format("2026-01-05T10:30:00Z", "MMMM d, YYYY")'),
+		'January 5, 2026',
+	);
+	assert.equal(
+		evaluate(`format("2026-01-05T10:30:00Z", "EEE 'at' h:mm a")`),
+		'Mon at 10:30 AM',
+	);
+	// links and line breaks are kept by default
+	assert.equal(
+		evaluate('snippet("<a href=\\"/x\\">one</a><br/>  two   three")'),
+		'<a href="/x">one</a><br/>two three',
+	);
+	assert.equal(
+		evaluate(
+			'snippet("<a href=\\"/x\\">one</a><br/>two", { links: false, linebreaks: false })',
+		),
+		'one two',
+	);
+	expect(() => evaluate('snippet("abc", { length: -1 })')).toThrow(/length/);
+	// Blogger images are resized, other URLs are kept
+	assert.equal(
+		evaluate(
+			'resizeImage("https://blogger.googleusercontent.com/img/b/x/s1600/a.jpg", 640, "16:9")',
+		),
+		'https://blogger.googleusercontent.com/img/b/x/w640-h360-p-k-no-nu/a.jpg',
+	);
+	assert.equal(
+		evaluate('resizeImage("https://example.com/a.jpg", 640, "16:9")'),
+		'https://example.com/a.jpg',
+	);
+});
+
+test('builtins: resizeImage and sourceSet take a ratio, not a height', () => {
+	const image = 'https://blogger.googleusercontent.com/img/a/x=s1600';
+	assert.equal(
+		evaluate(`sourceSet("${image}", [400, 800], "16:9")`),
+		`${image.replace('s1600', 'w400-h225-p-k-no-nu')} 400w, ${image.replace('s1600', 'w800-h450-p-k-no-nu')} 800w`,
+	);
+	expect(() => evaluate(`resizeImage("${image}", 400, 300)`)).toThrow(
+		/argument 3 must be a string literal/,
+	);
+	expect(() =>
+		evaluate(`resizeImage("${image}", 400, data:h)`, { data: { h: 300 } }),
+	).toThrow(/resizeImage\(\): argument 3 must be a ratio like "16:9"/);
+	expect(() => evaluate(`sourceSet("${image}", [400], "wide")`)).toThrow(
+		/sourceSet\(\): argument 3 must be a ratio/,
+	);
+});

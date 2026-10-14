@@ -1,7 +1,6 @@
 {
   "name": "blogger-expr",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.0.1",
   "description": "Parser and evaluator for Blogger theme XML expressions.",
   "keywords": [
     "blogger-theme"
@@ -20,6 +19,10 @@
   },
   "bugs": {
     "url": "https://github.com/bloggerkit/bloggerkit/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "lint": "biome lint ./src",
@@ -43,6 +46,9 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
+  },
+  "dependencies": {
+    "blogger-images": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

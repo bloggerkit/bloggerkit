@@ -2,6 +2,9 @@
 
 Parser and evaluator for Blogger theme XML expressions.
 
+> [!WARNING]
+> `blogger-expr` is experimental. Its API, options and output can change in any release, without a major version bump, and it can have bugs. Pin an exact version and check the output before relying on it.
+
 ## Compatibility
 
 Blogger does not provide an official specification or grammar for its XML expression language. Consequently, this project has been developed by carefully observing Blogger's behavior through extensive experimentation, reverse engineering, and trial and error.
