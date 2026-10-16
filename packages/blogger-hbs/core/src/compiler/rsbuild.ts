@@ -67,8 +67,8 @@ export async function buildAssets(
 }
 
 export interface WatchAssetsOptions extends BuildAssetsOptions {
-	/** Called after every rebuild caused by a change of a bundled file. */
-	onRebuild(): void;
+	/** Called after every rebuild caused by a change of bundled files, with them. */
+	onRebuild(files: string[]): void;
 }
 
 export interface AssetWatcher {
@@ -89,6 +89,9 @@ export async function watchAssets(
 	let result: { build: AssetBuild } | { error: unknown } | undefined;
 	let pending: PromiseWithResolvers<void> | undefined;
 
+	/** The files changed since the last rebuild. */
+	const changed = new Set<string>();
+
 	const start = (): void => {
 		pending ??= Promise.withResolvers();
 	};
@@ -99,7 +102,15 @@ export async function watchAssets(
 			// `invalid` comes as soon as a file changes, before the rebuild starts,
 			// so a rebuild already on its way is waited for
 			api.onAfterCreateCompiler(({ compiler }) => {
-				compiler.hooks.invalid.tap('blogger-hbs:watch', start);
+				compiler.hooks.invalid.tap(
+					'blogger-hbs:watch',
+					(file: string | null) => {
+						if (file) {
+							changed.add(file);
+						}
+						start();
+					},
+				);
 			});
 			api.onBeforeBuild(start);
 			api.onAfterBuild({
@@ -114,8 +125,9 @@ export async function watchAssets(
 					pending?.resolve();
 					pending = undefined;
 					if (!isFirstCompile) {
-						options.onRebuild();
+						options.onRebuild([...changed]);
 					}
+					changed.clear();
 				},
 			});
 		},

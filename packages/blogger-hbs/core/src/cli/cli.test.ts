@@ -43,7 +43,7 @@ function stripColors(text: string): string {
 const THEME = {
 	'index.hbs': `<html
   xmlns='http://www.w3.org/1999/xhtml'
-  b:version='2'>
+  b:layoutsVersion='3'>
   <body>{{title}}</body>
 </html>
 `,
@@ -60,6 +60,7 @@ describe('cli', () => {
 		const cwd = await createFixture({});
 		const help = await run(cwd, '--help');
 		assert.strictEqual(help.code, 0);
+		assert.notInclude(help.output, '───');
 		for (const flag of [
 			'--config',
 			'--entry',
@@ -86,11 +87,28 @@ describe('cli', () => {
 		const { code, output } = await run(cwd);
 
 		assert.strictEqual(code, 0, output);
+		const { version } = JSON.parse(
+			await fs.readFile(path.join(PACKAGE, 'package.json'), 'utf-8'),
+		);
+		const header = `blogger-hbs v${version}`;
+		assert.isTrue(
+			output.startsWith(`\n  ${header}\n${'─'.repeat(header.length + 2)}\n`),
+			output,
+		);
 		assert.match(output, /Compiled in \d+ms/);
 		assert.match(output, /Formatted in \d+ms/);
+		assert.match(
+			output,
+			/Written +Size +Gzip\n +dist\/theme\.xml +\d+ B +\d+ B\n +dist\/compiled\.js +[\d.]+ kB +[\d.]+ (kB|B)\n/,
+		);
+		assert.match(
+			output,
+			/In dist\/theme\.xml +Count +Size\n +Scripts +0 +0 B\n/,
+		);
+		assert.match(output, /Built in \d+ms/);
 		assert.strictEqual(
 			await fs.readFile(path.join(cwd, 'dist/theme.xml'), 'utf-8'),
-			`${XML_DECLARATION}\n${DOCTYPE}\n<html b:version='2' xmlns='http://www.w3.org/1999/xhtml'>\n  <body>Hi</body>\n</html>\n`,
+			`${XML_DECLARATION}\n${DOCTYPE}\n<html b:layoutsVersion='3' xmlns='http://www.w3.org/1999/xhtml'>\n  <body>Hi</body>\n</html>\n`,
 		);
 		assert.include(
 			await fs.readFile(path.join(cwd, 'dist/compiled.js'), 'utf-8'),
@@ -220,6 +238,27 @@ describe('cli', () => {
 		assert.notInclude(output, 'Caused by');
 	});
 
+	test('warns about x and expr:x in the rendered template', async () => {
+		const cwd = await createFixture({
+			'index.hbs': "<html>\n  <a href='#' expr:href='data:blog.url'/>\n</html>",
+		});
+		const { code, output } = await run(cwd);
+		assert.strictEqual(code, 0, output);
+		assert.match(
+			output,
+			/⚠ <a> has both 'href' and 'expr:href', Blogger uses 'expr:href' \(dist\/theme\.xml:4:38\)/,
+		);
+		// the place is in the file written, formatted
+		const written = await fs.readFile(
+			path.join(cwd, 'dist/theme.xml'),
+			'utf-8',
+		);
+		assert.strictEqual(
+			written.split('\n')[3],
+			"  <a expr:href='data:blog.url' href='#'/>",
+		);
+	});
+
 	test('watches and stops on SIGINT', async () => {
 		const cwd = await createFixture(THEME);
 		await fs.writeFile(
@@ -241,7 +280,20 @@ describe('cli', () => {
 			'<html><body>two</body></html>',
 		);
 		// the file is written after the rebuild is logged
-		await waitForOutput(child, /Rebuilt in \d+ms[\s\S]*Written/);
+		const rebuilt = await waitForOutput(
+			child,
+			/Rebuilt in \d+ms[\s\S]*Built in/,
+		);
+		// a divider with the time and the file changed, then the sizes only
+		assert.match(
+			rebuilt,
+			/─── \d\d:\d\d:\d\d · index\.hbs ─+\n✓ Rebuilt in \d+ms/,
+		);
+		assert.include(rebuilt, 'Written');
+		// everything, the markup with the change of the text
+		assert.match(rebuilt, /In dist\/theme\.xml +Count +Size\n +Scripts +0/);
+		assert.match(rebuilt, /\n +Markup +[\d.]+ k?B +[-+][\d.]+ k?B\n/);
+		assert.match(rebuilt, /\n +Widgets +0\n/);
 		assert.include(
 			await fs.readFile(path.join(cwd, 'dist/theme.xml'), 'utf-8'),
 			'<body>two</body>',
@@ -255,7 +307,8 @@ describe('cli', () => {
 	});
 });
 
-function waitForOutput(child: ChildProcess, pattern: RegExp): Promise<void> {
+/** The output of `child` from now until it matches `pattern`. */
+function waitForOutput(child: ChildProcess, pattern: RegExp): Promise<string> {
 	return new Promise((resolve, reject) => {
 		let output = '';
 		const timer = setTimeout(
@@ -268,7 +321,7 @@ function waitForOutput(child: ChildProcess, pattern: RegExp): Promise<void> {
 			if (pattern.test(output)) {
 				clearTimeout(timer);
 				child.stdout?.off('data', onData);
-				resolve();
+				resolve(output);
 			}
 		};
 		child.stdout?.on('data', onData);

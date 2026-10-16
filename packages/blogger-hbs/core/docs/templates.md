@@ -6,7 +6,7 @@ A theme is Handlebars templates, `.hbs`, `.handlebars`, `.xml` or `.html`, writt
 <html>
   <body>
     {{import "~/layout/header.hbs"}}
-    <b:section id='main'>...</b:section>
+    <b:section id="main">...</b:section>
     {{import "~/scripts/main.ts" script:defer=true}}
   </body>
 </html>
@@ -16,12 +16,12 @@ A theme is Handlebars templates, `.hbs`, `.handlebars`, `.xml` or `.html`, writt
 
 `{{import "specifier"}}` puts a template, a script, a style or data in its place, its kind is its extension:
 
-| Kind     | Extensions                                               | `{{import}}` is                                      |
-| -------- | -------------------------------------------------------- | ---------------------------------------------------- |
-| template | `.hbs` `.handlebars` `.xml` `.html`                      | the template rendered with the same context          |
-| script   | `.ts` `.tsx` `.mts` `.js` `.jsx` `.mjs` `.cjs`           | a `<script>`, with a `<style>` for the CSS it imports |
-| style    | `.css` `.scss` `.sass` `.less` `.styl` `.stylus` `.postcss` | a `<style>`                                     |
-| data     | `.json`                                                  | the value, `{{#with (import "./site.json")}}`        |
+| Kind     | Extensions                                                  | `{{import}}` is                                       |
+| -------- | ----------------------------------------------------------- | ----------------------------------------------------- |
+| template | `.hbs` `.handlebars` `.xml` `.html`                         | the template rendered with the same context           |
+| script   | `.ts` `.tsx` `.mts` `.js` `.jsx` `.mjs` `.cjs`              | a `<script>`, with a `<style>` for the CSS it imports |
+| style    | `.css` `.scss` `.sass` `.less` `.styl` `.stylus` `.postcss` | a `<style>`                                           |
+| data     | `.json`                                                     | the value, `{{#with (import "./site.json")}}`         |
 
 The specifier is a string written in the template, not a value:
 
@@ -59,7 +59,7 @@ A JSON file is read when compiling, its value is in the compiled theme:
 
 ```hbs
 {{#with (import "~/data/site.json")}}
-  {{#each nav}}<a href='{{url}}'>{{label}}</a>{{/each}}
+  {{#each nav}}<a href="{{url}}">{{label}}</a>{{/each}}
 {{/with}}
 ```
 
@@ -72,13 +72,13 @@ Scripts and styles are bundled with [Rsbuild](https://rsbuild.rs), once however 
 <!-- <script>/*<![CDATA[*/ ... /*]]>*/</script> -->
 ```
 
-| Option                                     | Renders                                                     |
-| ------------------------------------------ | ----------------------------------------------------------- |
+| Option                                      | Renders                                                                 |
+| ------------------------------------------- | ----------------------------------------------------------------------- |
 | `script:defer=true`, `script:type="module"` | the attribute on the `<script>`, `style:media="print"` on the `<style>` |
-| `script=(object type="module" defer=true)` | the attributes of the object, `script:name` ones go over them |
-| `script:only=true`, `style:only=true`      | only the `<script>`, or only the `<style>` of a script      |
-| `script:raw=true`, `style:raw=true`        | only the code, without a tag, for a `<b:skin>`              |
-| `depends-on="./a.ts, ./b.css"`             | a script loaded after those it depends on, which are imported too |
+| `script=(object type="module" defer=true)`  | the attributes of the object, `script:name` ones go over them           |
+| `script:only=true`, `style:only=true`       | only the `<script>`, or only the `<style>` of a script                  |
+| `script:raw=true`, `style:raw=true`         | only the code, without a tag, for a `<b:skin>`                          |
+| `depends-on="./a.ts, ./b.css"`              | a script loaded after those it depends on, which are imported too       |
 
 A style is usually in the `<b:skin>` of the theme:
 

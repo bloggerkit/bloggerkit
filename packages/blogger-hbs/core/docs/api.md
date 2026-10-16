@@ -9,21 +9,24 @@ Compiles the entry and everything it imports, the options being those of the [co
 ```ts
 import { compileTemplate, createRenderer } from "blogger-hbs";
 
-const compiled = await compileTemplate({ root: "theme", entry: "src/index.hbs" });
+const compiled = await compileTemplate({
+  root: "theme",
+  entry: "src/index.hbs",
+});
 const xml = await createRenderer(compiled).render({ title: "Blog" });
 ```
 
 It returns the compiled template, which `createRenderer` and `renderTemplate` take as the compiled module:
 
-| Property         | Description                                                    |
-| ---------------- | -------------------------------------------------------------- |
-| `source`         | The compiled module, what the CLI writes as `compiled.js`      |
-| `entry`          | The id of the entry template, `./src/index.hbs`                |
-| `format`         | The version of the compiled output, checked by the renderer    |
-| `chunks`         | The templates, scripts, styles and data, by id                 |
-| `pluginPartials` | The partials of plugins, by name                               |
-| `pluginData`     | The data of plugins, by plugin                                 |
-| `bundledPlugins` | The runtimes of plugins                                        |
+| Property         | Description                                                 |
+| ---------------- | ----------------------------------------------------------- |
+| `source`         | The compiled module, what the CLI writes as `compiled.js`   |
+| `entry`          | The id of the entry template, `./src/index.hbs`             |
+| `format`         | The version of the compiled output, checked by the renderer |
+| `chunks`         | The templates, scripts, styles and data, by id              |
+| `pluginPartials` | The partials of plugins, by name                            |
+| `pluginData`     | The data of plugins, by plugin                              |
+| `bundledPlugins` | The runtimes of plugins                                     |
 
 ## `watchTemplate(options)`
 
@@ -43,12 +46,12 @@ const watcher = await watchTemplate({
 await watcher.close();
 ```
 
-| Option      | Description                                                                 |
-| ----------- | --------------------------------------------------------------------------- |
-| `onCompile` | Called with every compilation, not when the output is the same as before    |
-| `onError`   | Called when compiling fails, it compiles again on the next change, `console.error` by default |
-| `onStart`   | Called when compiling starts                                                |
-| `debounce`  | Milliseconds to wait for more changes, `30` by default                      |
+| Option      | Description                                                                                                      |
+| ----------- | ---------------------------------------------------------------------------------------------------------------- |
+| `onCompile` | Called with every compilation, not when the output is the same as before                                         |
+| `onError`   | Called when compiling fails, it compiles again on the next change, `console.error` by default                    |
+| `onStart`   | Called when compiling starts, with `{ files }`, the files changed since the last compilation, none for the first |
+| `debounce`  | Milliseconds to wait for more changes, `30` by default                                                           |
 
 ## `createRenderer(compiled, { plugins? })`
 
@@ -60,11 +63,11 @@ Renders once, synchronously. Runtime plugins with `prepare` or `transform` need 
 
 ## And more
 
-| Export                                   | Description                                          |
-| ---------------------------------------- | ---------------------------------------------------- |
-| `defineConfig(config)`                   | Types for a config file                              |
-| `defineRuntimePlugin(setup)`             | Types for the runtime of a plugin, see [Plugins](./plugins.md) |
-| `validateXml(xml)`, `formatXml(xml)`     | See [Validation and formatting](./validation.md)     |
-| `CompileError`, `PluginError`, `HelperError`, `XmlError` | See [Errors](./errors.md)           |
+| Export                                                   | Description                                                    |
+| -------------------------------------------------------- | -------------------------------------------------------------- |
+| `defineConfig(config)`                                   | Types for a config file                                        |
+| `defineRuntimePlugin(setup)`                             | Types for the runtime of a plugin, see [Plugins](./plugins.md) |
+| `validateXml(xml)`, `formatXml(xml)`                     | See [Validation and formatting](./validation.md)               |
+| `CompileError`, `PluginError`, `HelperError`, `XmlError` | See [Errors](./errors.md)                                      |
 
 `blogger-hbs/runtime` has `createRenderer`, `renderTemplate`, `defineRuntimePlugin`, `validateXml`, `formatXml` and the errors of rendering, without the compiler or Node.js.
