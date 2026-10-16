@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { assert, describe, onTestFinished, test } from 'vitest';
 import { createFixture } from '../../test/fixture';
+import type { CompilePlugin } from '../plugins';
 import { renderTemplate } from '../runtime';
 import { type TemplateWatcher, watchTemplate } from './watch';
 
@@ -10,7 +11,11 @@ type Event =
 	| { kind: 'error'; message: string };
 
 /** Watches the fixture and hands over what happens, in order. */
-async function watchFixture(root: string, entry = 'index.hbs') {
+async function watchFixture(
+	root: string,
+	entry = 'index.hbs',
+	plugins?: CompilePlugin[],
+) {
 	const events: Event[] = [];
 	let waiting: ((event: Event) => void) | undefined;
 
@@ -26,6 +31,7 @@ async function watchFixture(root: string, entry = 'index.hbs') {
 	const watcher: TemplateWatcher = await watchTemplate({
 		root,
 		entry,
+		plugins,
 		debounce: 10,
 		onCompile: (compiled) =>
 			push({
@@ -157,5 +163,33 @@ describe('watchTemplate', () => {
 				assert.match((error as Error).message, message);
 			}
 		}
+	});
+	test('compiles again when a file a plugin watches changes', async () => {
+		const root = await createFixture({
+			'index.hbs': '<a>{{@words.list}}</a>',
+			'words.txt': 'one',
+		});
+		const seen: boolean[] = [];
+		const words: CompilePlugin = {
+			name: 'words',
+			async data(_context, plugin) {
+				seen.push(plugin.watch);
+				const file = path.join(plugin.root, 'words.txt');
+				plugin.addWatchFile(file);
+				return { list: await fs.readFile(file, 'utf8') };
+			},
+		};
+		const watcher = await watchFixture(root, 'index.hbs', [words]);
+
+		assert.deepEqual(await watcher.next(), {
+			kind: 'compile',
+			output: '<a>one</a>',
+		});
+		await write(root, 'words.txt', 'two');
+		assert.deepEqual(await watcher.next(), {
+			kind: 'compile',
+			output: '<a>two</a>',
+		});
+		assert.deepEqual(seen, [true, true]);
 	});
 });

@@ -1,5 +1,5 @@
 {
-  "name": "@examples/vue",
+  "name": "@examples/blogger-plugin-vue",
   "private": true,
   "version": "0.0.0",
   "type": "module",

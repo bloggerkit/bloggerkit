@@ -1,1 +1,1 @@
-export { compilePluginLucide, type LucideOptions } from './compile-plugin';
+export { type LucideOptions, pluginLucide } from './plugin';

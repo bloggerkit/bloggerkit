@@ -1,119 +1,115 @@
 import type { Stats } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import * as z from 'zod';
 import { TEMPLATE_EXTENSIONS } from '../constants';
-import { describeValue, didYouMean, isPlainObject } from '../utils/suggest';
+import {
+	expected,
+	fn,
+	formatIssues,
+	json,
+	options,
+	path as pathSchema,
+	wholeIssue,
+} from '../utils/schema';
+import { didYouMean } from '../utils/suggest';
 import type { CompileTemplateOptions } from './compile';
 import { CompileError } from './errors';
-
-export const COMPILE_OPTION_KEYS: readonly string[] = [
-	'root',
-	'entry',
-	'alias',
-	'plugins',
-	'rsbuild',
-];
-
-const PLUGIN_HOOKS = ['preprocess', 'provide', 'finalize', 'data'];
 
 /** Shown when a template is expected, `.hbs, .handlebars, .xml, .html`. */
 const TEMPLATE_EXTENSION_LIST = [...TEMPLATE_EXTENSIONS].join(', ');
 
-export function invalidOption(
-	name: string,
-	expected: string,
-	value: unknown,
-): CompileError {
-	return new CompileError(
-		`Invalid option '${name}', expected ${expected}, got: ${describeValue(value)}`,
+/** What is checked of a compile plugin, its name is checked when it runs. */
+const compilePlugin = z.looseObject(
+	{
+		enforce: z.optional(z.enum(['pre', 'post'], expected("'pre' or 'post'"))),
+		buildStart: z.optional(fn()),
+		preprocess: z.optional(fn()),
+		provide: z.optional(fn()),
+		finalize: z.optional(fn()),
+		data: z.optional(fn()),
+		buildEnd: z.optional(fn()),
+		runtime: z.optional(
+			z.looseObject(
+				{ entry: pathSchema(), options: z.optional(json) },
+				expected("an object with an 'entry'"),
+			),
+		),
+	},
+	expected('a compile plugin'),
+);
+
+/** The compile options, the config and the options of `watchTemplate` have more. */
+export const compileOptionsShape = {
+	root: z.optional(pathSchema()),
+	entry: z.optional(pathSchema()),
+	alias: z.optional(
+		z
+			.record(z.string(), pathSchema(), expected('an object of paths by name'))
+			.check((ctx) => {
+				if (Object.hasOwn(ctx.value, '')) {
+					ctx.issues.push({
+						code: 'custom',
+						input: ctx.value,
+						message: wholeIssue("Invalid option 'alias', a name is empty"),
+					});
+				}
+			}),
+	),
+	plugins: z.optional(
+		z.array(compilePlugin, expected('an array of compile plugins')),
+	),
+	rsbuild: z.optional(
+		z.union(
+			[fn(), z.record(z.string(), z.unknown())],
+			expected('an rsbuild config or a function returning one'),
+		),
+	),
+	onWarn: z.optional(fn()),
+};
+
+export const COMPILE_OPTION_KEYS: readonly string[] =
+	Object.keys(compileOptionsShape);
+
+const compileOptions = options(compileOptionsShape);
+
+/**
+ * Throws a `CompileError` unless `value` matches the schema of options,
+ * whose issues are described as the others: `Invalid option 'entry', ...`,
+ * and `Invalid 'provide' of plugin 'p', ...` for those of a plugin.
+ */
+export function assertOptions(schema: z.ZodType, value: unknown): void {
+	const result = schema.safeParse(value);
+	if (result.success) {
+		return;
+	}
+
+	throw new CompileError(
+		formatIssues(result.error, {
+			records: ['alias'],
+			scope(issuePath) {
+				const [key, index, ...rest] = issuePath;
+				if (key !== 'plugins' || typeof index !== 'number') {
+					return;
+				}
+				const plugins = (value as { plugins?: unknown[] }).plugins;
+				const name = (plugins?.[index] as { name?: unknown } | undefined)?.name;
+				return {
+					subject:
+						typeof name === 'string' ? `plugin '${name}'` : `plugins[${index}]`,
+					rest,
+				};
+			},
+		}),
 	);
 }
 
-/**
- * Throws unless `options` are compile options, `extraKeys` are the other
- * options allowed, for example those of `watchTemplate`.
- */
+/** Throws unless `options` are compile options. */
 export function assertCompileOptions(
 	options: unknown,
-	extraKeys: readonly string[] = [],
 ): asserts options is CompileTemplateOptions | undefined {
-	if (options === undefined) {
-		return;
-	}
-	if (!isPlainObject(options)) {
-		throw new CompileError(
-			`Expected the options to be an object, got: ${describeValue(options)}`,
-		);
-	}
-
-	const known = [...COMPILE_OPTION_KEYS, ...extraKeys];
-	for (const key of Object.keys(options)) {
-		if (!known.includes(key)) {
-			const hint = didYouMean(key, known);
-			throw new CompileError(
-				`Unknown option '${key}'${hint}${hint ? ' Valid' : ', valid'} options: ${known.join(', ')}`,
-			);
-		}
-	}
-
-	const { root, entry, alias, plugins, rsbuild } = options;
-
-	for (const [name, value] of [
-		['root', root],
-		['entry', entry],
-	] as const) {
-		if (value !== undefined && (typeof value !== 'string' || value === '')) {
-			throw invalidOption(name, 'a path', value);
-		}
-	}
-
-	if (alias !== undefined) {
-		if (!isPlainObject(alias)) {
-			throw invalidOption('alias', 'an object of paths by name', alias);
-		}
-		for (const [name, target] of Object.entries(alias)) {
-			if (name === '') {
-				throw new CompileError("Invalid option 'alias', a name is empty");
-			}
-			if (typeof target !== 'string' || target === '') {
-				throw invalidOption(`alias['${name}']`, 'a path', target);
-			}
-		}
-	}
-
-	if (plugins !== undefined) {
-		if (!Array.isArray(plugins)) {
-			throw invalidOption('plugins', 'an array of compile plugins', plugins);
-		}
-		plugins.forEach((plugin: unknown, i) => {
-			if (typeof plugin !== 'object' || plugin === null) {
-				throw invalidOption(`plugins[${i}]`, 'a compile plugin', plugin);
-			}
-			const hooks = plugin as Record<string, unknown>;
-			const label =
-				typeof hooks.name === 'string'
-					? `plugin '${hooks.name}'`
-					: `plugins[${i}]`;
-			for (const hook of PLUGIN_HOOKS) {
-				if (hooks[hook] !== undefined && typeof hooks[hook] !== 'function') {
-					throw new CompileError(
-						`Invalid '${hook}' of ${label}, expected a function, got: ${describeValue(hooks[hook])}`,
-					);
-				}
-			}
-		});
-	}
-
-	if (
-		rsbuild !== undefined &&
-		typeof rsbuild !== 'function' &&
-		!isPlainObject(rsbuild)
-	) {
-		throw invalidOption(
-			'rsbuild',
-			'an rsbuild config or a function returning one',
-			rsbuild,
-		);
+	if (options !== undefined) {
+		assertOptions(compileOptions, options);
 	}
 }
 

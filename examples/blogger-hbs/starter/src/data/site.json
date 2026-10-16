@@ -1,0 +1,7 @@
+{
+  "nav": [
+    { "label": "Home", "url": "/" },
+    { "label": "About", "url": "/p/about.html" },
+    { "label": "Contact", "url": "/p/contact.html" }
+  ]
+}

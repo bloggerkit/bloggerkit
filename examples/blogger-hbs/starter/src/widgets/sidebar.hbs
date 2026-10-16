@@ -1,0 +1,25 @@
+<b:section class='sidebar-section' id='sidebar' showaddelement='true'>
+  <b:widget id='Label1' locked='false' title='Labels' type='Label' version='2' visible='true'>
+    <b:widget-settings>
+      <b:widget-setting name='sorting'>ALPHA</b:widget-setting>
+      <b:widget-setting name='display'>LIST</b:widget-setting>
+      <b:widget-setting name='selectedLabelsList'/>
+      <b:widget-setting name='showType'>ALL</b:widget-setting>
+      <b:widget-setting name='showFreqNumbers'>true</b:widget-setting>
+    </b:widget-settings>
+
+    <b:includable id='main'>
+      <div class='widget-card'>
+        <h3 class='widget-title'><data:title/></h3>
+        <ul class='labels'>
+          <b:loop values='data:labels' var='label'>
+            <li>
+              <a expr:href='data:label.url'><data:label.name/></a>
+              <span class='count'><data:label.count/></span>
+            </li>
+          </b:loop>
+        </ul>
+      </div>
+    </b:includable>
+  </b:widget>
+</b:section>

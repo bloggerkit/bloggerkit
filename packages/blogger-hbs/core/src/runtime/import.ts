@@ -12,6 +12,12 @@ import { getOutputMode, renderAsset } from './tags';
 const MAX_DEPTH = 64;
 
 /**
+ * Key of the data frame holding the ids of the runtimes rendered so far, a set
+ * of its own for every render. Plugin names can not start with `_`.
+ */
+export const RUNTIMES_DATA_KEY = '_runtimes';
+
+/**
  * The `import` helper: embeds templates, renders scripts and styles as tags,
  * and returns the parsed value of json files.
  *
@@ -20,14 +26,12 @@ const MAX_DEPTH = 64;
  *
  * The compiler tags every import with the id of the chunk it resolved to.
  * Scripts and styles are bundled once but rendered wherever they are imported.
- * The runtime shared by a group of scripts is rendered once.
+ * The runtime shared by a group of scripts is rendered once per render.
  */
 export function createImportHelper(
 	chunks: MinimalChunks,
 	templates: Map<string, TemplateDelegate>,
 ): HelperDelegate {
-	const runtimes = new Set<string>();
-
 	return function (this: unknown, ...args: unknown[]) {
 		const options = args.pop() as HelperOptions;
 		const specifier = args.at(0);
@@ -95,6 +99,8 @@ export function createImportHelper(
 			// that renders its script
 			let runtime: string | undefined;
 			const runtimeId = chunk.type === 'script' ? chunk.runtime : undefined;
+			const runtimes: Set<string> =
+				options.data?.[RUNTIMES_DATA_KEY] ?? new Set<string>();
 			if (
 				runtimeId !== undefined &&
 				chunk.code?.trim() &&

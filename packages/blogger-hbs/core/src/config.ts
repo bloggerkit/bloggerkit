@@ -1,19 +1,14 @@
 import * as path from 'node:path';
 import { loadConfig as loadRsbuildConfig } from '@rsbuild/core';
+import * as z from 'zod';
 import { CompileError, type CompileTemplateOptions } from './compiler';
-import { assertCompileOptions, invalidOption } from './compiler/options';
-import type { RuntimePlugin } from './plugins';
-import { didYouMean, isPlainObject } from './utils/suggest';
-
-const CONFIG_KEYS = ['context', 'runtimePlugins', 'output', 'publicDir'];
-const OUTPUT_KEYS = [
-	'dir',
-	'module',
-	'template',
-	'clean',
-	'validate',
-	'format',
-];
+import { assertOptions, compileOptionsShape } from './compiler/options';
+import {
+	expected,
+	options,
+	path as pathSchema,
+	wholeIssue,
+} from './utils/schema';
 
 export const CONFIG_FILE_NAMES = [
 	'blogger-hbs.config.ts',
@@ -56,8 +51,6 @@ export interface OutputConfig {
 export interface UserConfig extends CompileTemplateOptions {
 	/** The context the template is rendered with. */
 	context?: unknown;
-	/** Plugins used when rendering. */
-	runtimePlugins?: RuntimePlugin[];
 	output?: OutputConfig;
 	/**
 	 * Directory whose files are copied as they are into the output directory,
@@ -96,93 +89,54 @@ export interface LoadedConfig {
 	dependencies: string[];
 }
 
+// the label of the union on the string too, for an empty one
+const fileName = z.union(
+	[pathSchema('a file name or false'), z.literal(false)],
+	expected('a file name or false'),
+);
+const flag = z.optional(z.boolean(expected('a boolean')));
+
+const outputConfig = options(
+	{
+		dir: z.optional(pathSchema()),
+		module: z.optional(fileName),
+		template: z.optional(fileName),
+		clean: flag,
+		validate: flag,
+		format: flag,
+	},
+	{ prefix: 'output.' },
+).check((ctx) => {
+	const module = ctx.value.module ?? 'compiled.js';
+	const template = ctx.value.template ?? 'theme.xml';
+	if (module !== false && module === template) {
+		ctx.issues.push({
+			code: 'custom',
+			input: ctx.value,
+			message: wholeIssue(
+				`'output.module' and 'output.template' are both '${module}', they would overwrite each other`,
+			),
+		});
+	}
+});
+
+const userConfig = options({
+	...compileOptionsShape,
+	context: z.optional(z.unknown()),
+	output: z.optional(outputConfig),
+	publicDir: z.optional(
+		z.union(
+			[pathSchema('a path or false'), z.literal(false)],
+			expected('a path or false'),
+		),
+	),
+});
+
 /** Throws unless `config` is a valid config. */
 export function assertUserConfig(
 	config: unknown,
 ): asserts config is UserConfig {
-	assertCompileOptions(config, CONFIG_KEYS);
-	const { runtimePlugins, output, publicDir } = config as UserConfig;
-
-	if (
-		publicDir !== undefined &&
-		publicDir !== false &&
-		(typeof publicDir !== 'string' || publicDir === '')
-	) {
-		throw invalidOption('publicDir', 'a path or false', publicDir);
-	}
-
-	if (runtimePlugins !== undefined) {
-		if (!Array.isArray(runtimePlugins)) {
-			throw invalidOption(
-				'runtimePlugins',
-				'an array of runtime plugins',
-				runtimePlugins,
-			);
-		}
-		runtimePlugins.forEach((plugin: unknown, i) => {
-			if (typeof plugin !== 'object' || plugin === null) {
-				throw invalidOption(`runtimePlugins[${i}]`, 'a runtime plugin', plugin);
-			}
-			const { helpers } = plugin as RuntimePlugin;
-			if (helpers !== undefined && !isPlainObject(helpers)) {
-				throw invalidOption(
-					`runtimePlugins[${i}].helpers`,
-					'an object of helpers by name',
-					helpers,
-				);
-			}
-		});
-	}
-
-	if (output === undefined) {
-		return;
-	}
-	if (!isPlainObject(output)) {
-		throw invalidOption('output', 'an object', output);
-	}
-	for (const key of Object.keys(output)) {
-		if (!OUTPUT_KEYS.includes(key)) {
-			const known = OUTPUT_KEYS.map((name) => `output.${name}`);
-			const hint = didYouMean(`output.${key}`, known);
-			throw new CompileError(
-				`Unknown option 'output.${key}'${hint}${hint ? ' Valid' : ', valid'} options: ${known.join(', ')}`,
-			);
-		}
-	}
-
-	const { dir, module, template, clean, validate, format } = output;
-	if (dir !== undefined && (typeof dir !== 'string' || dir === '')) {
-		throw invalidOption('output.dir', 'a path', dir);
-	}
-	for (const [name, value] of [
-		['module', module],
-		['template', template],
-	] as const) {
-		if (
-			value !== undefined &&
-			value !== false &&
-			(typeof value !== 'string' || value === '')
-		) {
-			throw invalidOption(`output.${name}`, 'a file name or false', value);
-		}
-	}
-	if (
-		(module ?? 'compiled.js') !== false &&
-		(module ?? 'compiled.js') === (template ?? 'theme.xml')
-	) {
-		throw new CompileError(
-			`'output.module' and 'output.template' are both '${module ?? template}', they would overwrite each other`,
-		);
-	}
-	for (const [name, value] of [
-		['clean', clean],
-		['validate', validate],
-		['format', format],
-	] as const) {
-		if (value !== undefined && typeof value !== 'boolean') {
-			throw invalidOption(`output.${name}`, 'a boolean', value);
-		}
-	}
+	assertOptions(userConfig, config);
 }
 
 /**

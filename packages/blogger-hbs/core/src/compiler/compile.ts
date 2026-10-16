@@ -2,6 +2,7 @@ import {
 	FILE_EXTENSIONS,
 	INDEX_EXTENSIONS,
 	RESOLVE_EXTENSIONS,
+	TEMPLATE_FORMAT,
 } from '../constants';
 import type { CompilePlugin } from '../plugins';
 import type { PluginData } from '../runtime/chunks';
@@ -17,9 +18,20 @@ import {
 	assertEntry,
 	resolvePaths,
 } from './options';
-import { runCompilePlugins } from './plugins';
+import {
+	createPluginContexts,
+	endCompilePlugins,
+	type RuntimeRequest,
+	runCompilePlugins,
+	sortPlugins,
+} from './plugins';
 import { precompileTemplates } from './precompile';
 import type { RsbuildOptions } from './rsbuild';
+import {
+	type BundledRuntime,
+	bundleRuntimes,
+	type RuntimeBundle,
+} from './runtimes';
 import { scan } from './scan';
 import { validateTemplateXml } from './validate';
 
@@ -30,21 +42,28 @@ export interface CompileTemplateOptions {
 	plugins?: CompilePlugin[];
 	/** Rsbuild config for bundling scripts and styles, merged over the defaults. */
 	rsbuild?: RsbuildOptions;
+	/** Called with the warnings of plugins, `console.warn` by default. */
+	onWarn?: (message: string) => void;
 }
 
 export interface CompiledTemplate {
+	/** Version of the compiled output, checked by the runtime. */
+	format: number;
 	chunks: Chunks;
 	/** Templates provided by plugins, by partial name. */
 	pluginPartials: Map<string, object>;
 	/** Data provided by plugins, by plugin name and data name. */
 	pluginData: PluginData;
+	/** Runtime halves of the plugins, bundled. */
+	bundledPlugins: BundledRuntime[];
 	entry: string;
+	/** The ES module to render the template with, it imports nothing. */
 	source: string;
 }
 
 /**
  * scan imports -> compile plugins -> validate dependencies -> precompile
- * templates -> bundle assets -> emit module source.
+ * templates -> bundle assets and plugin runtimes -> emit module source.
  */
 export async function compileTemplate(
 	options: CompileTemplateOptions = {},
@@ -59,10 +78,11 @@ export async function compileTemplate(
 		options.rsbuild,
 		prepared.dependencies,
 	);
-	return finishTemplate(prepared);
+	const bundle = await bundleRuntimes(prepared.root, prepared.runtimes);
+	return finishTemplate(prepared, bundle);
 }
 
-/** A template compiled up to the bundling of its scripts and styles. */
+/** A template compiled up to the bundling of its scripts, styles and plugin runtimes. */
 export interface PreparedTemplate {
 	root: string;
 	/** Id of the entry template. */
@@ -70,21 +90,30 @@ export interface PreparedTemplate {
 	chunks: Chunks;
 	partials: PartialChunk[];
 	pluginData: PluginData;
+	/** The runtime halves of the plugins, to bundle. */
+	runtimes: RuntimeRequest[];
 	/** The entries each script entry depends on. */
 	dependencies: Map<string, string[]>;
 }
 
-/**
- * Everything but bundling the scripts and styles, for validated options.
- * `onRead` is called with every template and json file before it is read,
- * even when compiling fails.
- */
+export interface PrepareOptions {
+	/**
+	 * Called with every template and json file before it is read, and the files
+	 * plugins add, even when compiling fails.
+	 */
+	onRead?: (file: string) => void;
+	/** Whether the template is compiled again on changes, told to plugins. */
+	watch?: boolean;
+}
+
+/** Everything but bundling the scripts, styles and plugin runtimes, for validated options. */
 export async function prepareTemplate(
 	options: CompileTemplateOptions = {},
-	onRead?: (file: string) => void,
+	{ onRead, watch = false }: PrepareOptions = {},
 ): Promise<PreparedTemplate> {
 	const { root, entry } = resolvePaths(options);
-	const { alias = {}, plugins = [] } = options;
+	const { alias = {}, onWarn = console.warn } = options;
+	const plugins = sortPlugins(options.plugins ?? []);
 
 	onRead?.(entry);
 	await assertEntry(options);
@@ -99,54 +128,74 @@ export async function prepareTemplate(
 		},
 	});
 
-	const { chunks, templates, requirements } = await scan(entry, {
+	const contexts = createPluginContexts(plugins, {
 		root,
+		entry,
+		watch,
 		resolver,
 		onRead,
+		onWarn,
 	});
 
-	const { partials, data: pluginData } = await runCompilePlugins(
-		plugins,
-		chunks,
-	);
-	const dependencies = linkDependencies(chunks, requirements);
+	let prepared: PreparedTemplate;
+	try {
+		const { chunks, templates, requirements } = await scan(entry, {
+			root,
+			resolver,
+			onRead,
+		});
 
-	// always, after the plugins changed the templates and provided theirs, the
-	// options of the rendered output do not turn it off
-	for (const template of templates) {
-		validateTemplateXml(template.parsed, template.path);
+		const {
+			partials,
+			data: pluginData,
+			runtimes,
+		} = await runCompilePlugins(plugins, chunks, contexts);
+		const dependencies = linkDependencies(chunks, requirements);
+
+		// always, after the plugins changed the templates and provided theirs, the
+		// options of the rendered output do not turn it off
+		for (const template of templates) {
+			validateTemplateXml(template.parsed, template.path);
+		}
+		for (const partial of partials) {
+			validateTemplateXml(partial.parsed, `partial '${partial.name}'`);
+		}
+
+		precompileTemplates([...templates, ...partials]);
+
+		prepared = {
+			root,
+			entry: toSpecifier(root, entry),
+			chunks,
+			partials,
+			pluginData,
+			runtimes,
+			dependencies,
+		};
+	} catch (error) {
+		await endCompilePlugins(plugins, contexts, error);
+		throw error;
 	}
-	for (const partial of partials) {
-		validateTemplateXml(partial.parsed, `partial '${partial.name}'`);
-	}
 
-	precompileTemplates([...templates, ...partials]);
-
-	return {
-		root,
-		entry: toSpecifier(root, entry),
-		chunks,
-		partials,
-		pluginData,
-		dependencies,
-	};
+	await endCompilePlugins(plugins, contexts);
+	return prepared;
 }
 
-/** Emits the module source of a template whose scripts and styles are bundled. */
-export function finishTemplate({
-	entry,
-	chunks,
-	partials,
-	pluginData,
-}: PreparedTemplate): CompiledTemplate {
+/** Emits the module source of a template whose scripts, styles and runtimes are bundled. */
+export function finishTemplate(
+	{ entry, chunks, partials, pluginData }: PreparedTemplate,
+	bundle: RuntimeBundle | undefined,
+): CompiledTemplate {
 	const pluginPartials = new Map(
 		partials.map((partial) => [partial.name, partial.spec as object]),
 	);
 
 	return {
+		format: TEMPLATE_FORMAT,
 		chunks,
 		pluginPartials,
 		pluginData,
+		bundledPlugins: bundle?.plugins ?? [],
 		entry,
 		source: emitSource({
 			chunks,
@@ -154,6 +203,7 @@ export function finishTemplate({
 				partials.map((partial) => [partial.name, partial.compiled as string]),
 			),
 			pluginData,
+			bundle,
 			entry,
 		}),
 	};

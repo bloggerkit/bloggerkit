@@ -1,5 +1,7 @@
 import { type FSWatcher, watch } from 'node:fs';
 import * as path from 'node:path';
+import * as z from 'zod';
+import { expected, fn, options as optionsSchema } from '../utils/schema';
 import { type AssetPlan, applyAssets, planAssets } from './bundle';
 import {
 	type CompiledTemplate,
@@ -10,13 +12,24 @@ import {
 } from './compile';
 import { CompileError } from './errors';
 import {
-	assertCompileOptions,
 	assertDirectories,
-	invalidOption,
+	assertOptions,
+	compileOptionsShape,
 } from './options';
 import { type AssetWatcher, watchAssets } from './rsbuild';
+import { bundleRuntimes, type RuntimeBundle } from './runtimes';
 
-const WATCH_OPTION_KEYS = ['onCompile', 'onError', 'onStart', 'debounce'];
+const watchOptions = optionsSchema({
+	...compileOptionsShape,
+	onCompile: fn(),
+	onError: z.optional(fn()),
+	onStart: z.optional(fn()),
+	debounce: z.optional(
+		z
+			.number(expected('a number of milliseconds'))
+			.min(0, expected('a number of milliseconds')),
+	),
+});
 
 function assertWatchOptions(
 	options: unknown,
@@ -26,28 +39,7 @@ function assertWatchOptions(
 			"watchTemplate() expects options with an 'onCompile' callback",
 		);
 	}
-	assertCompileOptions(options, WATCH_OPTION_KEYS);
-
-	const { onCompile, onError, onStart, debounce } =
-		options as Partial<WatchTemplateOptions>;
-
-	if (typeof onCompile !== 'function') {
-		throw invalidOption('onCompile', 'a function', onCompile);
-	}
-	for (const [name, value] of [
-		['onError', onError],
-		['onStart', onStart],
-	] as const) {
-		if (value !== undefined && typeof value !== 'function') {
-			throw invalidOption(name, 'a function', value);
-		}
-	}
-	if (
-		debounce !== undefined &&
-		(typeof debounce !== 'number' || !Number.isFinite(debounce) || debounce < 0)
-	) {
-		throw invalidOption('debounce', 'a number of milliseconds', debounce);
-	}
+	assertOptions(watchOptions, options);
 }
 
 export interface WatchTemplateOptions extends CompileTemplateOptions {
@@ -93,6 +85,11 @@ export async function watchTemplate(
 	let prepared: PreparedTemplate | undefined;
 	let plan: AssetPlan | undefined;
 	let assets: { key: string; watcher: AssetWatcher } | undefined;
+	/**
+	 * The bundled runtimes of the plugins, bundled again only when the plugins
+	 * with one or their options change, not when the files of a runtime do.
+	 */
+	let runtimes: { key: string; bundle?: RuntimeBundle } | undefined;
 	/** Source of the last compilation passed to `onCompile`. */
 	let previous: string | undefined;
 
@@ -193,7 +190,17 @@ export async function watchTemplate(
 			if (templates) {
 				const read = new Set<string>();
 				try {
-					const next = await prepareTemplate(options, (file) => read.add(file));
+					const next = await prepareTemplate(options, {
+						onRead: (file) => read.add(file),
+						watch: true,
+					});
+					const runtimesKey = JSON.stringify(next.runtimes);
+					if (runtimes?.key !== runtimesKey) {
+						runtimes = {
+							key: runtimesKey,
+							bundle: await bundleRuntimes(next.root, next.runtimes),
+						};
+					}
 					failed = false;
 					watchFiles(read);
 
@@ -220,7 +227,7 @@ export async function watchTemplate(
 				applyAssets(prepared.chunks, plan, build);
 			}
 
-			const compiled = finishTemplate(prepared);
+			const compiled = finishTemplate(prepared, runtimes?.bundle);
 			// a change can rebuild without changing anything, for example when
 			// an editor saves through a temporary file the bundler sees as well
 			if (!closed && compiled.source !== previous) {

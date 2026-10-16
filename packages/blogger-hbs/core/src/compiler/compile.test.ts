@@ -1,6 +1,7 @@
+import * as path from 'node:path';
 import { assert, describe, test } from 'vitest';
 import { createFixture, render } from '../../test/fixture';
-import type { CompilePlugin } from '../plugins';
+import type { CompilePlugin, PluginError } from '../plugins';
 import { renderTemplate } from '../runtime';
 import { compileTemplate } from './compile';
 
@@ -328,6 +329,272 @@ describe('plugins', () => {
 				plugins: [{ name: 'p', data: () => ({ f: () => 1 }) }],
 			}),
 			/Data 'f' of plugin 'p' is not serializable/,
+		);
+	});
+});
+
+describe('plugin context', () => {
+	test('tells where the compilation is', async () => {
+		const root = await createFixture({
+			'src/index.hbs': '<a/>',
+			'src/b.hbs': '<b/>',
+		});
+		let seen: unknown;
+		await compileTemplate({
+			root,
+			entry: 'src/index.hbs',
+			alias: { '~': 'src' },
+			plugins: [
+				{
+					name: 'p',
+					async buildStart(context) {
+						seen = {
+							root: context.root,
+							entry: context.entry,
+							mode: context.mode,
+							watch: context.watch,
+							alias: await context.resolve('~/b.hbs'),
+							relative: await context.resolve('./b.hbs'),
+							missing: await context.resolve('./nope.hbs'),
+						};
+					},
+				},
+			],
+		});
+		assert.deepEqual(seen, {
+			root,
+			entry: path.join(root, 'src/index.hbs'),
+			mode: 'production',
+			watch: false,
+			alias: path.join(root, 'src/b.hbs'),
+			relative: path.join(root, 'src/b.hbs'),
+			missing: undefined,
+		});
+	});
+
+	test('gives every place a partial is used, with the hash', async () => {
+		const root = await createFixture({
+			'index.hbs':
+				'<a>\n  {{> p.icon size=16 label="Home" on=true off=null}}\n{{~> p.icon size=data.size big=(eq 1 1)}}{{> p.wrap}}</a>',
+		});
+		const asked: unknown[] = [];
+		await compileTemplate({
+			root,
+			plugins: [
+				{
+					name: 'p',
+					provide({ partials, requests }) {
+						asked.push({ partials, requests: structuredClone(requests) });
+						return Object.fromEntries(
+							partials.map((name) => [
+								name,
+								name === 'wrap' ? '<w>{{> p.icon}}</w>' : '<i/>',
+							]),
+						);
+					},
+				},
+			],
+		});
+
+		const file = path.join(root, 'index.hbs');
+		assert.deepEqual(asked, [
+			{
+				partials: ['icon', 'wrap'],
+				requests: [
+					{
+						name: 'icon',
+						usages: [
+							{
+								path: file,
+								line: 2,
+								column: 3,
+								hash: { size: 16, label: 'Home', on: true, off: null },
+							},
+							{
+								path: file,
+								line: 3,
+								column: 1,
+								hash: {
+									size: { expression: 'data.size' },
+									big: { expression: '(eq 1 1)' },
+								},
+							},
+						],
+					},
+					{
+						name: 'wrap',
+						usages: [{ path: file, line: 3, column: 42, hash: {} }],
+					},
+				],
+			},
+		]);
+	});
+
+	test('finalize gets the requests of the plugin', async () => {
+		const root = await createFixture({
+			'index.hbs': '<a>{{> p.one}}{{> p.all}}</a>',
+		});
+		let names: string[] = [];
+		await compileTemplate({
+			root,
+			plugins: [
+				{
+					name: 'p',
+					provide: () => ({ one: '<one/>' }),
+					finalize({ requests }) {
+						names = requests.map(({ name }) => name);
+						return { all: '<all/>' };
+					},
+				},
+			],
+		});
+		assert.deepEqual(names, ['one', 'all']);
+	});
+
+	test('error stops at the place given', async () => {
+		const root = await createFixture({ 'index.hbs': '<a>\n{{> p.x}}</a>' });
+		try {
+			await compileTemplate({
+				root,
+				plugins: [
+					{
+						name: 'p',
+						provide({ requests }, plugin) {
+							plugin.error('Unknown x', requests[0].usages[0]);
+						},
+					},
+				],
+			});
+			assert.fail('expected an error');
+		} catch (error) {
+			const file = path.join(root, 'index.hbs');
+			assert.strictEqual((error as Error).message, `Unknown x (${file}:2:1)`);
+			assert.deepEqual((error as PluginError).loc, {
+				path: file,
+				line: 2,
+				column: 1,
+			});
+		}
+	});
+
+	test('warn does not stop the compilation', async () => {
+		const root = await createFixture({ 'index.hbs': '<a>{{> p.x}}</a>' });
+		const warnings: string[] = [];
+		const compiled = await compileTemplate({
+			root,
+			onWarn: (message) => warnings.push(message),
+			plugins: [
+				{
+					name: 'p',
+					provide({ requests }, plugin) {
+						plugin.warn('x is old', requests[0].usages[0]);
+						plugin.warn('no place');
+						return { x: '<x/>' };
+					},
+				},
+			],
+		});
+		assert.deepEqual(warnings, [
+			`Plugin 'p': x is old (${path.join(root, 'index.hbs')}:1:4)`,
+			"Plugin 'p': no place",
+		]);
+		assert.strictEqual(renderTemplate(compiled), '<a><x/></a>');
+	});
+
+	test('a partial that is not provided is reported where it is used', async () => {
+		const root = await createFixture({ 'index.hbs': '<a>\n {{> p.x}}</a>' });
+		await assertRejects(
+			compileTemplate({ root, plugins: [{ name: 'p' }] }),
+			new RegExp(
+				`did not provide the partial 'x' \\(used in ${path.join(root, 'index.hbs').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:2:2\\)`,
+			),
+		);
+	});
+});
+
+describe('plugin lifecycle', () => {
+	test('buildStart first and buildEnd last, in the order of enforce', async () => {
+		const root = await createFixture({ 'index.hbs': '<a/>' });
+		const calls: string[] = [];
+		const plugin = (name: string, enforce?: 'pre' | 'post'): CompilePlugin => ({
+			name,
+			enforce,
+			buildStart: () => {
+				calls.push(`${name}:start`);
+			},
+			preprocess: () => {
+				calls.push(`${name}:preprocess`);
+			},
+			data: () => {
+				calls.push(`${name}:data`);
+			},
+			buildEnd: (_context, error) => {
+				calls.push(`${name}:end:${error === undefined ? 'ok' : 'error'}`);
+			},
+		});
+
+		await compileTemplate({
+			root,
+			plugins: [plugin('b'), plugin('c', 'post'), plugin('a', 'pre')],
+		});
+		assert.deepEqual(calls, [
+			'a:start',
+			'b:start',
+			'c:start',
+			'a:preprocess',
+			'b:preprocess',
+			'c:preprocess',
+			'a:data',
+			'b:data',
+			'c:data',
+			'a:end:ok',
+			'b:end:ok',
+			'c:end:ok',
+		]);
+	});
+
+	test('buildEnd gets the error of a failed compilation', async () => {
+		const root = await createFixture({ 'index.hbs': '<a>{{> p.x}}</a>' });
+		let ended: unknown;
+		await assertRejects(
+			compileTemplate({
+				root,
+				plugins: [
+					{
+						name: 'p',
+						buildEnd: (_context, error) => {
+							ended = error;
+						},
+					},
+				],
+			}),
+			/did not provide the partial 'x'/,
+		);
+		assert.match((ended as Error).message, /did not provide the partial 'x'/);
+	});
+
+	test('validates enforce and runtime', async () => {
+		const root = await createFixture({ 'index.hbs': '<a/>' });
+		await assertRejects(
+			compileTemplate({
+				root,
+				plugins: [{ name: 'p', enforce: 'first' as never }],
+			}),
+			/Invalid 'enforce' of plugin 'p', expected 'pre' or 'post', got: 'first'/,
+		);
+		await assertRejects(
+			compileTemplate({
+				root,
+				plugins: [{ name: 'p', runtime: { entry: '' } }],
+			}),
+			/Invalid 'runtime.entry' of plugin 'p', expected a path/,
+		);
+		await assertRejects(
+			compileTemplate({
+				root,
+				plugins: [{ name: 'p', runtime: './runtime.js' as never }],
+			}),
+			/Invalid 'runtime' of plugin 'p', expected an object with an 'entry'/,
 		);
 	});
 });

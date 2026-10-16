@@ -54,6 +54,13 @@ export const RESOLVE_EXTENSIONS = new Set([
 export const ATTRIBUTE_NAME_REGEX =
 	/^[^\s"'>/=\p{Cc}\uFDD0-\uFDEF\uFFFE\uFFFF]+$/u;
 
+/**
+ * Version of what the compiler emits for the runtime, the compiled module
+ * exports it as `format`. It changes whenever a compiled template can not be
+ * rendered by the runtime of another version.
+ */
+export const TEMPLATE_FORMAT = 1;
+
 /** Hash keys the compiler uses to pass information about an `import` to the runtime. */
 export const CHUNK_HASH_KEY = '__chunk';
 export const INDENT_HASH_KEY = '__indent';

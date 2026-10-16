@@ -1,3 +1,5 @@
+import type { RuntimePluginSetup } from '../plugins';
+
 export interface MinimalTemplateChunk {
 	type: 'template';
 	spec?: object;
@@ -32,6 +34,14 @@ export type PluginPartials = Map<string, object>;
 
 /** Data provided by plugins, by plugin name and data name. */
 export type PluginData = Record<string, Record<string, unknown>>;
+
+/** The runtime half of a compile plugin, bundled into the compiled module. */
+export interface BundledPlugin {
+	name: string;
+	/** From the compile plugin, given to `setup`. */
+	options?: unknown;
+	setup: RuntimePluginSetup<never>;
+}
 
 export type MinimalChunk =
 	| MinimalTemplateChunk

@@ -1,0 +1,16 @@
+{
+  "name": "@examples/blogger-hbs-starter",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "blogger-hbs",
+    "dev": "blogger-hbs --watch",
+    "render": "node render.mjs"
+  },
+  "devDependencies": {
+    "@blogger-hbs/plugin-lucide": "workspace:*",
+    "@types/node": "catalog:",
+    "blogger-hbs": "workspace:*"
+  }
+}

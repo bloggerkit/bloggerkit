@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' b:templateVersion='{{theme.version}}' expr:lang='data:blog.locale.language' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+  <head>
+    {{import "~/layout/head.hbs"}}
+  </head>
+  <body>
+    {{import "~/layout/header.hbs"}}
+
+    <div class='container layout'>
+      <main class='main'>
+        {{import "~/widgets/blog.hbs"}}
+      </main>
+      <aside class='sidebar'>
+        {{import "~/widgets/sidebar.hbs"}}
+      </aside>
+    </div>
+
+    {{import "~/layout/footer.hbs"}}
+
+    <b:comment>Common includables can be included anywhere, the icons as well</b:comment>
+    <b:defaultmarkups>
+      <b:defaultmarkup type='Common'>
+        {{> lucide.includable}}
+      </b:defaultmarkup>
+    </b:defaultmarkups>
+
+    {{import "~/scripts/main.ts" script:defer=true}}
+  </body>
+</html>

@@ -1,0 +1,19 @@
+{{#with (import "~/data/site.json")}}
+<header class='header'>
+  <div class='container header-inner'>
+    <a class='brand' expr:href='data:blog.homepageUrl'>
+      {{> lucide.book-open class="brand-icon"}}
+      <data:blog.title.escaped/>
+    </a>
+    <button aria-controls='nav' aria-expanded='false' aria-label='Open the menu' class='menu-button' type='button'>
+      {{> lucide.menu class="menu-open"}}
+      {{> lucide.x class="menu-close"}}
+    </button>
+    <nav class='nav' id='nav'>
+      {{#each nav}}
+      <a class='nav-link' href='{{url}}'>{{label}}</a>
+      {{/each}}
+    </nav>
+  </div>
+</header>
+{{/with}}
