@@ -7,7 +7,7 @@ import {
 	renderTemplate,
 } from 'blogger-hbs';
 import { assert, describe, onTestFinished, test } from 'vitest';
-import { compilePluginLucide, type LucideOptions } from './compile-plugin';
+import { type LucideOptions, pluginLucide } from './plugin';
 
 /** Writes `index.hbs` into a temporary directory removed after the test. */
 async function createFixture(source: string): Promise<string> {
@@ -23,7 +23,7 @@ function compile(
 ): ReturnType<typeof compileTemplate> {
 	const config: CompileTemplateOptions = {
 		root,
-		plugins: [compilePluginLucide(options)],
+		plugins: [pluginLucide(options)],
 	};
 	return compileTemplate(config);
 }
@@ -80,7 +80,7 @@ describe('icons', () => {
 		);
 		await assertRejects(
 			compile(root),
-			/Unknown lucide icon:\n {2}'mneu' \(.+index\.hbs:2\), did you mean 'menu'\?/,
+			/Unknown lucide icon:\n {2}'mneu' \(.+index\.hbs:2:1\), did you mean 'menu'\?/,
 		);
 	});
 
@@ -94,14 +94,42 @@ describe('icons', () => {
 		);
 	});
 
+	test('has no main partial, an icon is {{> lucide.name}}', async () => {
+		const root = await createFixture(
+			'<a>{{> lucide}}{{> lucide.includable}}</a>',
+		);
+		await assertRejects(
+			compile(root),
+			/^Plugin 'lucide' did not provide its main partial '\.' \(\{\{> lucide\}\}\) \(used in .+index\.hbs:1:4\)$/,
+		);
+	});
+
 	test('requires the includable when icons are used', async () => {
 		const root = await createFixture(
 			'<a>{{> lucide.menu}}{{> lucide.house}}</a>',
 		);
 		await assertRejects(
 			compile(root),
-			/Lucide icons are used \(house, menu\) but not '\{\{> lucide\.includable\}\}'/,
+			/Lucide icons are used \(house, menu\) but not '\{\{> lucide\.includable\}\}', which renders them\. Add it once to the theme \(.+index\.hbs:1:4\)/,
 		);
+	});
+
+	test('reports unknown props where they are used', async () => {
+		const root = await createFixture(
+			'<a>\n  {{> lucide.menu sise=16}}{{> lucide.includable}}</a>',
+		);
+		await assertRejects(
+			compile(root),
+			/Unknown prop 'sise' of lucide icon 'menu', did you mean 'size'\? The props are size, stroke, strokeWidth, class \(.+index\.hbs:2:3\)/,
+		);
+	});
+
+	test('accepts props from data', async () => {
+		const root = await createFixture(
+			'<a>{{> lucide.menu size=data.size class=(toJson "a")}}{{> lucide.includable}}</a>',
+		);
+		const compiled = await compile(root);
+		assert.include(compiled.source, 'lucide.menu');
 	});
 });
 
@@ -187,14 +215,15 @@ describe('options', () => {
 
 	test('rejects an invalid id', () => {
 		assert.throws(
-			() => compilePluginLucide({ id: "a'b" }),
+			() => pluginLucide({ id: "a'b" }),
 			"Invalid lucide includable id 'a'b'",
 		);
 	});
 
 	test('rejects an unknown fallback icon', () => {
 		assert.throws(
-			() => compilePluginLucide({ fallback: 'mneu' }),
+			// a typo the types catch, but not in a config written in JavaScript
+			() => pluginLucide({ fallback: 'mneu' as never }),
 			/Unknown lucide fallback icon:\n {2}'mneu', did you mean 'menu'\?/,
 		);
 	});

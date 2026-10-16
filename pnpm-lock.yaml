@@ -204,7 +204,19 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  examples/react:
+  examples/blogger-hbs/starter:
+    devDependencies:
+      '@blogger-hbs/plugin-lucide':
+        specifier: workspace:*
+        version: link:../../../packages/blogger-hbs/plugin-lucide
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.1.2
+      blogger-hbs:
+        specifier: workspace:*
+        version: link:../../../packages/blogger-hbs/core
+
+  examples/blogger-plugin/react:
     dependencies:
       react:
         specifier: ^19.3.0
@@ -227,12 +239,12 @@ importers:
         version: 6.1.1(vite@8.3.0)
       blogger-plugin:
         specifier: workspace:*
-        version: link:../../packages/blogger-plugin
+        version: link:../../../packages/blogger-plugin
       vite:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@26.1.2)(jiti@2.6.1)(yaml@2.9.1)
 
-  examples/svelte:
+  examples/blogger-plugin/svelte:
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.3.0
@@ -245,7 +257,7 @@ importers:
         version: 26.1.2
       blogger-plugin:
         specifier: workspace:*
-        version: link:../../packages/blogger-plugin
+        version: link:../../../packages/blogger-plugin
       svelte:
         specifier: ^5.57.0
         version: 5.57.0
@@ -256,7 +268,7 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@26.1.2)(jiti@2.6.1)(yaml@2.9.1)
 
-  examples/vue:
+  examples/blogger-plugin/vue:
     dependencies:
       vue:
         specifier: ^3.5.42
@@ -273,7 +285,7 @@ importers:
         version: 0.9.1(typescript@6.0.3)(vue@3.5.42)
       blogger-plugin:
         specifier: workspace:*
-        version: link:../../packages/blogger-plugin
+        version: link:../../../packages/blogger-plugin
       vite:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@26.1.2)(jiti@2.6.1)(yaml@2.9.1)
@@ -326,6 +338,9 @@ importers:
       normalize-path:
         specifier: ^3.0.0
         version: 3.0.0
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -2357,6 +2372,9 @@ packages:
   zimmerframe@1.1.4:
     resolution: {integrity: sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ==}
 
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
+
 snapshots:
 
   '@babel/helper-string-parser@7.29.7': {}
@@ -3895,3 +3913,5 @@ snapshots:
       '@yuku-parser/binding-win32-x64': 0.9.5
 
   zimmerframe@1.1.4: {}
+
+  zod@4.6.7: {}

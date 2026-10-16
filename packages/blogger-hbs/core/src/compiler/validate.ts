@@ -66,13 +66,7 @@ function visitProgram(program: Program, scanner: XmlScanner): void {
 }
 
 function visitStatement(statement: Statement, scanner: XmlScanner): void {
-	// decorators are not in the typings
-	const type = statement.type as
-		| Statement['type']
-		| 'Decorator'
-		| 'DecoratorBlock';
-
-	switch (type) {
+	switch (statement.type) {
 		case 'ContentStatement': {
 			const content = statement as ContentStatement;
 			scanner.feed(content.value, locateContent(content));
@@ -85,7 +79,7 @@ function visitStatement(statement: Statement, scanner: XmlScanner): void {
 
 		case 'DecoratorBlock':
 			// `{{#*inline "name"}}` defines a partial, it renders nothing here
-			validateFragment((statement as BlockStatement).program);
+			validateFragment(statement.program);
 			return;
 
 		case 'MustacheStatement':

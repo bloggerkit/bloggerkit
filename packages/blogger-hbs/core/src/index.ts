@@ -18,16 +18,30 @@ export type {
 	DataContext,
 	DataResult,
 	FinalizeContext,
+	HashValue,
+	JsonValue,
+	Location,
+	PartialRequest,
+	PartialUsage,
+	PluginContext,
 	ProvideContext,
 	ProvideResult,
+	RuntimeApi,
+	RuntimeEntry,
 	RuntimePlugin,
+	RuntimePluginHooks,
+	RuntimePluginSetup,
 	TemplateContext,
 } from './plugins';
-export { PluginError } from './plugins';
+export { defineRuntimePlugin, PluginError } from './plugins';
 export type {
+	BundledPlugin,
+	CompiledModule,
 	PluginData,
 	PluginPartials,
+	Renderer,
+	RendererOptions,
 	RenderTemplateOptions,
 } from './runtime';
-export { HelperError, renderTemplate } from './runtime';
+export { createRenderer, HelperError, renderTemplate } from './runtime';
 export { formatXml, validateXml, XmlError } from './xml';

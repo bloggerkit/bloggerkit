@@ -20,7 +20,7 @@ import {
 	resolvePaths,
 } from '../compiler/options';
 import { type LoadedConfig, loadConfig } from '../config';
-import { renderTemplate } from '../runtime';
+import { createRenderer } from '../runtime';
 import { didYouMean } from '../utils/suggest';
 import { formatXml, validateXml } from '../xml';
 
@@ -61,6 +61,8 @@ const log = {
 		console.log(`${styleText('green', '✓')} ${message}`),
 	info: (message: string) =>
 		console.log(`${styleText('cyan', '●')} ${message}`),
+	warn: (message: string) =>
+		console.warn(`${styleText('yellow', '⚠')} ${message}`),
 	error: (error: unknown) =>
 		console.error(`${styleText('red', '✗')} ${formatError(error)}`),
 };
@@ -169,6 +171,7 @@ async function setup(
 	}
 	options.root = resolvedRoot;
 	options.entry = flags.entry ?? config.entry;
+	options.onWarn ??= log.warn;
 
 	assertCompileOptions(options);
 	await assertDirectories(options);
@@ -490,7 +493,7 @@ async function prepareOutDir({ outDir, clean }: BuildSetup) {
  * formatted after rendering when enabled.
  */
 async function write(current: BuildSetup, compiled: CompiledTemplate) {
-	const { outDir, moduleFile, templateFile, context, loaded } = current;
+	const { outDir, moduleFile, templateFile, context } = current;
 
 	if (moduleFile) {
 		await fs.writeFile(path.join(outDir, moduleFile), compiled.source);
@@ -502,12 +505,10 @@ async function write(current: BuildSetup, compiled: CompiledTemplate) {
 	const file = path.join(outDir, templateFile);
 	const shown = path.relative(process.cwd(), file);
 
+	// the same as anywhere else the compiled module is rendered
 	let start = performance.now();
-	const rendered = renderTemplate({
-		...compiled,
-		context,
-		plugins: loaded.config.runtimePlugins,
-	});
+	const renderer = createRenderer(compiled);
+	const rendered = await renderer.render(context);
 	log.success(`Rendered in ${elapsed(start)}`);
 
 	start = performance.now();

@@ -30,7 +30,10 @@ export interface MustacheStatement extends BaseStatement {
 	strip: StripFlags;
 }
 
-export interface Decorator extends MustacheStatement {}
+/** `{{* decorator}}` */
+export interface Decorator extends Omit<MustacheStatement, 'type'> {
+	type: 'Decorator';
+}
 
 export interface BlockStatement extends BaseStatement {
 	type: 'BlockStatement';
@@ -44,7 +47,10 @@ export interface BlockStatement extends BaseStatement {
 	closeStrip: StripFlags;
 }
 
-export interface DecoratorBlock extends BlockStatement {}
+/** `{{#*inline "name"}}...{{/inline}}` */
+export interface DecoratorBlock extends Omit<BlockStatement, 'type'> {
+	type: 'DecoratorBlock';
+}
 
 export interface PartialStatement extends BaseStatement {
 	type: 'PartialStatement';
@@ -80,6 +86,8 @@ export interface CommentStatement extends BaseStatement {
 export type Statement =
 	| MustacheStatement
 	| BlockStatement
+	| Decorator
+	| DecoratorBlock
 	| PartialStatement
 	| PartialBlockStatement
 	| ContentStatement

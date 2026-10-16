@@ -12,7 +12,6 @@ describe('assertUserConfig', () => {
 			plugins: [{ name: 'p', provide() {} }],
 			rsbuild: {},
 			context: { a: 1 },
-			runtimePlugins: [{ name: 'r', helpers: { x() {} } }],
 			publicDir: false,
 			output: {
 				dir: 'out',
@@ -31,11 +30,6 @@ describe('assertUserConfig', () => {
 		[{ alias: ['src'] }, /Invalid option 'alias', expected an object of paths/],
 		[{ alias: { '~': '' } }, /Invalid option 'alias\['~'\]', expected a path/],
 		[{ rsbuild: 5 }, /Invalid option 'rsbuild'/],
-		[{ runtimePlugins: {} }, /Invalid option 'runtimePlugins'/],
-		[
-			{ runtimePlugins: [{ name: 'r', helpers: [] }] },
-			/runtimePlugins\[0\]\.helpers/,
-		],
 		[{ publicDir: 1 }, /Invalid option 'publicDir', expected a path or false/],
 		[
 			{ output: { dri: 'x' } },
@@ -54,6 +48,21 @@ describe('assertUserConfig', () => {
 			/Invalid option 'output\.clean', expected a boolean, got: 'yes'/,
 		],
 		[{ output: { validate: 1 } }, /Invalid option 'output\.validate'/],
+		[5, /^Expected the options to be an object, got: 5$/],
+		[{ alias: { '': 'src' } }, /^Invalid option 'alias', a name is empty$/],
+		[
+			{ plugins: [{ name: 'p', provide: 1 }] },
+			/^Invalid 'provide' of plugin 'p', expected a function, got: 1$/,
+		],
+		[
+			{
+				plugins: [
+					{ name: 'p', runtime: { entry: 'x', options: { a: [1, () => 2] } } },
+				],
+			},
+			/^Invalid 'runtime\.options\.a\[1\]' of plugin 'p', expected a JSON value, got: function$/,
+		],
+		[{ foo: 1, entry: 2 }, /^Unknown option 'foo', valid options: /],
 	])('rejects %o', (config, message) => {
 		assert.throws(() => assertUserConfig(config), message);
 	});

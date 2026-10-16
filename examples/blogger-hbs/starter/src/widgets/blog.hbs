@@ -1,0 +1,69 @@
+<b:section class='main-section' id='main' maxwidgets='1' showaddelement='false'>
+  <b:widget id='Blog1' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'>
+    <b:widget-settings>
+      <b:widget-setting name='showDateHeader'>false</b:widget-setting>
+      <b:widget-setting name='showAuthor'>true</b:widget-setting>
+      <b:widget-setting name='showLabels'>true</b:widget-setting>
+    </b:widget-settings>
+
+    <b:includable id='main'>
+      <b:if cond='data:view.isMultipleItems'>
+        <div class='posts'>
+          <b:loop values='data:posts' var='post'>
+            <b:include data='post' name='postCard'/>
+          </b:loop>
+        </div>
+        <b:include name='pager'/>
+        <b:else/>
+        <b:loop values='data:posts' var='post'>
+          <b:include data='post' name='postFull'/>
+        </b:loop>
+      </b:if>
+    </b:includable>
+
+    <b:includable id='postCard' var='post'>
+      <article class='card'>
+        <b:if cond='data:post.featuredImage'>
+          <a class='card-image' expr:href='data:post.url'>
+            <img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 640, &quot;16:9&quot;)' loading='lazy'/>
+          </a>
+        </b:if>
+        <h2 class='card-title'><a expr:href='data:post.url'><data:post.title/></a></h2>
+        <p class='card-snippet'><data:post.snippets.short/></p>
+        <b:include data='post' name='postMeta'/>
+      </article>
+    </b:includable>
+
+    <b:includable id='postFull' var='post'>
+      <article class='post'>
+        <h1 class='post-title'><data:post.title/></h1>
+        <b:include data='post' name='postMeta'/>
+        <div class='post-body'><data:post.body/></div>
+      </article>
+    </b:includable>
+
+    <b:includable id='postMeta' var='post'>
+      <p class='meta'>
+        {{> lucide.calendar size=16}}
+        <time expr:datetime='data:post.date.iso8601'><data:post.date/></time>
+        <b:if cond='data:post.labels'>
+          {{> lucide.tag size=16}}
+          <b:loop values='data:post.labels' var='label'>
+            <a class='label' expr:href='data:label.url'><data:label.name/></a>
+          </b:loop>
+        </b:if>
+      </p>
+    </b:includable>
+
+    <b:includable id='pager'>
+      <nav class='pager'>
+        <b:if cond='data:newerPageUrl'>
+          <a expr:href='data:newerPageUrl'>{{> lucide.arrow-left size=16}} Newer</a>
+        </b:if>
+        <b:if cond='data:olderPageUrl'>
+          <a expr:href='data:olderPageUrl'>Older {{> lucide.arrow-right size=16}}</a>
+        </b:if>
+      </nav>
+    </b:includable>
+  </b:widget>
+</b:section>

@@ -2,8 +2,9 @@ import type { LucideIconData } from '@lucide/icons';
 import { lucideDynamicIconImports } from '@lucide/icons/dynamic';
 import {
 	type CompilePlugin,
+	type Location,
+	type PartialRequest,
 	PluginError,
-	type TemplateContext,
 } from 'blogger-hbs';
 
 type IconName = keyof typeof lucideDynamicIconImports;
@@ -17,7 +18,7 @@ export interface LucideOptions {
 	 * happen when the name comes from data. `circle-slash` by default, `false`
 	 * to render an empty icon.
 	 */
-	fallback?: string | false;
+	fallback?: IconName | false;
 	/** Default width and height, `24` by default. */
 	size?: number;
 	/** Default stroke color, `currentColor` by default. */
@@ -28,6 +29,11 @@ export interface LucideOptions {
 
 const PLUGIN_NAME = 'lucide';
 const INCLUDABLE = 'includable';
+/** `{{> lucide}}`, not provided: an icon is `{{> lucide.name}}`. */
+const MAIN = '.';
+
+/** Whether a partial of the plugin is an icon, `{{> lucide.house}}`. */
+const isIconPartial = (name: string) => name !== INCLUDABLE && name !== MAIN;
 
 /**
  * Props of `{{> lucide.house size=16 class="icon"}}` passed on to the
@@ -45,9 +51,7 @@ const cache = new Map<string, Promise<LucideIconData>>();
  * includable that has to be in the theme once, `{{> lucide.includable}}`. Only
  * the icons used are in it.
  */
-export function compilePluginLucide(
-	options: LucideOptions = {},
-): CompilePlugin {
+export function pluginLucide(options: LucideOptions = {}): CompilePlugin {
 	const {
 		id = '@lucide',
 		fallback = 'circle-slash',
@@ -60,32 +64,50 @@ export function compilePluginLucide(
 		throw new PluginError(`Invalid lucide includable id '${String(id)}'`);
 	}
 	if (fallback !== false && !isIcon(fallback)) {
-		throw new PluginError(unknownIcons([fallback], 'fallback icon'));
+		throw new PluginError(
+			unknownIcons([{ name: fallback, usages: [] }], 'fallback icon'),
+		);
 	}
 
 	return {
 		name: PLUGIN_NAME,
 
-		provide({ partials, templates }) {
-			const icons = partials.filter((name) => name !== INCLUDABLE);
-			const unknown = icons.filter((name) => !isIcon(name));
+		provide({ requests }, plugin) {
+			const icons = requests.filter(({ name }) => isIconPartial(name));
+			const unknown = icons.filter(({ name }) => !isIcon(name));
 			if (unknown.length > 0) {
-				throw new PluginError(unknownIcons(unknown, 'icon', templates));
+				plugin.error(unknownIcons(unknown, 'icon'));
+			}
+
+			for (const { name, usages } of icons) {
+				for (const usage of usages) {
+					for (const prop of Object.keys(usage.hash)) {
+						if (!PROPS.includes(prop)) {
+							const match = closest(prop, PROPS);
+							plugin.error(
+								`Unknown prop '${prop}' of lucide icon '${name}'${match ? `, did you mean '${match}'?` : ''} The props are ${PROPS.join(', ')}`,
+								usage,
+							);
+						}
+					}
+				}
 			}
 
 			return Object.fromEntries(
-				icons.map((name) => [name, iconPartial(id, name)]),
+				icons.map(({ name }) => [name, iconPartial(id, name)]),
 			);
 		},
 
 		// the includable needs every icon used, which is only known now
-		async finalize({ provided, missing }) {
-			const icons = provided.filter((name) => name !== INCLUDABLE).sort();
+		async finalize({ provided, missing, requests }, plugin) {
+			const icons = provided.filter(isIconPartial).sort();
 
 			if (!missing.includes(INCLUDABLE)) {
 				if (icons.length > 0) {
-					throw new PluginError(
+					const first = requests.find(({ name }) => isIconPartial(name));
+					plugin.error(
 						`Lucide icons are used (${icons.join(', ')}) but not '{{> ${PLUGIN_NAME}.${INCLUDABLE}}}', which renders them. Add it once to the theme`,
+						first?.usages[0],
 					);
 				}
 				return;
@@ -167,46 +189,30 @@ function escapeXml(value: string): string {
 	return value.replace(/[&<>"']/g, (char) => XML_ENTITIES[char] ?? char);
 }
 
-/** Lists the unknown icons with where they are used and the closest names. */
-function unknownIcons(
-	names: string[],
-	label: string,
-	templates: readonly TemplateContext[] = [],
-): string {
-	const lines = names.map((name) => {
-		const where = findUsage(name, templates);
-		const match = closest(name);
-		return `  '${name}'${where ? ` (${where})` : ''}${match ? `, did you mean '${match}'?` : ''}`;
+/** Lists the unknown icons with where they are first used and the closest names. */
+function unknownIcons(icons: readonly PartialRequest[], label: string): string {
+	const lines = icons.map(({ name, usages }) => {
+		const [first] = usages;
+		const match = closest(name, ICON_NAMES);
+		return `  '${name}'${first ? ` (${describe(first)})` : ''}${match ? `, did you mean '${match}'?` : ''}`;
 	});
 
-	return `Unknown lucide ${label}${names.length > 1 ? 's' : ''}:\n${lines.join('\n')}\nSee the icons at https://lucide.dev/icons`;
+	return `Unknown lucide ${label}${icons.length > 1 ? 's' : ''}:\n${lines.join('\n')}\nSee the icons at https://lucide.dev/icons`;
 }
 
-/** `file:line` of the first `{{> lucide.name}}` in the templates. */
-function findUsage(
+function describe({ path, line, column }: Location): string {
+	return line > 0 ? `${path}:${line}:${column}` : path;
+}
+
+/** The candidate closest to `name`, when it is close enough to be a typo. */
+function closest(
 	name: string,
-	templates: readonly TemplateContext[],
+	candidates: readonly string[],
 ): string | undefined {
-	const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	const pattern = new RegExp(
-		`\\{\\{~?#?>\\s*${PLUGIN_NAME}\\.${escaped}(?=[\\s}~])`,
-	);
-
-	for (const template of templates) {
-		const match = pattern.exec(template.source);
-		if (match) {
-			const line = template.source.slice(0, match.index).split('\n').length;
-			return `${template.path}:${line}`;
-		}
-	}
-}
-
-/** The icon name closest to `name`, when it is close enough to be a typo. */
-function closest(name: string): string | undefined {
 	let best: string | undefined;
 	let bestDistance = Math.max(2, Math.floor(name.length / 3)) + 1;
 
-	for (const candidate of ICON_NAMES) {
+	for (const candidate of candidates) {
 		if (Math.abs(candidate.length - name.length) >= bestDistance) {
 			continue;
 		}
