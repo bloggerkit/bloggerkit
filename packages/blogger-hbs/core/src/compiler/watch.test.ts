@@ -107,7 +107,7 @@ describe('watchTemplate', () => {
 		assert.strictEqual(event.kind, 'error');
 		assert.match(
 			event.kind === 'error' ? event.message : '',
-			/Invalid XML in .*b\.hbs/,
+			/^Invalid XML: .* \(\.\/b\.hbs:\d+:\d+\)$/,
 		);
 
 		await write(root, 'b.hbs', '<b>3</b>');

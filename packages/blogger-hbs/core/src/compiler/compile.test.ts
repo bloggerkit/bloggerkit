@@ -189,7 +189,7 @@ describe('xml validation', () => {
 		});
 		await assertRejects(
 			compileTemplate({ root }),
-			/Invalid XML in .*b\.hbs:3:1, expected <\/c>/,
+			/^Invalid XML: expected <\/c> .* \(\.\/b\.hbs:3:1\)$/,
 		);
 	});
 
@@ -200,7 +200,7 @@ describe('xml validation', () => {
 				root,
 				plugins: [{ name: 'p', provide: () => ({ x: '<i>' }) }],
 			}),
-			/Invalid XML in partial 'p\.x'/,
+			/^Plugin 'p': Invalid XML: <i> \(opened at 1:1\) is not closed \(p\.x:1:1\)$/,
 		);
 	});
 
@@ -219,7 +219,7 @@ describe('xml validation', () => {
 					},
 				],
 			}),
-			/Invalid XML in .*index\.hbs/,
+			/^Invalid XML: .* \(\.\/index\.hbs:\d+:\d+\)$/,
 		);
 	});
 });
@@ -319,7 +319,7 @@ describe('plugins', () => {
 					},
 				],
 			}),
-			/^mine$/,
+			/^Plugin 'p': mine$/,
 		);
 	});
 
@@ -337,7 +337,7 @@ describe('plugins', () => {
 				root,
 				plugins: [{ name: 'p', data: () => ({ f: () => 1 }) }],
 			}),
-			/Data 'f' of plugin 'p' is not serializable/,
+			/^Plugin 'p' provided the data 'f' that is not serializable to JSON$/,
 		);
 	});
 });
@@ -405,7 +405,7 @@ describe('plugin context', () => {
 			],
 		});
 
-		const file = path.join(root, 'index.hbs');
+		const file = './index.hbs';
 		assert.deepEqual(asked, [
 			{
 				partials: ['icon', 'wrap'],
@@ -476,10 +476,13 @@ describe('plugin context', () => {
 			});
 			assert.fail('expected an error');
 		} catch (error) {
-			const file = path.join(root, 'index.hbs');
-			assert.strictEqual((error as Error).message, `Unknown x (${file}:2:1)`);
+			assert.strictEqual(
+				(error as Error).message,
+				"Plugin 'p': Unknown x (./index.hbs:2:1)",
+			);
+			assert.strictEqual((error as PluginError).plugin, 'p');
 			assert.deepEqual((error as PluginError).loc, {
-				path: file,
+				path: './index.hbs',
 				line: 2,
 				column: 1,
 			});
@@ -504,7 +507,7 @@ describe('plugin context', () => {
 			],
 		});
 		assert.deepEqual(warnings, [
-			`Plugin 'p': x is old (${path.join(root, 'index.hbs')}:1:4)`,
+			"Plugin 'p': x is old (./index.hbs:1:4)",
 			"Plugin 'p': no place",
 		]);
 		assert.strictEqual(renderTemplate(compiled), '<a><x/></a>');
@@ -514,9 +517,7 @@ describe('plugin context', () => {
 		const root = await createFixture({ 'index.hbs': '<a>\n {{> p.x}}</a>' });
 		await assertRejects(
 			compileTemplate({ root, plugins: [{ name: 'p' }] }),
-			new RegExp(
-				`did not provide the partial 'x' \\(used in ${path.join(root, 'index.hbs').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:2:2\\)`,
-			),
+			/^Plugin 'p' did not provide the partial 'x' \(\.\/index\.hbs:2:2\)$/,
 		);
 	});
 });
@@ -571,7 +572,7 @@ describe('plugin partial names', () => {
 		await assertRejects(
 			compileTemplate({ root, plugins: [echo()] }),
 			new RegExp(
-				`^Invalid partial '${escapeRegExp(name)}'${escapeRegExp(rest)} of plugin 'p' is 'p' or 'p\\.name', with names separated by single dots \\(${escapeRegExp(path.join(root, 'index.hbs'))}:2:3\\)$`,
+				`^Invalid partial '${escapeRegExp(name)}'${escapeRegExp(rest)} of plugin 'p' is 'p' or 'p\\.name', with names separated by single dots \\(\\.\\/index\\.hbs:2:3\\)$`,
 			),
 		);
 	});
@@ -617,16 +618,16 @@ describe('plugin partial names', () => {
 		const root = await createFixture({ 'index.hbs': '<a>{{> p}}</a>' });
 		await assertRejects(
 			compileTemplate({ root, plugins: [{ name: 'p', provide: () => ({}) }] }),
-			/^Plugin 'p' did not provide its main partial '\.' \(\{\{> p\}\}\) \(used in .*index\.hbs:1:4\)$/,
+			/^Plugin 'p' did not provide its main partial '\.' \(\{\{> p\}\}\) \(\.\/index\.hbs:1:4\)$/,
 		);
 	});
 
 	test.each([
-		['', /^Partial of plugin 'p' name is required$/],
-		['a.', /^Partial of plugin 'p' name 'a\.' is not valid$/],
-		['.a', /^Partial of plugin 'p' name '\.a' is not valid$/],
-		['a..b', /^Partial of plugin 'p' name 'a\.\.b' is not valid$/],
-		['a b', /^Partial of plugin 'p' name 'a b' is not valid$/],
+		['', /^Plugin 'p' provided a partial without a name$/],
+		['a.', /^Plugin 'p' provided a partial with the invalid name 'a\.'$/],
+		['.a', /^Plugin 'p' provided a partial with the invalid name '\.a'$/],
+		['a..b', /^Plugin 'p' provided a partial with the invalid name 'a\.\.b'$/],
+		['a b', /^Plugin 'p' provided a partial with the invalid name 'a b'$/],
 	])('rejects the key %o provided by a plugin', async (key, message) => {
 		const root = await createFixture({ 'index.hbs': '<a/>' });
 		await assertRejects(

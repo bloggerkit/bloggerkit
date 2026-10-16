@@ -1,3 +1,4 @@
+import { type Location, withLocation } from '../plugins';
 import {
 	formatExpression,
 	type ParsedExpression,
@@ -13,16 +14,40 @@ import {
 	XmlSyntaxError,
 } from './scanner';
 
+/**
+ * An error in a document, `message (theme.xml:3:7)`, or `message (3:7)`
+ * when the document has no path.
+ */
 export class XmlError extends Error {
-	readonly line: number;
-	/** 1-based. */
-	readonly column: number;
+	readonly loc: Location;
+	readonly #reason: string;
 
-	constructor(message: string, { line, column }: Position) {
-		super(`${message} (${line}:${column + 1})`);
+	constructor(message: string, { line, column }: Position, path = '') {
+		const loc = { path, line, column: column + 1 };
+		super(withLocation(message, loc));
 		this.name = 'XmlError';
-		this.line = line;
-		this.column = column + 1;
+		this.loc = loc;
+		this.#reason = message;
+	}
+
+	/** The same error in the document at `path`. */
+	withPath(path: string): XmlError {
+		const { line, column } = this.loc;
+		return new XmlError(this.#reason, { line, column: column - 1 }, path);
+	}
+}
+
+export interface XmlOptions {
+	/** Path of the document, shown in errors. */
+	path?: string;
+}
+
+/** Runs `check`, its errors in the document at `path`. */
+function atPath<T>(path: string | undefined, check: () => T): T {
+	try {
+		return check();
+	} catch (error) {
+		throw path && error instanceof XmlError ? error.withPath(path) : error;
 	}
 }
 
@@ -37,7 +62,11 @@ export const DOCTYPE = '<!DOCTYPE html>';
  * as `formatXml` requires them (XML 1.0 in UTF-8, an `html` doctype), whose
  * expressions (`b:if cond`, `expr:*`, ...) parse with `blogger-expr`.
  */
-export function validateXml(xml: string): void {
+export function validateXml(xml: string, { path }: XmlOptions = {}): void {
+	atPath(path, () => checkDocument(xml));
+}
+
+function checkDocument(xml: string): void {
 	const { declarations } = scanDocument(xml);
 	const [first, second] = [...xml.split('\n', 2)].map((line) =>
 		line.replace(/\r$/, ''),
@@ -84,7 +113,11 @@ export function validateXml(xml: string): void {
  *
  * Everything else is left as it is.
  */
-export function formatXml(xml: string): string {
+export function formatXml(xml: string, { path }: XmlOptions = {}): string {
+	return atPath(path, () => formatDocument(xml));
+}
+
+function formatDocument(xml: string): string {
 	const { tags, declarations, expressions } = scanDocument(xml);
 
 	// the declarations are taken out, they are written at the top

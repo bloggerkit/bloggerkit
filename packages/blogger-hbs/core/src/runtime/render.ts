@@ -6,6 +6,7 @@ import {
 } from '../constants';
 import {
 	assertPlugins,
+	attributeToPlugin,
 	PluginError,
 	type RuntimeApi,
 	type RuntimePlugin,
@@ -18,6 +19,7 @@ import type {
 	PluginPartials,
 } from './chunks';
 import { HelperError } from './helpers';
+import { optionsOf } from './helpers/args';
 import * as helpers from './helpers/functions';
 import { createImportHelper, RUNTIMES_DATA_KEY } from './import';
 import { restoreLinebreaks } from './linebreaks';
@@ -54,7 +56,7 @@ export interface Renderer {
  * ```ts
  * import * as theme from './dist/compiled.js';
  * const renderer = createRenderer(theme);
- * const html = await renderer.render(context);
+ * const xml = await renderer.render(context);
  * ```
  */
 export function createRenderer(
@@ -75,7 +77,8 @@ export function createRenderer(
 					);
 					if (typeof output !== 'string') {
 						throw new PluginError(
-							`Plugin '${plugin.name}' must return a string from 'transform', got: ${typeof output}`,
+							`Plugin '${plugin.name}' must return a string from 'transform', got: ${describeValue(output)}`,
+							{ plugin: plugin.name },
 						);
 					}
 				}
@@ -107,6 +110,7 @@ export function renderTemplate(options: RenderTemplateOptions): string {
 			if (plugin[hook]) {
 				throw new PluginError(
 					`Plugin '${plugin.name}' has '${hook}', render with createRenderer`,
+					{ plugin: plugin.name },
 				);
 			}
 		}
@@ -158,7 +162,8 @@ function setup(
 			}
 			if (typeof hooks !== 'object' || hooks === null) {
 				throw new PluginError(
-					`The runtime of plugin '${name}' must return an object from its setup, got: ${hooks === null ? 'null' : typeof hooks}`,
+					`Plugin '${name}' must return an object from the setup of its runtime, got: ${describeValue(hooks)}`,
+					{ plugin: name },
 				);
 			}
 			return { ...hooks, name };
@@ -208,7 +213,7 @@ function setup(
 			);
 		}
 		owners.set(name, owner);
-		hbs.registerHelper(name, helper as Handlebars.HelperDelegate);
+		hbs.registerHelper(name, withPlace(helper as Handlebars.HelperDelegate));
 	};
 
 	register('import', createImportHelper(chunks, templates), 'built-in');
@@ -234,6 +239,42 @@ function setup(
 			return restoreLinebreaks(main(context, { data: frame }));
 		},
 	};
+}
+
+/**
+ * The helper with its errors as `HelperError`s, which say which helper it is
+ * and where it is used: the options Handlebars gives a helper tell both.
+ */
+function withPlace(
+	helper: Handlebars.HelperDelegate,
+): Handlebars.HelperDelegate {
+	return function (this: unknown, ...args: unknown[]) {
+		const options = optionsOf(args);
+		try {
+			return (helper as (...args: unknown[]) => unknown).apply(this, args);
+		} catch (error) {
+			// by name too, a helper can get `HelperError` from another copy of the package
+			const known = error as Partial<HelperError> | null;
+			if (known?.name !== 'HelperError') {
+				// `throw new TypeError('...')` reads as the helper's own message
+				throw new HelperError(messageOf(error), { options, cause: error });
+			}
+			// made without the options, it does not know where it is
+			if (known.loc === undefined && known.helper === undefined) {
+				throw new HelperError(known.message, { options, cause: known.cause });
+			}
+			throw error;
+		}
+	};
+}
+
+/** The message of something thrown, undefined when it has none. */
+function messageOf(error: unknown): string | undefined {
+	const message =
+		typeof error === 'string'
+			? error
+			: (error as { message?: unknown } | null)?.message;
+	return typeof message === 'string' && message !== '' ? message : undefined;
 }
 
 /** The data of the compile plugins, read as `@plugin.name`. */
@@ -270,6 +311,7 @@ async function prepareData(
 		) {
 			throw new PluginError(
 				`Plugin '${plugin.name}' must return an object or nothing from 'prepare', got: ${describeValue(values)}`,
+				{ plugin: plugin.name },
 			);
 		}
 		data[plugin.name] = Object.assign(
@@ -294,15 +336,17 @@ async function call<T>(
 	}
 }
 
-function wrap(plugin: string, hook: string, error: unknown): Error {
-	// by name too, a plugin can get `PluginError` from another copy of the package
-	if (
-		error instanceof Error &&
-		(error.name === 'PluginError' || error.name === 'HelperError')
-	) {
+function wrap(plugin: string, hook: string, error: unknown): unknown {
+	// by name too, a plugin can get them from another copy of the package
+	const name = (error as { name?: unknown } | null)?.name;
+	if (name === 'HelperError') {
 		return error;
 	}
+	if (name === 'PluginError') {
+		return attributeToPlugin(error, plugin);
+	}
 	return new PluginError(`Plugin '${plugin}' failed in '${hook}'`, {
+		plugin,
 		cause: error,
 	});
 }

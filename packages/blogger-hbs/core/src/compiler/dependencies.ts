@@ -1,6 +1,6 @@
 import type { Chunks, ScriptChunk } from './chunks';
 import { CompileError } from './errors';
-import type { Requirement } from './scan';
+import { located, type Requirement } from './scan';
 
 /**
  * Validates `depends-on` targets and resolves them to entries.
@@ -27,8 +27,9 @@ export function linkDependencies(
 
 	for (const { id, specifier, where } of requirements) {
 		if (!entries.has(id) && chunks.get(id)?.type !== 'style') {
-			throw new CompileError(
-				`'depends-on' target '${specifier}' must also be imported by a template (${where})`,
+			throw located(
+				`'depends-on' target '${specifier}' must also be imported by a template`,
+				where,
 			);
 		}
 	}

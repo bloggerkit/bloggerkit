@@ -177,6 +177,49 @@ describe('cli', () => {
 		);
 	});
 
+	test('shows where the rendered template is not valid', async () => {
+		const cwd = await createFixture({
+			'index.hbs': '<html>\n  <body/>\n</html>',
+		});
+		const { code, output } = await run(cwd, '--no-format');
+		assert.strictEqual(code, 1);
+		assert.match(
+			output,
+			/The rendered template is not valid XML\n {2}Caused by: The first line has to be the XML declaration, .* \(dist\/theme\.xml:1:1\)/,
+		);
+		// written anyway, to look at where it is invalid
+		assert.isTrue(existsSync(path.join(cwd, 'dist/theme.xml')));
+	});
+
+	test('shows which helper fails and where', async () => {
+		const cwd = await createFixture({
+			'index.hbs': '<html>\n  {{eq 1}}\n</html>',
+		});
+		const { code, output } = await run(cwd);
+		assert.strictEqual(code, 1);
+		assert.match(
+			output,
+			/Helper 'eq': Expected exactly 2 arguments, but got 1 \(\.\/index\.hbs:2:3\)/,
+		);
+	});
+
+	test('shows the message of an error a helper throws, once', async () => {
+		const cwd = await createFixture({
+			'index.hbs': '<html>\n  <p>{{format 1}}</p>\n</html>',
+			'runtime.js':
+				"export default () => ({ helpers: { format: () => { throw new TypeError('Expected a date'); } } });",
+			'blogger-hbs.config.mjs':
+				"export default { plugins: [{ name: 'theme', runtime: { entry: './runtime.js' } }] };",
+		});
+		const { code, output } = await run(cwd);
+		assert.strictEqual(code, 1);
+		assert.match(
+			output,
+			/✗ Helper 'format': Expected a date \(\.\/index\.hbs:2:6\)\n?$/,
+		);
+		assert.notInclude(output, 'Caused by');
+	});
+
 	test('watches and stops on SIGINT', async () => {
 		const cwd = await createFixture(THEME);
 		await fs.writeFile(

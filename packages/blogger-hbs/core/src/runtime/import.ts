@@ -1,11 +1,12 @@
 import Handlebars, {
 	type HelperDelegate,
-	type HelperOptions,
 	type TemplateDelegate,
 } from 'handlebars/runtime';
 import { CHUNK_HASH_KEY, INDENT_HASH_KEY } from '../constants';
+import { describeValue } from '../utils/suggest';
 import type { MinimalChunks } from './chunks';
 import { HelperError } from './helpers';
+import { argumentsOf, optionsOf } from './helpers/args';
 import { protectCdataNewlines } from './linebreaks';
 import { getOutputMode, renderAsset } from './tags';
 
@@ -32,13 +33,13 @@ export function createImportHelper(
 	chunks: MinimalChunks,
 	templates: Map<string, TemplateDelegate>,
 ): HelperDelegate {
-	return function (this: unknown, ...args: unknown[]) {
-		const options = args.pop() as HelperOptions;
-		const specifier = args.at(0);
+	return function (this: unknown, ...input: unknown[]) {
+		const options = optionsOf(input);
+		const [specifier] = argumentsOf(input);
 
 		if (typeof specifier !== 'string') {
 			throw new HelperError(
-				`Expected specifier to be a string, got: ${typeof specifier}`,
+				`Expected specifier to be a string, got: ${describeValue(specifier)}`,
 				{ options },
 			);
 		}
@@ -58,7 +59,7 @@ export function createImportHelper(
 			return chunk.data;
 		}
 
-		let html = '';
+		let output = '';
 
 		if (chunk.type === 'template') {
 			const depth = (options.data?._depth ?? 0) + 1;
@@ -91,7 +92,7 @@ export function createImportHelper(
 
 			// as with `{{#> partial}}` the whitespace around a block is stripped from
 			// the calling template, so the file keeps its own line breaks
-			html = protectCdataNewlines(
+			output = protectCdataNewlines(
 				typeof options.fn === 'function' ? result : result.trim(),
 			);
 		} else {
@@ -114,16 +115,16 @@ export function createImportHelper(
 				}
 			}
 
-			html = renderAsset(chunk, options, runtime);
+			output = renderAsset(chunk, options, runtime);
 		}
 
 		// Set by the compiler when the import is alone on its line
 		const indent: unknown = options.hash[INDENT_HASH_KEY];
-		if (typeof indent === 'string' && html) {
-			html = `${indentLines(html, indent)}\n`;
+		if (typeof indent === 'string' && output) {
+			output = `${indentLines(output, indent)}\n`;
 		}
 
-		return new Handlebars.SafeString(html);
+		return new Handlebars.SafeString(output);
 	};
 }
 

@@ -34,8 +34,10 @@ export interface RuntimeChunk extends MinimalRuntimeChunk {}
 
 /** Template provided by a plugin, kept out of the chunks. */
 export interface PartialChunk {
-	/** Full name, `plugin-name.template-name`. */
+	/** Full name, `plugin-name` or `plugin-name.a.b`. */
 	name: string;
+	/** The plugin that provided it. */
+	plugin: string;
 	source: string;
 	parsed: Program;
 	compiled?: string;

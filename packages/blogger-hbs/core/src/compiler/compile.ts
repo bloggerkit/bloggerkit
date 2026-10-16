@@ -155,10 +155,10 @@ export async function prepareTemplate(
 		// always, after the plugins changed the templates and provided theirs, the
 		// options of the rendered output do not turn it off
 		for (const template of templates) {
-			validateTemplateXml(template.parsed, template.path);
+			validateTemplateXml(template.parsed, toSpecifier(root, template.path));
 		}
 		for (const partial of partials) {
-			validateTemplateXml(partial.parsed, `partial '${partial.name}'`);
+			validateTemplateXml(partial.parsed, partial.name, partial.plugin);
 		}
 
 		precompileTemplates([...templates, ...partials]);

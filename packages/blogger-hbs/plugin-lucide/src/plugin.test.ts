@@ -80,7 +80,7 @@ describe('icons', () => {
 		);
 		await assertRejects(
 			compile(root),
-			/Unknown lucide icon:\n {2}'mneu' \(.+index\.hbs:2:1\), did you mean 'menu'\?/,
+			/^Plugin 'lucide': Unknown icon:\n {2}'mneu' \(\.\/index\.hbs:2:1\), did you mean 'menu'\?/,
 		);
 	});
 
@@ -90,7 +90,7 @@ describe('icons', () => {
 		);
 		await assertRejects(
 			compile(root),
-			/Unknown lucide icons:\n.*'mneu'.*\n {2}'not-an-icon-at-all' \(.+\)\n/,
+			/^Plugin 'lucide': Unknown icons:\n.*'mneu'.*\n {2}'not-an-icon-at-all' \(\.\/index\.hbs:1:\d+\)\n/,
 		);
 	});
 
@@ -100,7 +100,7 @@ describe('icons', () => {
 		);
 		await assertRejects(
 			compile(root),
-			/^Plugin 'lucide' did not provide its main partial '\.' \(\{\{> lucide\}\}\) \(used in .+index\.hbs:1:4\)$/,
+			/^Plugin 'lucide' did not provide its main partial '\.' \(\{\{> lucide\}\}\) \(\.\/index\.hbs:1:4\)$/,
 		);
 	});
 
@@ -110,7 +110,7 @@ describe('icons', () => {
 		);
 		await assertRejects(
 			compile(root),
-			/Lucide icons are used \(house, menu\) but not '\{\{> lucide\.includable\}\}', which renders them\. Add it once to the theme \(.+index\.hbs:1:4\)/,
+			/^Plugin 'lucide': Icons are used \(house, menu\) but not '\{\{> lucide\.includable\}\}', which renders them\. Add it once to the theme \(\.\/index\.hbs:1:4\)$/,
 		);
 	});
 
@@ -120,7 +120,7 @@ describe('icons', () => {
 		);
 		await assertRejects(
 			compile(root),
-			/Unknown prop 'sise' of lucide icon 'menu', did you mean 'size'\? The props are size, stroke, strokeWidth, class \(.+index\.hbs:2:3\)/,
+			/^Plugin 'lucide': Unknown prop 'sise' of icon 'menu', did you mean 'size'\? The props are size, stroke, strokeWidth, class \(\.\/index\.hbs:2:3\)$/,
 		);
 	});
 
@@ -216,7 +216,7 @@ describe('options', () => {
 	test('rejects an invalid id', () => {
 		assert.throws(
 			() => pluginLucide({ id: "a'b" }),
-			"Invalid lucide includable id 'a'b'",
+			"Plugin 'lucide': Invalid includable id 'a'b'",
 		);
 	});
 
@@ -224,7 +224,7 @@ describe('options', () => {
 		assert.throws(
 			// a typo the types catch, but not in a config written in JavaScript
 			() => pluginLucide({ fallback: 'mneu' as never }),
-			/Unknown lucide fallback icon:\n {2}'mneu', did you mean 'menu'\?/,
+			/^Plugin 'lucide': Unknown fallback icon:\n {2}'mneu', did you mean 'menu'\?/,
 		);
 	});
 });
