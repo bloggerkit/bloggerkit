@@ -1,6 +1,6 @@
 {
   "name": "blogger-hbs",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Build Blogger themes from Handlebars templates, with bundled scripts and styles.",
   "keywords": [
     "blogger",
