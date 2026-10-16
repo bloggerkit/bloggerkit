@@ -3,8 +3,8 @@ import Handlebars from 'handlebars';
 import * as z from 'zod';
 import { FORBIDDEN_KEYS, NAME_DENYLIST_REGEX } from '../constants';
 import {
-	assertName,
 	assertPlugins,
+	attributeToPlugin,
 	type CompilePlugin,
 	type JsonValue,
 	type Location,
@@ -26,6 +26,7 @@ import {
 	type Program,
 } from './ast';
 import type { Chunks, PartialChunk } from './chunks';
+import { CompileError } from './errors';
 
 /** The runtime half of a compile plugin, to be bundled. */
 export interface RuntimeRequest {
@@ -92,9 +93,10 @@ export function createPluginContexts(
 					onWarn(withLocation(`Plugin '${name}': ${message}`, loc));
 				},
 				error(message, loc): never {
-					throw new PluginError(withLocation(message, loc), {
-						loc: toLocation(loc),
-					});
+					throw new PluginError(
+						withLocation(`Plugin '${name}': ${message}`, loc),
+						{ plugin: name, loc: toLocation(loc) },
+					);
 				},
 			} satisfies PluginContext,
 		]),
@@ -171,7 +173,7 @@ export async function runCompilePlugins(
 			const plugin = pluginOf(inline.name);
 			if (owners.has(plugin)) {
 				const loc = locationOf(where, inline);
-				throw new PluginError(
+				throw new CompileError(
 					withLocation(
 						`Inline partial '${inline.name}' uses the name of plugin '${plugin}', whose partials are '${plugin}' and '${plugin}.name'`,
 						loc,
@@ -224,7 +226,7 @@ export async function runCompilePlugins(
 	}
 	// as written, before `preprocess` can change the templates
 	for (const template of templates) {
-		checkWritten(template.ast, template.path, template.source);
+		checkWritten(template.ast, template.id, template.source);
 	}
 	for (const plugin of plugins) {
 		await call(plugin, 'preprocess', () =>
@@ -237,7 +239,7 @@ export async function runCompilePlugins(
 		if (chunk?.type === 'template') {
 			chunk.parsed = template.ast;
 		}
-		collect(template.ast, template.path);
+		collect(template.ast, template.id);
 	}
 
 	const asked = new Set<string>();
@@ -308,9 +310,13 @@ export async function runCompilePlugins(
 				request.name === MAIN_PARTIAL
 					? `its main partial '.' ({{> ${request.plugin}}})`
 					: `the partial '${request.name}'`;
+			const loc = toLocation(first);
 			throw new PluginError(
-				`Plugin '${request.plugin}' did not provide ${partial} (used in ${describe(first)})${hint}`,
-				{ loc: toLocation(first) },
+				withLocation(
+					`Plugin '${request.plugin}' did not provide ${partial}${hint}`,
+					loc,
+				),
+				{ plugin: request.plugin, loc },
 			);
 		}
 	}
@@ -345,17 +351,21 @@ export async function runCompilePlugins(
 	}
 
 	function addPartial(plugin: string, name: string, source: unknown): void {
+		function fail(message: string, options?: ErrorOptions): never {
+			throw new PluginError(`Plugin '${plugin}' ${message}`, {
+				...options,
+				plugin,
+			});
+		}
 		if (name === '') {
-			throw new PluginError(`Partial of plugin '${plugin}' name is required`);
+			fail('provided a partial without a name');
 		}
 		if (!isPartialKey(name)) {
-			throw new PluginError(
-				`Partial of plugin '${plugin}' name '${name}' is not valid`,
-			);
+			fail(`provided a partial with the invalid name '${name}'`);
 		}
 		if (typeof source !== 'string') {
-			throw new PluginError(
-				`Partial '${name}' of plugin '${plugin}' must be a string, got: ${typeof source}`,
+			fail(
+				`provided the partial '${name}' that is not a string, got: ${describeValue(source)}`,
 			);
 		}
 
@@ -368,36 +378,51 @@ export async function runCompilePlugins(
 		try {
 			parsed = Handlebars.parse(source, { srcName: full }) as Program;
 		} catch (error) {
-			throw new PluginError(`Failed to parse partial '${full}'`, {
+			fail(`provided the partial '${name}' that can not be parsed`, {
 				cause: error,
 			});
 		}
 		if (extractImports(parsed).length > 0) {
-			throw new PluginError(`Partial '${full}' can not use 'import'`);
+			fail(
+				`provided the partial '${name}' that uses 'import', which partials can not`,
+			);
 		}
 
-		const chunk: PartialChunk = { name: full, source, parsed };
+		const chunk: PartialChunk = {
+			name: full,
+			plugin,
+			source,
+			parsed,
+		};
 		partials.set(full, chunk);
 		checkWritten(parsed, full, source);
 		collect(parsed, full);
 	}
 
 	function addData(plugin: string, name: string, value: unknown): void {
-		assertName(name, `Data of plugin '${plugin}'`);
+		function fail(message: string, options?: ErrorOptions): never {
+			throw new PluginError(`Plugin '${plugin}' ${message}`, {
+				...options,
+				plugin,
+			});
+		}
+		if (name === '') {
+			fail('provided data without a name');
+		}
+		if (NAME_DENYLIST_REGEX.test(name) || FORBIDDEN_KEYS.has(name)) {
+			fail(`provided data with the invalid name '${name}'`);
+		}
 
 		let serialized: string | undefined;
 		try {
 			serialized = JSON.stringify(value);
 		} catch (error) {
-			throw new PluginError(
-				`Data '${name}' of plugin '${plugin}' is not serializable`,
-				{ cause: error },
-			);
+			fail(`provided the data '${name}' that is not serializable to JSON`, {
+				cause: error,
+			});
 		}
 		if (serialized === undefined) {
-			throw new PluginError(
-				`Data '${name}' of plugin '${plugin}' is not serializable`,
-			);
+			fail(`provided the data '${name}' that is not serializable to JSON`);
 		}
 
 		data[plugin] ??= Object.create(null);
@@ -422,14 +447,6 @@ export async function endCompilePlugins(
 			await call(plugin, 'buildEnd', () => plugin.buildEnd?.(context, error));
 		}
 	}
-}
-
-/** `path:line:column`, or the path alone when the place is unknown. */
-function describe(loc: Location | undefined): string {
-	if (loc === undefined) {
-		return 'unknown';
-	}
-	return loc.line > 0 ? `${loc.path}:${loc.line}:${loc.column}` : loc.path;
 }
 
 /** The key of the main partial of a plugin, `{{> plugin-name}}`. */
@@ -488,7 +505,7 @@ function partialKey(plugin: string, raw: string, loc: Location): string {
 		fixed !== raw && isPartialKey(fixed.slice(plugin.length + 1))
 			? `Invalid partial '${raw}', did you mean '${fixed}'? A ${rule}`
 			: `Invalid partial '${raw}': a ${rule}`;
-	throw new PluginError(withLocation(message, loc), { loc });
+	throw new CompileError(withLocation(message, loc), { loc });
 }
 
 /** Keys of the partials of `plugin` among full names: `.` for `p`, `a` for `p.a`. */
@@ -523,6 +540,7 @@ function assertRecord(
 	if (!parsed.success) {
 		throw new PluginError(
 			`Plugin '${plugin}' must return an object or nothing from '${hook}', got: ${describeValue(result)}`,
+			{ plugin },
 		);
 	}
 	// the result itself, the values are kept as they are
@@ -537,14 +555,11 @@ async function call<T>(
 	try {
 		return await fn();
 	} catch (error) {
-		// by name too, a plugin can get `PluginError` from another copy of the package
-		if (
-			error instanceof PluginError ||
-			(error instanceof Error && error.name === 'PluginError')
-		) {
-			throw error;
+		if ((error as { name?: unknown } | null)?.name === 'PluginError') {
+			throw attributeToPlugin(error, plugin.name);
 		}
 		throw new PluginError(`Plugin '${plugin.name}' failed in '${hook}'`, {
+			plugin: plugin.name,
 			cause: error,
 		});
 	}

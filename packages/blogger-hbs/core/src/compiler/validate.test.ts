@@ -71,7 +71,7 @@ describe('validateTemplateXml', () => {
 		[
 			'an unclosed tag',
 			'<div>\n  <p>text\n</div>',
-			/index\.hbs:3:1, expected <\/p> to close <p> \(opened at 2:3\), found <\/div>/,
+			/^Invalid XML: expected <\/p> to close <p> \(opened at 2:3\), found <\/div> \(index\.hbs:3:1\)$/,
 		],
 		[
 			'a tag left open at the end',
@@ -140,12 +140,12 @@ describe('validateTemplateXml', () => {
 		[
 			'an invalid Blogger expression',
 			`<p>\n  <b:if cond='data:a and'/></p>`,
-			/index\.hbs:2:25, invalid expression in the attribute 'cond' of <b:if>: /,
+			/^Invalid XML: invalid expression in the attribute 'cond' of <b:if>: .* \(index\.hbs:2:25\)$/,
 		],
 		[
 			'an invalid Blogger expression after a Handlebars comment',
 			`<a expr:href='data:a {{! c }}+'/>`,
-			/index\.hbs:1:31, invalid expression in the attribute 'expr:href' of <a>/,
+			/^Invalid XML: invalid expression in the attribute 'expr:href' of <a>: .* \(index\.hbs:1:31\)$/,
 		],
 		[
 			'an invalid b:include data',
@@ -163,12 +163,8 @@ describe('validateTemplateXml', () => {
 
 	test('names the template in errors', () => {
 		assert.throws(
-			() =>
-				validateTemplateXml(
-					Handlebars.parse('<a>') as Program,
-					"partial 'p.x'",
-				),
-			/^Invalid XML in partial 'p\.x':1:1,/,
+			() => validateTemplateXml(Handlebars.parse('<a>') as Program, 'p.x', 'p'),
+			/^Plugin 'p': Invalid XML: <a> \(opened at 1:1\) is not closed \(p\.x:1:1\)$/,
 		);
 	});
 });

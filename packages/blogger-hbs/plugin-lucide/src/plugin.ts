@@ -61,11 +61,15 @@ export function pluginLucide(options: LucideOptions = {}): CompilePlugin {
 	} = options;
 
 	if (typeof id !== 'string' || !/^[\w@.-]+$/.test(id)) {
-		throw new PluginError(`Invalid lucide includable id '${String(id)}'`);
+		throw new PluginError(
+			`Plugin '${PLUGIN_NAME}': Invalid includable id '${String(id)}'`,
+			{ plugin: PLUGIN_NAME },
+		);
 	}
 	if (fallback !== false && !isIcon(fallback)) {
 		throw new PluginError(
-			unknownIcons([{ name: fallback, usages: [] }], 'fallback icon'),
+			`Plugin '${PLUGIN_NAME}': ${unknownIcons([{ name: fallback, usages: [] }], 'fallback icon')}`,
+			{ plugin: PLUGIN_NAME },
 		);
 	}
 
@@ -85,7 +89,7 @@ export function pluginLucide(options: LucideOptions = {}): CompilePlugin {
 						if (!PROPS.includes(prop)) {
 							const match = closest(prop, PROPS);
 							plugin.error(
-								`Unknown prop '${prop}' of lucide icon '${name}'${match ? `, did you mean '${match}'?` : ''} The props are ${PROPS.join(', ')}`,
+								`Unknown prop '${prop}' of icon '${name}'${match ? `, did you mean '${match}'?` : ''} The props are ${PROPS.join(', ')}`,
 								usage,
 							);
 						}
@@ -106,7 +110,7 @@ export function pluginLucide(options: LucideOptions = {}): CompilePlugin {
 				if (icons.length > 0) {
 					const first = requests.find(({ name }) => isIconPartial(name));
 					plugin.error(
-						`Lucide icons are used (${icons.join(', ')}) but not '{{> ${PLUGIN_NAME}.${INCLUDABLE}}}', which renders them. Add it once to the theme`,
+						`Icons are used (${icons.join(', ')}) but not '{{> ${PLUGIN_NAME}.${INCLUDABLE}}}', which renders them. Add it once to the theme`,
 						first?.usages[0],
 					);
 				}
@@ -197,7 +201,7 @@ function unknownIcons(icons: readonly PartialRequest[], label: string): string {
 		return `  '${name}'${first ? ` (${describe(first)})` : ''}${match ? `, did you mean '${match}'?` : ''}`;
 	});
 
-	return `Unknown lucide ${label}${icons.length > 1 ? 's' : ''}:\n${lines.join('\n')}\nSee the icons at https://lucide.dev/icons`;
+	return `Unknown ${label}${icons.length > 1 ? 's' : ''}:\n${lines.join('\n')}\nSee the icons at https://lucide.dev/icons`;
 }
 
 function describe({ path, line, column }: Location): string {

@@ -2,6 +2,7 @@ import { assert, describe, test } from 'vitest';
 import { createFixture } from '../../test/fixture';
 import { compileTemplate } from '../compiler';
 import type { CompilePlugin, RuntimePlugin } from '../plugins';
+import { HelperError } from './helpers';
 import { createRenderer, renderTemplate } from './render';
 
 async function compile(
@@ -66,8 +67,8 @@ describe('createRenderer', () => {
 		const compiled = await compile({ 'index.hbs': '<x>a</x>' });
 		const output = await createRenderer(compiled, {
 			plugins: [
-				{ name: 'one', transform: (html) => html.replace('a', 'b') },
-				{ name: 'two', transform: async (html) => `${html}<!-- c -->` },
+				{ name: 'one', transform: (xml) => xml.replace('a', 'b') },
+				{ name: 'two', transform: async (xml) => `${xml}<!-- c -->` },
 			],
 		}).render();
 		assert.strictEqual(output, '<x>b</x><!-- c -->');
@@ -98,7 +99,7 @@ describe('createRenderer', () => {
 			createRenderer(compiled, {
 				plugins: [{ name: 'p', transform: () => 1 as never }],
 			}).render(),
-			/Plugin 'p' must return a string from 'transform', got: number/,
+			/^Plugin 'p' must return a string from 'transform', got: 1$/,
 		);
 	});
 
@@ -149,7 +150,109 @@ describe('createRenderer', () => {
 					...compiled,
 					bundledPlugins: [{ name: 'p', setup: () => null as never }],
 				}),
-			/The runtime of plugin 'p' must return an object from its setup, got: null/,
+			/^Plugin 'p' must return an object from the setup of its runtime, got: null$/,
+		);
+	});
+});
+
+describe('errors of helpers', () => {
+	async function renderError(
+		files: Record<string, string>,
+		helpers: RuntimePlugin['helpers'] = {},
+	): Promise<HelperError> {
+		const compiled = await compile(files);
+		try {
+			renderTemplate({ ...compiled, plugins: [{ name: 'h', helpers }] });
+		} catch (error) {
+			return error as HelperError;
+		}
+		assert.fail('expected an error');
+	}
+
+	test('say which helper it is and where it is used', async () => {
+		const error = await renderError({
+			'index.hbs': '<a>\n  <b>{{eq 1}}</b></a>',
+		});
+		assert.instanceOf(error, HelperError);
+		assert.strictEqual(
+			error.message,
+			"Helper 'eq': Expected exactly 2 arguments, but got 1 (./index.hbs:2:6)",
+		);
+		assert.strictEqual(error.helper, 'eq');
+		assert.deepEqual(error.loc, { path: './index.hbs', line: 2, column: 6 });
+	});
+
+	test('wrap the other errors, which are their cause', async () => {
+		const cause = new Error('kaboom');
+		const error = await renderError(
+			{ 'index.hbs': '<a>{{boom}}</a>' },
+			{
+				boom: () => {
+					throw cause;
+				},
+			},
+		);
+		assert.strictEqual(
+			error.message,
+			"Helper 'boom': kaboom (./index.hbs:1:4)",
+		);
+		assert.strictEqual(error.cause, cause);
+	});
+
+	test('keep the error thrown as the cause, a TypeError too', async () => {
+		const cause = new TypeError('Expected a date');
+		const error = await renderError(
+			{ 'index.hbs': '<a>\n  {{format 1}}</a>' },
+			{
+				format: () => {
+					throw cause;
+				},
+			},
+		);
+		assert.instanceOf(error, HelperError);
+		assert.strictEqual(
+			error.message,
+			"Helper 'format': Expected a date (./index.hbs:2:3)",
+		);
+		assert.instanceOf(error.cause, TypeError);
+		assert.deepEqual(error.loc, { path: './index.hbs', line: 2, column: 3 });
+	});
+
+	test('fail without a message for an error that has none', async () => {
+		const error = await renderError(
+			{ 'index.hbs': '<a>{{boom}}</a>' },
+			{
+				boom: () => {
+					throw new Error();
+				},
+			},
+		);
+		assert.strictEqual(error.message, "Helper 'boom' failed (./index.hbs:1:4)");
+	});
+
+	test('give the place to one made without the options', async () => {
+		const error = await renderError(
+			{ 'index.hbs': '<a>{{bare}}</a>' },
+			{
+				bare: () => {
+					throw new HelperError('no place');
+				},
+			},
+		);
+		assert.strictEqual(
+			error.message,
+			"Helper 'bare': no place (./index.hbs:1:4)",
+		);
+	});
+
+	test('are where they are in an imported template', async () => {
+		const error = await renderError({
+			'index.hbs': '<a>{{import "./inner.hbs"}}</a>',
+			'inner.hbs': '<i>\n {{eq 1 2 3}}</i>',
+		});
+		assert.strictEqual(
+			error.message,
+			"Helper 'eq': Expected exactly 2 arguments, but got 3 (./inner.hbs:2:2)",
 		);
 	});
 });
@@ -161,7 +264,7 @@ describe('renderTemplate', () => {
 			() =>
 				renderTemplate({
 					...compiled,
-					plugins: [{ name: 'p', transform: (html) => html }],
+					plugins: [{ name: 'p', transform: (xml) => xml }],
 				}),
 			/Plugin 'p' has 'transform', render with createRenderer/,
 		);

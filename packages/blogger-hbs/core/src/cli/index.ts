@@ -22,7 +22,7 @@ import {
 import { type LoadedConfig, loadConfig } from '../config';
 import { createRenderer } from '../runtime';
 import { didYouMean } from '../utils/suggest';
-import { formatXml, validateXml } from '../xml';
+import { formatXml, validateXml, type XmlError } from '../xml';
 
 const { version } = createRequire(import.meta.url)('../../package.json') as {
 	version: string;
@@ -514,13 +514,14 @@ async function write(current: BuildSetup, compiled: CompiledTemplate) {
 	start = performance.now();
 	let output: string;
 	try {
-		output = finalizeXml(current, rendered);
+		output = finalizeXml(current, rendered, shown);
 	} catch (error) {
 		// written anyway, to look at where it is invalid
 		await fs.writeFile(file, rendered);
-		throw new CompileError(
-			`The rendered template ${shown} is not valid XML: ${(error as Error).message}`,
-		);
+		throw new CompileError('The rendered template is not valid XML', {
+			cause: error,
+			loc: (error as XmlError).loc,
+		});
 	}
 	if (current.validate) {
 		log.success(
@@ -533,32 +534,41 @@ async function write(current: BuildSetup, compiled: CompiledTemplate) {
 }
 
 /** Validates and formats the rendered template, as enabled. */
-function finalizeXml({ validate, format }: BuildSetup, xml: string): string {
+function finalizeXml(
+	{ validate, format }: BuildSetup,
+	xml: string,
+	path: string,
+): string {
 	if (!validate) {
 		return xml;
 	}
 	if (!format) {
-		validateXml(xml);
+		validateXml(xml, { path });
 		return xml;
 	}
-	return formatXml(xml);
+	return formatXml(xml, { path });
 }
 
 function elapsed(start: number): string {
 	return styleText('yellow', `${Math.round(performance.now() - start)}ms`);
 }
 
-/** The message of the error and of everything that caused it. */
+/**
+ * The message of the error and of everything that caused it, a cause whose
+ * message is already in the one before is not repeated.
+ */
 function formatError(error: unknown): string {
 	const lines: string[] = [];
+	let previous = '';
 	let current: unknown = error;
 
 	while (current !== undefined) {
-		lines.push(
-			current instanceof Error
-				? `${lines.length === 0 ? '' : 'Caused by: '}${current.message}`
-				: String(current),
-		);
+		const message =
+			current instanceof Error ? current.message : String(current);
+		if (lines.length === 0 || !previous.includes(message)) {
+			lines.push(`${lines.length === 0 ? '' : 'Caused by: '}${message}`);
+		}
+		previous = message;
 		current = current instanceof Error ? current.cause : undefined;
 	}
 

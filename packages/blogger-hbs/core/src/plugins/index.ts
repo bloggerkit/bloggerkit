@@ -8,13 +8,22 @@ import {
 } from '../constants';
 import type { HelperError } from '../runtime/helpers';
 
+/**
+ * An error of a plugin, the message says which one and where:
+ * `Plugin 'p': Unknown icon 'mneu' (./index.hbs:2:3)`.
+ */
 export class PluginError extends Error {
-	/** Where the error is, when the plugin gave it. */
+	/** The plugin, when it is known. */
+	plugin?: string;
+	/** Where the error is, when it is known. */
 	loc?: Location;
 
 	constructor(message: string, options?: PluginErrorOptions) {
 		super(message, options);
 		this.name = 'PluginError';
+		if (options?.plugin) {
+			this.plugin = options.plugin;
+		}
 		if (options?.loc) {
 			this.loc = options.loc;
 		}
@@ -22,12 +31,30 @@ export class PluginError extends Error {
 }
 
 export interface PluginErrorOptions extends ErrorOptions {
+	plugin?: string;
 	loc?: Location;
 }
 
-/** A place in a template or a partial provided by a plugin. */
+/**
+ * The error of plugin `plugin`, `Plugin 'p': message (place)`: an error the
+ * plugin made itself is given its name, unless it has one.
+ */
+export function attributeToPlugin(error: unknown, plugin: string): unknown {
+	// by name too, a plugin can get `PluginError` from another copy of the package
+	const own = error as Partial<PluginError> | null;
+	if (own?.name === 'PluginError' && own.plugin === undefined) {
+		own.plugin = plugin;
+		own.message = `Plugin '${plugin}': ${own.message}`;
+	}
+	return error;
+}
+
+/** A place in a template, a partial provided by a plugin or a document. */
 export interface Location {
-	/** Path of the template, or the full name of a partial provided by a plugin. */
+	/**
+	 * Id of the template, `./index.hbs`, the full name of a partial provided by
+	 * a plugin, `p.x`, or the file of a document. Empty when it is not known.
+	 */
 	path: string;
 	/** 1-based. */
 	line: number;
@@ -297,7 +324,15 @@ export function toLocation(loc: Location | undefined): Location | undefined {
 	return loc && { path: loc.path, line: loc.line, column: loc.column };
 }
 
-/** `message (path:line:column)` */
+/** `message (path:line:column)`, `message (line:column)` without a path */
 export function withLocation(message: string, loc?: Location): string {
-	return loc ? `${message} (${loc.path}:${loc.line}:${loc.column})` : message;
+	if (loc === undefined) {
+		return message;
+	}
+	const path = loc.path ? `${loc.path}:` : '';
+	return loc.line > 0
+		? `${message} (${path}${loc.line}:${loc.column})`
+		: loc.path
+			? `${message} (${loc.path})`
+			: message;
 }

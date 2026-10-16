@@ -1,5 +1,6 @@
 import Handlebars, { type HelperOptions } from 'handlebars/runtime';
 import { ATTRIBUTE_NAME_REGEX } from '../constants';
+import { describeValue } from '../utils/suggest';
 import type { MinimalScriptChunk, MinimalStyleChunk } from './chunks';
 import { HelperError } from './helpers';
 import { protectNewlines } from './linebreaks';
@@ -100,7 +101,7 @@ function renderAttributes(tag: Tag, options: HelperOptions): string {
 	if (bulk !== undefined) {
 		if (typeof bulk !== 'object' || bulk === null || Array.isArray(bulk)) {
 			throw new HelperError(
-				`Expected '${tag}' to be an object, got: ${bulk === null ? 'null' : typeof bulk}`,
+				`Expected '${tag}' to be an object, got: ${describeValue(bulk)}`,
 				{ options },
 			);
 		}
@@ -114,7 +115,7 @@ function renderAttributes(tag: Tag, options: HelperOptions): string {
 		}
 	}
 
-	let html = '';
+	let attributesText = '';
 	for (const [name, value] of Object.entries(attributes)) {
 		if (!ATTRIBUTE_NAME_REGEX.test(name)) {
 			throw new HelperError(`Invalid attribute name '${name}'`, { options });
@@ -125,16 +126,16 @@ function renderAttributes(tag: Tag, options: HelperOptions): string {
 
 		if (value === true) {
 			// XML requires a value for every attribute
-			html += ` ${name}="${name}"`;
+			attributesText += ` ${name}="${name}"`;
 		} else if (typeof value === 'string' || typeof value === 'number') {
-			html += ` ${name}="${Handlebars.escapeExpression(String(value))}"`;
+			attributesText += ` ${name}="${Handlebars.escapeExpression(String(value))}"`;
 		} else {
 			throw new HelperError(
-				`Expected attribute '${name}' to be a string, number or boolean, got: ${typeof value}`,
+				`Expected attribute '${name}' to be a string, number or boolean, got: ${describeValue(value)}`,
 				{ options },
 			);
 		}
 	}
 
-	return html;
+	return attributesText;
 }

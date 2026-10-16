@@ -1,3 +1,4 @@
+import { PluginError, withLocation } from '../plugins';
 import {
 	createLocate,
 	type Locate,
@@ -35,19 +36,29 @@ const CONDITIONALS = new Set(['if', 'unless']);
  * `blogger-expr`, unless their value has Handlebars in it, which is only known
  * once rendered.
  *
- * `label` names the template in errors, a path or the name of a partial.
+ * `path` is the id of the template or the full name of a partial, provided
+ * by `plugin`, whose error it then is.
  */
-export function validateTemplateXml(program: Program, label: string): void {
+export function validateTemplateXml(
+	program: Program,
+	path: string,
+	plugin?: string,
+): void {
 	try {
 		validateFragment(program);
 	} catch (error) {
-		if (error instanceof XmlSyntaxError) {
-			const { line, column } = error.position;
-			throw new CompileError(
-				`Invalid XML in ${label}:${line}:${column + 1}, ${lowerFirst(error.message)}`,
-			);
+		if (!(error instanceof XmlSyntaxError)) {
+			throw error;
 		}
-		throw error;
+		const { line, column } = error.position;
+		const loc = { path, line, column: column + 1 };
+		const message = `Invalid XML: ${lowerFirst(error.message)}`;
+		throw plugin === undefined
+			? new CompileError(withLocation(message, loc), { loc })
+			: new PluginError(withLocation(`Plugin '${plugin}': ${message}`, loc), {
+					plugin,
+					loc,
+				});
 	}
 }
 

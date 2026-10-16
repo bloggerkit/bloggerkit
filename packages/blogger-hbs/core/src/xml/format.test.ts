@@ -277,8 +277,22 @@ describe('validateXml', () => {
 			assert.fail('expected an error');
 		} catch (error) {
 			assert.instanceOf(error, XmlError);
-			assert.strictEqual(error.line, 4);
-			assert.strictEqual(error.column, 6);
+			assert.deepEqual(error.loc, { path: '', line: 4, column: 6 });
+			assert.match(error.message, / \(4:6\)$/);
+		}
+	});
+
+	test('XmlError has the path of the document when it is given', () => {
+		try {
+			validateXml(`${HEAD}<a>\n  <b></a>`, { path: 'dist/theme.xml' });
+			assert.fail('expected an error');
+		} catch (error) {
+			assert.deepEqual((error as XmlError).loc, {
+				path: 'dist/theme.xml',
+				line: 4,
+				column: 6,
+			});
+			assert.match((error as Error).message, / \(dist\/theme\.xml:4:6\)$/);
 		}
 	});
 });

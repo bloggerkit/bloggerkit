@@ -8,6 +8,7 @@ import {
 	STYLE_EXTENSIONS,
 	TEMPLATE_EXTENSIONS,
 } from '../constants';
+import { type Location, withLocation } from '../plugins';
 import { toSpecifier } from '../utils/path';
 import type { Resolver } from '../utils/resolver';
 import {
@@ -25,7 +26,7 @@ export interface Requirement {
 	/** Id of the required script or style file. */
 	id: string;
 	specifier: string;
-	where: string;
+	where: Location;
 }
 
 export interface Graph {
@@ -58,13 +59,26 @@ export async function scan(
 	const templates: TemplateChunk[] = [];
 	const requirements: Requirement[] = [];
 
+	/** The file `specifier` is, from `importer`, the error is at `where`. */
+	const resolve = async (
+		importer: string,
+		specifier: string,
+		where: Location,
+	): Promise<string> => {
+		try {
+			return await resolver.resolve(importer, specifier);
+		} catch {
+			throw located(`Failed to resolve '${specifier}'`, where);
+		}
+	};
+
 	const scanTemplate = async (file: string, id: string): Promise<void> => {
 		onRead?.(file);
 		let source: string;
 		try {
 			source = await fs.readFile(file, 'utf-8');
 		} catch (error) {
-			throw new CompileError(`Failed to read template '${file}'`, {
+			throw new CompileError(`Failed to read template '${id}'`, {
 				cause: error,
 			});
 		}
@@ -73,7 +87,7 @@ export async function scan(
 		try {
 			parsed = Handlebars.parse(source, { srcName: id }) as Program;
 		} catch (error) {
-			throw new CompileError(`Failed to parse template '${file}'`, {
+			throw new CompileError(`Failed to parse template '${id}'`, {
 				cause: error,
 			});
 		}
@@ -83,25 +97,28 @@ export async function scan(
 
 		for (const item of extractImports(parsed)) {
 			// 1-based column, as editors show it
-			const where = `${file}:${item.start[0]}:${item.start[1] + 1}`;
+			const where: Location = {
+				path: id,
+				line: item.start[0],
+				column: item.start[1] + 1,
+			};
 			if (!item.valid) {
-				throw new CompileError(`${item.reason} (${where})`);
+				throw located(item.reason, where);
 			}
 
-			const target = await resolver.resolve(file, item.specifier);
+			const target = await resolve(file, item.specifier, where);
 			const kind = getKind(target);
 			assertSupportedOptions(kind, item, where);
 
 			if (item.node.type === 'BlockStatement') {
 				if (kind !== 'template') {
-					throw new CompileError(
-						`'import' block of ${kind} '${item.specifier}' is not supported, only templates can have a block (${where})`,
+					throw located(
+						`'import' block of ${kind} '${item.specifier}' is not supported, only templates can have a block`,
+						where,
 					);
 				}
 				if (item.node.inverse) {
-					throw new CompileError(
-						`'import' block does not support '{{else}}' (${where})`,
-					);
+					throw located(`'import' block does not support '{{else}}'`, where);
 				}
 			}
 
@@ -158,16 +175,17 @@ export async function scan(
 	const resolveDependsOn = async (
 		file: string,
 		item: ValidImport,
-		where: string,
+		where: Location,
 	): Promise<string[]> => {
 		const files = new Set<string>();
 
 		for (const specifier of item.dependsOn) {
-			const dependency = await resolver.resolve(file, specifier);
+			const dependency = await resolve(file, specifier, where);
 			const kind = getKind(dependency);
 			if (kind !== 'script' && kind !== 'style') {
-				throw new CompileError(
-					`'depends-on' target '${specifier}' must be a script or style that is also imported by a template (${where})`,
+				throw located(
+					`'depends-on' target '${specifier}' must be a script or style that is also imported by a template`,
+					where,
 				);
 			}
 
@@ -243,7 +261,7 @@ function getKind(file: string): Chunk['type'] | undefined {
 function assertSupportedOptions(
 	kind: Chunk['type'] | undefined,
 	item: ValidImport,
-	where: string,
+	where: Location,
 ): void {
 	if (kind === 'script') {
 		return;
@@ -259,8 +277,14 @@ function assertSupportedOptions(
 	);
 
 	if (unsupported !== undefined) {
-		throw new CompileError(
-			`'import' of ${kind} '${item.specifier}' does not support option '${unsupported}' (${where})`,
+		throw located(
+			`'import' of ${kind} '${item.specifier}' does not support option '${unsupported}'`,
+			where,
 		);
 	}
+}
+
+/** An error in a template, `message (./index.hbs:2:3)`. */
+export function located(message: string, loc: Location): CompileError {
+	return new CompileError(withLocation(message, loc), { loc });
 }
