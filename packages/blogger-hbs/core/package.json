@@ -13,11 +13,11 @@
     "email": "deo@fineshopdesign.com",
     "url": "https://github.com/kumardeo"
   },
-  "homepage": "https://github.com/bloggerkit/bloggerkit/tree/main/packages/blogger-hbs#readme",
+  "homepage": "https://github.com/bloggerkit/bloggerkit/tree/main/packages/blogger-hbs/core#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/bloggerkit/bloggerkit",
-    "directory": "packages/blogger-hbs"
+    "directory": "packages/blogger-hbs/core"
   },
   "bugs": {
     "url": "https://github.com/bloggerkit/bloggerkit/issues"

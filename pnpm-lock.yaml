@@ -309,14 +309,14 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0(@types/node@26.1.2)(vite@8.3.0)
 
-  packages/blogger-hbs:
+  packages/blogger-hbs/core:
     dependencies:
       '@rsbuild/core':
         specifier: ^2.2.11
         version: 2.2.12
       blogger-expr:
         specifier: workspace:*
-        version: link:../blogger-expr
+        version: link:../../blogger-expr
       cac:
         specifier: ^7.1.0
         version: 7.1.0
@@ -333,6 +333,25 @@ importers:
       '@types/normalize-path':
         specifier: ^3.0.2
         version: 3.0.2
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.23.0(@tsdown/css@0.23.0)(@volar/typescript@2.4.28)(typescript@6.0.3)(vue-tsc@3.3.11)
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0(@types/node@26.1.2)(vite@8.3.0)
+
+  packages/blogger-hbs/plugin-lucide:
+    dependencies:
+      '@lucide/icons':
+        specifier: ^1.56.0
+        version: 1.57.0
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.1.2
+      blogger-hbs:
+        specifier: workspace:*
+        version: link:../core
       tsdown:
         specifier: 'catalog:'
         version: 0.23.0(@tsdown/css@0.23.0)(@volar/typescript@2.4.28)(typescript@6.0.3)(vue-tsc@3.3.11)
@@ -713,6 +732,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@lucide/icons@1.57.0':
+    resolution: {integrity: sha512-pgB2q0cOtzvkLZ9R6V8alSxSmyjTZYYVNOEWiD+rPoTkHyk15MXdfucIybvcdHsV+kiXtptMUOfb5ujiTBKRJw==}
 
   '@manypkg/find-root@3.1.0':
     resolution: {integrity: sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA==}
@@ -2622,6 +2644,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@lucide/icons@1.57.0': {}
 
   '@manypkg/find-root@3.1.0':
     dependencies:
