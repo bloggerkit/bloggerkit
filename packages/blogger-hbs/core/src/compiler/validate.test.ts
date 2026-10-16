@@ -8,6 +8,11 @@ function validate(source: string): void {
 }
 
 describe('validateTemplateXml', () => {
+	test('closes elements, without hooks of the scanner', () => {
+		validate('<aside>x</aside>');
+		validate('<a><b/></a>');
+	});
+
 	test.each([
 		[
 			'expressions in text and attribute values',

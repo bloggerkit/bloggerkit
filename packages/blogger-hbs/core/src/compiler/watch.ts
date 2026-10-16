@@ -52,10 +52,11 @@ export interface WatchTemplateOptions extends CompileTemplateOptions {
 	onError?(error: unknown): void;
 	/**
 	 * Called when compiling starts after a change, the first compilation
-	 * included. A compilation can end without `onCompile` when the output is
-	 * the same as before.
+	 * included, with the files changed since the last one, none for the first.
+	 * A compilation can end without `onCompile` when the output is the same as
+	 * before.
 	 */
-	onStart?(): void;
+	onStart?(change: { files: string[] }): void;
 	/** Milliseconds to wait for more changes before compiling, 30 by default. */
 	debounce?: number;
 }
@@ -92,6 +93,8 @@ export async function watchTemplate(
 	let runtimes: { key: string; bundle?: RuntimeBundle } | undefined;
 	/** Source of the last compilation passed to `onCompile`. */
 	let previous: string | undefined;
+	/** The files changed since the last compilation started. */
+	const changedFiles = new Set<string>();
 
 	// the first compilation is a change of the templates
 	let templatesChanged = true;
@@ -137,6 +140,9 @@ export async function watchTemplate(
 				const file = name ? path.join(directory, name) : undefined;
 				// a file that was missing can be created anywhere near the others
 				if (failed || file === undefined || files.has(file)) {
+					if (file !== undefined) {
+						changedFiles.add(file);
+					}
 					templatesChanged = true;
 					schedule();
 				}
@@ -167,7 +173,10 @@ export async function watchTemplate(
 				root,
 				entries: next.entries,
 				rsbuild: options.rsbuild,
-				onRebuild() {
+				onRebuild(changed) {
+					for (const file of changed) {
+						changedFiles.add(file);
+					}
 					assetsChanged = true;
 					schedule();
 				},
@@ -181,7 +190,9 @@ export async function watchTemplate(
 			return;
 		}
 
-		options.onStart?.();
+		const files = [...changedFiles];
+		changedFiles.clear();
+		options.onStart?.({ files });
 		const templates = templatesChanged;
 		templatesChanged = false;
 		assetsChanged = false;

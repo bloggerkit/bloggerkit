@@ -4,14 +4,14 @@
 
 Besides those of Handlebars (`if`, `unless`, `each`, `with`, `lookup`, `log`) and `import`:
 
-| Kind                     | Helpers                                                                                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Comparison               | `eq` `ne` (`===`, `!==`), `eqw` `new` (`==`, `!=`), `lt` `lte` `gt` `gte`                                                                        |
-| Logic | `and` `or` (two or more values, the deciding one as `&&` and `\|\|`), `not`, `default` (the first value that is not `null`, `undefined` or `''`), `iif` (`{{iif featured "a" "b"}}`, `''` without the last value) |
+| Kind                     | Helpers                                                                                                                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Comparison               | `eq` `ne` (`===`, `!==`), `eqw` `new` (`==`, `!=`), `lt` `lte` `gt` `gte`                                                                                                                                                                                                                     |
+| Logic                    | `and` `or` (two or more values, the deciding one as `&&` and `\|\|`), `not`, `default` (the first value that is not `null`, `undefined` or `''`), `iif` (`{{iif featured "a" "b"}}`, `''` without the last value)                                                                             |
 | Strings                  | `concat`, `lower`, `upper`, `trim`, `replace` (the first occurrence), `replaceAll`, `startsWith`, `endsWith`, `split`, `truncate` (`…` by default), `padStart` `padEnd` (a number too, `{{padStart 7 3 "0"}}` is `007`), `repeat`, `capitalize`, `slugify`, `encodeUri`, `encodeUriComponent` |
-| Numbers                  | `add`, `sub`, `mul`, `div`, `mod`, `min`, `max`, `round` (decimals, none by default), `floor`, `ceil`, `abs`, `clamp` |
-| Arrays, strings, objects | `length`, `includes`, `first`, `last`, `slice`, `join` (`, ` by default), `keys`, `values`, `array`, `hash` (or `object`), `range` (both ends included, `{{#each (range 1 5)}}`), `reverse`, `unique`, `entries` (`{ key, value }` of every key) |
-| Values                   | `typeOf`, `toJson`, `fromJson`                                                                                                                   |
+| Numbers                  | `add`, `sub`, `mul`, `div`, `mod`, `min`, `max`, `round` (decimals, none by default), `floor`, `ceil`, `abs`, `clamp`                                                                                                                                                                         |
+| Arrays, strings, objects | `length`, `includes`, `first`, `last`, `slice`, `join` (`, ` by default), `keys`, `values`, `array`, `hash` (or `object`), `range` (both ends included, `{{#each (range 1 5)}}`), `reverse`, `unique`, `entries` (`{ key, value }` of every key)                                              |
+| Values                   | `typeOf`, `toJson`, `fromJson`                                                                                                                                                                                                                                                                |
 
 ```hbs
 {{#if (and post.featured (not post.draft))}}…{{/if}}

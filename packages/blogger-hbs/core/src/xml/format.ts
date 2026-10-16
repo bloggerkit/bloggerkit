@@ -4,6 +4,7 @@ import {
 	type ParsedExpression,
 	parseExpressions,
 } from './expressions';
+import { createLayoutCheck } from './layout';
 import {
 	createLocate,
 	type Position,
@@ -38,8 +39,10 @@ export class XmlError extends Error {
 }
 
 export interface XmlOptions {
-	/** Path of the document, shown in errors. */
+	/** Path of the document, shown in errors and warnings. */
 	path?: string;
+	/** Called with warnings, with their place, `console.warn` by default. */
+	onWarn?: (message: string) => void;
 }
 
 /** Runs `check`, its errors in the document at `path`. */
@@ -62,12 +65,12 @@ export const DOCTYPE = '<!DOCTYPE html>';
  * as `formatXml` requires them (XML 1.0 in UTF-8, an `html` doctype), whose
  * expressions (`b:if cond`, `expr:*`, ...) parse with `blogger-expr`.
  */
-export function validateXml(xml: string, { path }: XmlOptions = {}): void {
-	atPath(path, () => checkDocument(xml));
+export function validateXml(xml: string, options: XmlOptions = {}): void {
+	atPath(options.path, () => checkDocument(xml, options));
 }
 
-function checkDocument(xml: string): void {
-	const { declarations } = scanDocument(xml);
+function checkDocument(xml: string, options: XmlOptions): void {
+	const { declarations } = scanDocument(xml, options);
 	const [first, second] = [...xml.split('\n', 2)].map((line) =>
 		line.replace(/\r$/, ''),
 	);
@@ -113,20 +116,26 @@ function checkDocument(xml: string): void {
  *
  * Everything else is left as it is.
  */
-export function formatXml(xml: string, { path }: XmlOptions = {}): string {
-	return atPath(path, () => formatDocument(xml));
+export function formatXml(xml: string, options: XmlOptions = {}): string {
+	return atPath(options.path, () => formatDocument(xml, options));
 }
 
-function formatDocument(xml: string): string {
-	const { tags, declarations, expressions } = scanDocument(xml);
+function formatDocument(xml: string, options: XmlOptions): string {
+	const { tags, declarations, expressions } = scanDocument(xml, options);
 
 	// the declarations are taken out, they are written at the top
 	const edits: { start: number; end: number; text: string }[] = [
-		...tags.map((tag) => ({
-			start: tag.start,
-			end: tag.end,
-			text: formatStartTag(tag, expressions),
-		})),
+		...tags.map((tag) => {
+			const end = emptyElementEnd(xml, tag);
+			return {
+				start: tag.start,
+				end: end ?? tag.end,
+				text: formatStartTag(
+					end === undefined ? tag : { ...tag, selfClosing: true },
+					expressions,
+				),
+			};
+		}),
 		...indentChildren(xml, tags),
 		...declarations.map((item) => ({
 			...lineOf(xml, item.start, item.end),
@@ -153,7 +162,11 @@ function formatDocument(xml: string): string {
 }
 
 /** Elements whose children Blogger writes each on a line, indented. */
-const INDENTED_PARENTS = new Set(['b:widget', 'b:widget-settings']);
+const INDENTED_PARENTS = new Set([
+	'b:section',
+	'b:widget',
+	'b:widget-settings',
+]);
 
 /**
  * Puts the start tag of each child of an indented parent on its own line,
@@ -200,8 +213,14 @@ interface Scanned {
 	expressions: Map<ScannedAttribute, ParsedExpression>;
 }
 
-function scanDocument(xml: string): Scanned {
+function scanDocument(
+	xml: string,
+	{ path = '', onWarn = console.warn }: XmlOptions,
+): Scanned {
 	const locate = createLocate(xml);
+	const layout = createLayoutCheck(locate, (message, { line, column }) =>
+		onWarn(withLocation(message, { path, line, column: column + 1 })),
+	);
 	const scanned: Scanned = {
 		tags: [],
 		declarations: [],
@@ -210,11 +229,14 @@ function scanDocument(xml: string): Scanned {
 	const scanner = new XmlScanner({
 		document: true,
 		onStartTag: (tag) => {
+			layout.onStartTag(tag);
 			scanned.tags.push(tag);
 			for (const [attribute, expression] of parseExpressions(tag)) {
 				scanned.expressions.set(attribute, expression);
 			}
 		},
+		onEndTag: layout.onEndTag,
+		onText: layout.onText,
 		onDeclaration: (declaration) => scanned.declarations.push(declaration),
 	});
 
@@ -323,6 +345,23 @@ function formatDoctype({ content, position }: ScannedDeclaration): string {
 	}
 	const identifiers = rest.trim().replace(/\s+/g, ' ');
 	return identifiers ? `<!DOCTYPE html ${identifiers}>` : DOCTYPE;
+}
+
+/**
+ * Where the end tag right after a start tag ends, with nothing between them,
+ * not a space either: Blogger writes such an element `<a/>`. The document is
+ * well-formed, an end tag right after a start tag is the one of its element.
+ */
+function emptyElementEnd(
+	xml: string,
+	{ name, end, selfClosing }: ScannedStartTag,
+): number | undefined {
+	if (selfClosing || !xml.startsWith(`</${name}`, end)) {
+		return;
+	}
+	const after = end + name.length + 2;
+	const close = /^\s*>/.exec(xml.slice(after));
+	return close ? after + close[0].length : undefined;
 }
 
 function formatStartTag(

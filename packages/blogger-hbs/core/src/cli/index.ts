@@ -1,6 +1,5 @@
 import { type FSWatcher, watch } from 'node:fs';
 import * as fs from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import { styleText } from 'node:util';
 import { cac } from 'cac';
@@ -23,10 +22,16 @@ import { type LoadedConfig, loadConfig } from '../config';
 import { createRenderer } from '../runtime';
 import { didYouMean } from '../utils/suggest';
 import { formatXml, validateXml, type XmlError } from '../xml';
+import {
+	type BuildStats,
+	collectStats,
+	formatStats,
+	type WrittenFile,
+} from './stats';
 
-const { version } = createRequire(import.meta.url)('../../package.json') as {
-	version: string;
-};
+const { version } = JSON.parse(
+	await fs.readFile(new URL('../../package.json', import.meta.url), 'utf-8'),
+) as { version: string };
 
 interface BuildFlags {
 	config?: string;
@@ -54,6 +59,10 @@ interface BuildSetup {
 	format: boolean;
 	/** Absolute path of the public directory, undefined when nothing is copied. */
 	publicDir?: string;
+	/** Sizes of the files written last, by path, to show their changes when watching. */
+	sizes: Map<string, number>;
+	/** What the theme was made of at the last build, when watching. */
+	theme?: BuildStats['theme'];
 }
 
 const log = {
@@ -87,6 +96,7 @@ cli
 	.example('blogger-hbs --watch')
 	.example('blogger-hbs ./theme --entry src/index.hbs --context context.json')
 	.action(async (rootArg: unknown, rawFlags: BuildFlags) => {
+		printHeader();
 		// cac turns values that look like numbers into numbers, `-o 2024`
 		const text = (value: unknown) =>
 			value === undefined ? undefined : String(value);
@@ -198,6 +208,7 @@ async function setup(
 			? await readContext(path.resolve(cwd, flags.context), flags.context)
 			: (config.context ?? {}),
 		publicDir: await resolvePublicDir(resolvedRoot, config.publicDir, outDir),
+		sizes: new Map(),
 	};
 }
 
@@ -341,7 +352,7 @@ async function build(root: string | undefined, flags: BuildFlags) {
 	const compiled = await compileTemplate(current.options);
 	log.success(`Compiled in ${elapsed(start)}`);
 
-	await write(current, compiled);
+	await write(current, compiled, start);
 }
 
 /** Watches the template and restarts when the config file changes. */
@@ -356,6 +367,16 @@ async function watchBuild(root: string | undefined, flags: BuildFlags) {
 	const start = async () => {
 		let begin = performance.now();
 		let first = true;
+		/** Shown before what a rebuild prints, after the first build. */
+		let divider = '';
+
+		/** Once, before the first thing a rebuild prints, its output can be the same. */
+		const printDivider = () => {
+			if (divider) {
+				console.log(divider);
+				divider = '';
+			}
+		};
 
 		try {
 			await copyPublic(current);
@@ -365,15 +386,20 @@ async function watchBuild(root: string | undefined, flags: BuildFlags) {
 
 		watcher = await watchTemplate({
 			...current.options,
-			onStart() {
+			onStart({ files }) {
 				begin = performance.now();
+				divider = first ? '' : formatDivider(files);
 			},
 			async onCompile(compiled) {
+				printDivider();
 				log.success(`${first ? 'Compiled' : 'Rebuilt'} in ${elapsed(begin)}`);
+				await write(current, compiled, begin);
 				first = false;
-				await write(current, compiled);
 			},
-			onError: log.error,
+			onError(error) {
+				printDivider();
+				log.error(error);
+			},
 		});
 
 		for (const file of current.loaded.dependencies) {
@@ -492,16 +518,57 @@ async function prepareOutDir({ outDir, clean }: BuildSetup) {
  * Writes the compiled module and the rendered template, validated and
  * formatted after rendering when enabled.
  */
-async function write(current: BuildSetup, compiled: CompiledTemplate) {
-	const { outDir, moduleFile, templateFile, context } = current;
+async function write(
+	current: BuildSetup,
+	compiled: CompiledTemplate,
+	begin: number,
+) {
+	const { outDir, moduleFile, templateFile } = current;
+	const written: WrittenFile[] = [];
+	let theme: WrittenFile | undefined;
 
 	if (moduleFile) {
-		await fs.writeFile(path.join(outDir, moduleFile), compiled.source);
+		const file = path.join(outDir, moduleFile);
+		await fs.writeFile(file, compiled.source);
+		written.push({
+			path: path.relative(process.cwd(), file),
+			content: compiled.source,
+		});
 	}
-	if (!templateFile) {
-		return;
+	if (templateFile) {
+		theme = await writeTheme(current, compiled, templateFile);
+		written.unshift(theme);
 	}
 
+	const stats = await collectStats(compiled, written, theme);
+	console.log(
+		formatStats(stats, current.sizes, { previousTheme: current.theme }),
+	);
+	current.sizes = new Map(stats.files.map(({ path, size }) => [path, size]));
+	current.theme = stats.theme;
+	log.success(`Built in ${elapsed(begin)}`);
+}
+
+/** `─── 14:32:05 · src/header.hbs +2 ───────`, dim. */
+function formatDivider(files: readonly string[]): string {
+	const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+	const [file, ...others] = files.map((item) =>
+		path.relative(process.cwd(), item),
+	);
+	const what = file
+		? ` · ${file}${others.length > 0 ? ` +${others.length}` : ''}`
+		: '';
+	const text = `─── ${time}${what} `;
+	return `\n${styleText('dim', text + '─'.repeat(Math.max(3, 50 - text.length)))}`;
+}
+
+/** Renders, validates and formats the theme, as enabled, and writes it. */
+async function writeTheme(
+	current: BuildSetup,
+	compiled: CompiledTemplate,
+	templateFile: string,
+): Promise<WrittenFile> {
+	const { outDir, context } = current;
 	const file = path.join(outDir, templateFile);
 	const shown = path.relative(process.cwd(), file);
 
@@ -530,7 +597,7 @@ async function write(current: BuildSetup, compiled: CompiledTemplate) {
 	}
 
 	await fs.writeFile(file, output);
-	log.success(`Written ${styleText('dim', shown)}`);
+	return { path: shown, content: output };
 }
 
 /** Validates and formats the rendered template, as enabled. */
@@ -543,10 +610,25 @@ function finalizeXml(
 		return xml;
 	}
 	if (!format) {
-		validateXml(xml, { path });
+		validateXml(xml, { path, onWarn: log.warn });
 		return xml;
 	}
-	return formatXml(xml, { path });
+	// warned about the formatted output, where the places are in the file written
+	const formatted = formatXml(xml, { path, onWarn: () => {} });
+	validateXml(formatted, { path, onWarn: log.warn });
+	return formatted;
+}
+
+/**
+ * A blank line, `blogger-hbs v0.0.4` right-aligned on a cyan line under it,
+ * before what a build prints.
+ */
+function printHeader(): void {
+	const text = `blogger-hbs v${version}`;
+	const width = text.length + 2;
+	console.log(
+		`\n${' '.repeat(width - text.length)}${styleText('bold', 'blogger-hbs')} ${styleText('dim', `v${version}`)}\n${styleText('cyan', '─'.repeat(width))}`,
+	);
 }
 
 function elapsed(start: number): string {

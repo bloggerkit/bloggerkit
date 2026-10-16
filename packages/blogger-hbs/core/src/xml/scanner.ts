@@ -74,6 +74,13 @@ export interface ScannerOptions {
 	 * fed in one piece, `ScannedAttribute.positionOf` always is.
 	 */
 	onStartTag?(tag: ScannedStartTag): void;
+	/** Called when an element ends, with its end tag or self-closed. */
+	onEndTag?(element: OpenElement): void;
+	/**
+	 * Called with what is not whitespace in the text of an element:
+	 * characters, entities and CDATA sections.
+	 */
+	onText?(position: Position, parent: OpenElement | undefined): void;
 	/** Called with the XML declaration and the doctype, like `onStartTag`. */
 	onDeclaration?(declaration: ScannedDeclaration): void;
 }
@@ -320,13 +327,13 @@ export class XmlScanner {
 					this.tagStart = base + i;
 					this.tagPosition = locate(i);
 				} else if (char === '&') {
+					this.options.onText?.(locate(i), this.stack.at(-1));
 					this.startEntity('text', locate(i));
-				} else if (
-					this.options.document &&
-					this.stack.length === 0 &&
-					!WHITESPACE.test(char)
-				) {
-					fail(`Text out of the root element: '${char}'`);
+				} else if (!WHITESPACE.test(char)) {
+					if (this.options.document && this.stack.length === 0) {
+						fail(`Text out of the root element: '${char}'`);
+					}
+					this.options.onText?.(locate(i), this.stack.at(-1));
 				}
 				return;
 
@@ -491,6 +498,9 @@ export class XmlScanner {
 					}
 					this.entityPosition = this.tagPosition;
 					this.count = 0;
+					if (match === '[CDATA[') {
+						this.options.onText?.(this.tagPosition, this.stack.at(-1));
+					}
 					this.mode =
 						match === '--'
 							? 'comment'
@@ -651,16 +661,18 @@ export class XmlScanner {
 			parent: this.stack.at(-1),
 		});
 
+		const element: OpenElement = {
+			name: this.tagName,
+			position: this.tagPosition,
+			start: this.tagStart,
+		};
 		if (selfClosing) {
 			if (this.stack.length === 0) {
 				this.rootClosed = true;
 			}
+			this.options.onEndTag?.(element);
 		} else {
-			this.stack.push({
-				name: this.tagName,
-				position: this.tagPosition,
-				start: this.tagStart,
-			});
+			this.stack.push(element);
 		}
 		this.tagName = '';
 		this.mode = 'text';
@@ -680,7 +692,8 @@ export class XmlScanner {
 				`Expected </${open.name}> to close ${describeElement(open)}, found </${this.tagName}>`,
 			);
 		}
-		this.stack.pop();
+		const closed = this.stack.pop() as OpenElement;
+		this.options.onEndTag?.(closed);
 		if (this.stack.length === 0) {
 			this.rootClosed = true;
 		}

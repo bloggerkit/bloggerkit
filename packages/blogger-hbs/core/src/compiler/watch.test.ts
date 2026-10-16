@@ -164,6 +164,32 @@ describe('watchTemplate', () => {
 			}
 		}
 	});
+	test('tells onStart the files changed', async () => {
+		const root = await createFixture({ 'index.hbs': '<a>one</a>' });
+		const started: string[][] = [];
+		let compiled = 0;
+		let resolveNext = () => {};
+		const watcher = await watchTemplate({
+			root,
+			debounce: 10,
+			onStart: ({ files }) => started.push(files),
+			onCompile: () => {
+				compiled++;
+				resolveNext();
+			},
+		});
+		onTestFinished(() => watcher.close());
+
+		const next = new Promise<void>((resolve) => {
+			resolveNext = resolve;
+		});
+		await write(root, 'index.hbs', '<a>two</a>');
+		await next;
+
+		assert.strictEqual(compiled, 2);
+		assert.deepEqual(started, [[], [path.join(root, 'index.hbs')]]);
+	});
+
 	test('compiles again when a file a plugin watches changes', async () => {
 		const root = await createFixture({
 			'index.hbs': '<a>{{@words.list}}</a>',
