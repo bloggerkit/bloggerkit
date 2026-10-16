@@ -142,6 +142,13 @@ describe('includable', () => {
 		assert.include(output, `expr:stroke='data:props.stroke ?: "currentColor"'`);
 		assert.include(output, "expr:stroke-width='data:props.strokeWidth ?: 2'");
 	});
+
+	test('only has the class given', async () => {
+		const output = await render('<a>{{> lucide.includable}}</a>');
+		assert.deepEqual(output.match(/<b:class [^>]*>/g), [
+			"<b:class cond='data:props.class' expr:name='data:props.class'/>",
+		]);
+	});
 });
 
 describe('options', () => {

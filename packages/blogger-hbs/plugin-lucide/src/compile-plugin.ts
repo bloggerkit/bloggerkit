@@ -103,8 +103,6 @@ export function compilePluginLucide(
 			return {
 				[INCLUDABLE]: `<b:includable id='${id}' var='props'>
   <svg aria-hidden='true' expr:height='data:props.size ?: ${size}' expr:stroke='data:props.stroke ?: "${escapeXml(stroke)}"' expr:stroke-width='data:props.strokeWidth ?: ${strokeWidth}' expr:width='data:props.size ?: ${size}' fill='none' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'>
-    <b:class name='lucide'/>
-    <b:class expr:name='"lucide-" + data:props.name'/>
     <b:class cond='data:props.class' expr:name='data:props.class'/>
     <b:switch var='data:props.name'>
 ${cases.join('')}      <b:default/>
