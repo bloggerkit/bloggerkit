@@ -14,9 +14,13 @@ Parser and evaluator for Blogger theme XML expressions. **Experimental.**
 
 A lightweight, type-safe Blogger feed API client for fetching Blogger blog metadata, posts, pages, comments, and pagination data.
 
-### [blogger-hbs](./packages/blogger-hbs)
+### [blogger-hbs](./packages/blogger-hbs/core)
 
 Build Blogger themes from Handlebars templates, with bundled scripts and styles. **Experimental.**
+
+### [@blogger-hbs/plugin-lucide](./packages/blogger-hbs/plugin-lucide)
+
+Lucide icons for blogger-hbs themes. **Experimental.**
 
 ### [blogger-images](./packages/blogger-images)
 
