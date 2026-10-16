@@ -27,7 +27,7 @@ export interface PluginErrorOptions extends ErrorOptions {
 
 /** A place in a template or a partial provided by a plugin. */
 export interface Location {
-	/** Path of the template, or `partial 'plugin-name.template-name'`. */
+	/** Path of the template, or the full name of a partial provided by a plugin. */
 	path: string;
 	/** 1-based. */
 	line: number;
@@ -55,7 +55,10 @@ export interface PartialUsage extends Location {
 
 /** A partial of a plugin and every place it is used. */
 export interface PartialRequest {
-	/** Name of the partial, without the plugin name. */
+	/**
+	 * Name of the partial without the plugin name: `.` for the main partial
+	 * `{{> plugin-name}}`, `a.b` for `{{> plugin-name.a.b}}`.
+	 */
 	name: string;
 	usages: PartialUsage[];
 }
@@ -113,7 +116,7 @@ export interface FinalizeContext {
 	/** Every partial of the plugin that is used, with the places it is used. */
 	requests: readonly PartialRequest[];
 	/**
-	 * Full names (`plugin-name.template-name`) of the partials provided so far
+	 * Full names (`plugin-name` and `plugin-name.a.b`) of the partials provided so far
 	 * by all the plugins, the only ones what `finalize` provides can use.
 	 */
 	available: readonly string[];
@@ -122,13 +125,17 @@ export interface FinalizeContext {
 export interface DataContext {
 	/** Names of the plugin's partials (without the plugin name). */
 	provided: readonly string[];
-	/** Full names (`plugin-name.template-name`) of all the provided partials. */
+	/** Full names (`plugin-name` and `plugin-name.a.b`) of all the provided partials. */
 	available: readonly string[];
 	/** All the scanned templates. */
 	templates: readonly TemplateContext[];
 }
 
-/** Template sources by name, used as `{{> plugin-name.template-name}}`. */
+/**
+ * Template sources by name: `.` for the main partial `{{> plugin-name}}`, and
+ * names separated by single dots for the others, `a.b` for
+ * `{{> plugin-name.a.b}}`.
+ */
 export type ProvideResult = Record<string, string>;
 
 /** JSON serializable values by name, read as `@plugin-name.data-name`. */

@@ -29,6 +29,11 @@ export interface LucideOptions {
 
 const PLUGIN_NAME = 'lucide';
 const INCLUDABLE = 'includable';
+/** `{{> lucide}}`, not provided: an icon is `{{> lucide.name}}`. */
+const MAIN = '.';
+
+/** Whether a partial of the plugin is an icon, `{{> lucide.house}}`. */
+const isIconPartial = (name: string) => name !== INCLUDABLE && name !== MAIN;
 
 /**
  * Props of `{{> lucide.house size=16 class="icon"}}` passed on to the
@@ -68,7 +73,7 @@ export function pluginLucide(options: LucideOptions = {}): CompilePlugin {
 		name: PLUGIN_NAME,
 
 		provide({ requests }, plugin) {
-			const icons = requests.filter(({ name }) => name !== INCLUDABLE);
+			const icons = requests.filter(({ name }) => isIconPartial(name));
 			const unknown = icons.filter(({ name }) => !isIcon(name));
 			if (unknown.length > 0) {
 				plugin.error(unknownIcons(unknown, 'icon'));
@@ -95,11 +100,11 @@ export function pluginLucide(options: LucideOptions = {}): CompilePlugin {
 
 		// the includable needs every icon used, which is only known now
 		async finalize({ provided, missing, requests }, plugin) {
-			const icons = provided.filter((name) => name !== INCLUDABLE).sort();
+			const icons = provided.filter(isIconPartial).sort();
 
 			if (!missing.includes(INCLUDABLE)) {
 				if (icons.length > 0) {
-					const first = requests.find(({ name }) => name !== INCLUDABLE);
+					const first = requests.find(({ name }) => isIconPartial(name));
 					plugin.error(
 						`Lucide icons are used (${icons.join(', ')}) but not '{{> ${PLUGIN_NAME}.${INCLUDABLE}}}', which renders them. Add it once to the theme`,
 						first?.usages[0],

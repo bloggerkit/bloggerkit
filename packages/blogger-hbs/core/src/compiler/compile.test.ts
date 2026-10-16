@@ -16,6 +16,15 @@ describe('templates', () => {
 		assert.strictEqual(output, '<a><b><c/><d/></b></a>');
 	});
 
+	test('imports in an inline partial', async () => {
+		const output = await render({
+			'index.hbs':
+				'<a>{{#*inline "x"}}<i>{{import "./b.hbs"}}</i>{{/inline}}{{> x}}</a>',
+			'b.hbs': '<b/>',
+		});
+		assert.strictEqual(output, '<a><i><b/></i></a>');
+	});
+
 	test('resolves aliases and extensionless specifiers', async () => {
 		const output = await render(
 			{
@@ -509,6 +518,173 @@ describe('plugin context', () => {
 				`did not provide the partial 'x' \\(used in ${path.join(root, 'index.hbs').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:2:2\\)`,
 			),
 		);
+	});
+});
+
+describe('plugin partial names', () => {
+	/** A plugin providing every partial asked for, as `<name/>`. */
+	const echo = (asked: string[][] = []): CompilePlugin => ({
+		name: 'p',
+		provide({ partials }) {
+			asked.push(partials);
+			return Object.fromEntries(
+				partials.map((name) => [
+					name,
+					name === '.'
+						? '<main>{{> @partial-block}}</main>'
+						: `<i n='${name}'/>`,
+				]),
+			);
+		},
+	});
+
+	test('the main partial and names separated by single dots', async () => {
+		const asked: string[][] = [];
+		const output = await render(
+			{
+				'index.hbs':
+					'<a>{{#> p}}x{{/p}}{{> p.a}}{{> p.a.b}}{{> p.a.b.x}}{{> p.arrow-left}}{{> p.a_b}}</a>',
+			},
+			{ plugins: [echo(asked)] },
+		);
+		assert.deepEqual(asked, [['.', 'a', 'a.b', 'a.b.x', 'arrow-left', 'a_b']]);
+		assert.strictEqual(
+			output,
+			"<a><main>x</main><i n='a'/><i n='a.b'/><i n='a.b.x'/><i n='arrow-left'/><i n='a_b'/></a>",
+		);
+	});
+
+	test.each([
+		['p.', ': a partial'],
+		['p..', ': a partial'],
+		['p.a.', ': a partial'],
+		['p..a', ': a partial'],
+		['p.[a b]', ': a partial'],
+		['p/a', ", did you mean 'p.a'? A partial"],
+		['p.a/b', ", did you mean 'p.a.b'? A partial"],
+	])('rejects {{> %s}} where it is written', async (name, rest) => {
+		const root = await createFixture({
+			'index.hbs': `<a>\n  {{> ${name}}}</a>`,
+		});
+		const escapeRegExp = (text: string) =>
+			text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+		await assertRejects(
+			compileTemplate({ root, plugins: [echo()] }),
+			new RegExp(
+				`^Invalid partial '${escapeRegExp(name)}'${escapeRegExp(rest)} of plugin 'p' is 'p' or 'p\\.name', with names separated by single dots \\(${escapeRegExp(path.join(root, 'index.hbs'))}:2:3\\)$`,
+			),
+		);
+	});
+
+	test('takes a name changed by preprocess, not the one written', async () => {
+		const asked: string[][] = [];
+		const rename: CompilePlugin = {
+			name: 'rename',
+			enforce: 'pre',
+			preprocess(templates) {
+				for (const { ast } of templates) {
+					for (const statement of ast.body) {
+						if (statement.type === 'PartialStatement') {
+							Object.assign(statement.name, {
+								original: 'p.icon',
+								parts: ['p', 'icon'],
+							});
+						}
+					}
+				}
+			},
+		};
+		const output = await render(
+			{ 'index.hbs': '<a>{{> old.name}}</a>' },
+			{ plugins: [rename, echo(asked)] },
+		);
+		assert.deepEqual(asked, [['icon']]);
+		assert.strictEqual(output, "<a><i n='icon'/></a>");
+	});
+
+	test('leaves the partials of no plugin as they are', async () => {
+		const output = await render(
+			{
+				'index.hbs':
+					'<a>{{#*inline "other.x"}}<o/>{{/inline}}{{#*inline "p:a"}}<c/>{{/inline}}{{> other.x}}{{> p:a}}{{> p.a}}</a>',
+			},
+			{ plugins: [echo()] },
+		);
+		assert.strictEqual(output, "<a><o/><c/><i n='a'/></a>");
+	});
+
+	test('reports the main partial that is not provided', async () => {
+		const root = await createFixture({ 'index.hbs': '<a>{{> p}}</a>' });
+		await assertRejects(
+			compileTemplate({ root, plugins: [{ name: 'p', provide: () => ({}) }] }),
+			/^Plugin 'p' did not provide its main partial '\.' \(\{\{> p\}\}\) \(used in .*index\.hbs:1:4\)$/,
+		);
+	});
+
+	test.each([
+		['', /^Partial of plugin 'p' name is required$/],
+		['a.', /^Partial of plugin 'p' name 'a\.' is not valid$/],
+		['.a', /^Partial of plugin 'p' name '\.a' is not valid$/],
+		['a..b', /^Partial of plugin 'p' name 'a\.\.b' is not valid$/],
+		['a b', /^Partial of plugin 'p' name 'a b' is not valid$/],
+	])('rejects the key %o provided by a plugin', async (key, message) => {
+		const root = await createFixture({ 'index.hbs': '<a/>' });
+		await assertRejects(
+			compileTemplate({
+				root,
+				plugins: [{ name: 'p', provide: () => ({ [key]: '<x/>' }) }],
+			}),
+			message,
+		);
+	});
+
+	test('finalize and data see the main partial', async () => {
+		const root = await createFixture({
+			'index.hbs': '<a>{{> p}}{{> p.a.b}}</a>',
+		});
+		let seen: unknown;
+		await compileTemplate({
+			root,
+			plugins: [
+				{
+					name: 'p',
+					provide: () => ({ '.': '<m/>', 'a.b': '<ab/>' }),
+					data({ provided, available }) {
+						seen = { provided, available };
+					},
+				},
+			],
+		});
+		assert.deepEqual(seen, {
+			provided: ['.', 'a.b'],
+			available: ['p', 'p.a.b'],
+		});
+	});
+
+	test.each(['p', 'p.x'])(
+		'rejects the inline partial %o, a name of the plugin',
+		async (name) => {
+			const root = await createFixture({
+				'index.hbs': `<a>\n{{#*inline "${name}"}}<x/>{{/inline}}</a>`,
+			});
+			await assertRejects(
+				compileTemplate({ root, plugins: [echo()] }),
+				new RegExp(
+					`^Inline partial '${name.replace('.', '\\.')}' uses the name of plugin 'p', whose partials are 'p' and 'p\\.name' \\(.*index\\.hbs:2:1\\)$`,
+				),
+			);
+		},
+	);
+
+	test('provides the partials used in an inline partial', async () => {
+		const output = await render(
+			{
+				'index.hbs':
+					'<a>{{#*inline "card"}}<c>{{> p.icon}}</c>{{/inline}}{{> card}}</a>',
+			},
+			{ plugins: [echo()] },
+		);
+		assert.strictEqual(output, "<a><c><i n='icon'/></c></a>");
 	});
 });
 

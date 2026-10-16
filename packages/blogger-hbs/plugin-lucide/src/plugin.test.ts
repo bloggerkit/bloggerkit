@@ -94,6 +94,16 @@ describe('icons', () => {
 		);
 	});
 
+	test('has no main partial, an icon is {{> lucide.name}}', async () => {
+		const root = await createFixture(
+			'<a>{{> lucide}}{{> lucide.includable}}</a>',
+		);
+		await assertRejects(
+			compile(root),
+			/^Plugin 'lucide' did not provide its main partial '\.' \(\{\{> lucide\}\}\) \(used in .+index\.hbs:1:4\)$/,
+		);
+	});
+
 	test('requires the includable when icons are used', async () => {
 		const root = await createFixture(
 			'<a>{{> lucide.menu}}{{> lucide.house}}</a>',

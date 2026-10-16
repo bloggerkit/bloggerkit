@@ -15,7 +15,13 @@ export function findPartials(root: Program): string[] {
 export type HashLiteral = string | number | boolean | null | undefined;
 
 export interface PartialUsageNode {
+	/** The name as Handlebars reads it. */
 	name: string;
+	/**
+	 * The name as it is written, when the source is given, `name` otherwise:
+	 * Handlebars reads `p.` and `p..a` as `p`, and `p.a.` as `p.a`.
+	 */
+	raw: string;
 	/** 1-based, undefined when the node has no location, made by a plugin. */
 	line?: number;
 	/** 1-based. */
@@ -23,9 +29,16 @@ export interface PartialUsageNode {
 	hash: Record<string, HashLiteral | { expression: string }>;
 }
 
-/** Every use of a partial by name, in the order they are written. */
-export function findPartialUsages(root: Program): PartialUsageNode[] {
+/**
+ * Every use of a partial by name, in the order they are written. With the
+ * `source` of the template, as it was parsed, the names are as written.
+ */
+export function findPartialUsages(
+	root: Program,
+	source?: string,
+): PartialUsageNode[] {
 	const usages: PartialUsageNode[] = [];
+	const offsetOf = source === undefined ? undefined : createOffsets(source);
 
 	walk(root, (node) => {
 		if (
@@ -34,20 +47,76 @@ export function findPartialUsages(root: Program): PartialUsageNode[] {
 			node.name.type === 'PathExpression' &&
 			!node.name.original.startsWith('@')
 		) {
-			usages.push(toUsage(node, node.name.original));
+			const { original, loc } = node.name;
+			// a name ends at what can not be in one, a space, `}`, `~` or `(`,
+			// unless it is in a `[segment]`
+			const written =
+				loc && offsetOf && source !== undefined
+					? /^(?:\[[^\]]*\]|[^\s}~()[])+/.exec(
+							source.slice(offsetOf(loc.start.line, loc.start.column)),
+						)?.[0]
+					: undefined;
+			usages.push(toUsage(node, original, written ?? original));
 		}
 	});
 
 	return usages;
 }
 
+export interface InlinePartial {
+	name: string;
+	/** 1-based, undefined when the node has no location. */
+	line?: number;
+	/** 1-based. */
+	column?: number;
+}
+
+/** The partials defined in the template, `{{#*inline "name"}}`. */
+export function findInlinePartials(root: Program): InlinePartial[] {
+	const inline: InlinePartial[] = [];
+
+	walk(root, (node) => {
+		if (node.type !== 'DecoratorBlock' || node.path.original !== 'inline') {
+			return;
+		}
+		const [name] = node.params;
+		if (name?.type === 'StringLiteral') {
+			const start = node.loc?.start;
+			inline.push({
+				name: name.value,
+				line: start?.line,
+				column: start === undefined ? undefined : start.column + 1,
+			});
+		}
+	});
+
+	return inline;
+}
+
+/** The offset in `source` of a line (1-based) and a column (0-based). */
+function createOffsets(
+	source: string,
+): (line: number, column: number) => number {
+	const starts = [0];
+	for (
+		let i = source.indexOf('\n');
+		i !== -1;
+		i = source.indexOf('\n', i + 1)
+	) {
+		starts.push(i + 1);
+	}
+	return (line, column) => (starts[line - 1] ?? 0) + column;
+}
+
 function toUsage(
 	node: PartialStatement | PartialBlockStatement,
 	name: string,
+	raw: string,
 ): PartialUsageNode {
 	const start = node.loc?.start;
 	return {
 		name,
+		raw,
 		line: start?.line,
 		// Handlebars counts columns from 0
 		column: start === undefined ? undefined : start.column + 1,

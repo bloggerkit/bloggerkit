@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import Handlebars from 'handlebars';
 import * as z from 'zod';
+import { FORBIDDEN_KEYS, NAME_DENYLIST_REGEX } from '../constants';
 import {
 	assertName,
 	assertPlugins,
@@ -18,7 +19,12 @@ import {
 import type { PluginData } from '../runtime/chunks';
 import type { Resolver } from '../utils/resolver';
 import { describeValue } from '../utils/suggest';
-import { extractImports, findPartialUsages, type Program } from './ast';
+import {
+	extractImports,
+	findInlinePartials,
+	findPartialUsages,
+	type Program,
+} from './ast';
 import type { Chunks, PartialChunk } from './chunks';
 
 /** The runtime half of a compile plugin, to be bundled. */
@@ -141,27 +147,57 @@ export async function runCompilePlugins(
 	const requests = new Map<string, Request>();
 	const partials = new Map<string, PartialChunk>();
 
+	/**
+	 * Checks the names of the partials of plugins as they are written in the
+	 * `source` of `program`, before anything can change it: Handlebars reads
+	 * `p..a` as `p`, which is valid.
+	 */
+	const checkWritten = (
+		program: Program,
+		where: string,
+		source: string,
+	): void => {
+		for (const usage of findPartialUsages(program, source)) {
+			const plugin = pluginOf(usage.raw);
+			if (owners.has(plugin)) {
+				partialKey(plugin, usage.raw, locationOf(where, usage));
+			}
+		}
+	};
+
+	/** The partials of plugins in `program`, the others are left as they are. */
 	const collect = (program: Program, where: string): void => {
+		for (const inline of findInlinePartials(program)) {
+			const plugin = pluginOf(inline.name);
+			if (owners.has(plugin)) {
+				const loc = locationOf(where, inline);
+				throw new PluginError(
+					withLocation(
+						`Inline partial '${inline.name}' uses the name of plugin '${plugin}', whose partials are '${plugin}' and '${plugin}.name'`,
+						loc,
+					),
+					{ loc },
+				);
+			}
+		}
+
 		for (const usage of findPartialUsages(program)) {
-			const full = usage.name;
-			const dot = full.indexOf('.');
-			const plugin = full.slice(0, dot);
-			// anything else can still be registered when rendering
-			if (dot <= 0 || !owners.has(plugin)) {
+			const plugin = pluginOf(usage.name);
+			if (!owners.has(plugin)) {
 				continue;
 			}
 
+			const loc = locationOf(where, usage);
+			// the name as it is now, `preprocess` can have changed it
+			const name = partialKey(plugin, usage.name, loc);
+			const full = fullName(plugin, name);
+
 			let request = requests.get(full);
 			if (request === undefined) {
-				request = { plugin, name: full.slice(dot + 1), where, usages: [] };
+				request = { plugin, name, where, usages: [] };
 				requests.set(full, request);
 			}
-			request.usages.push({
-				path: where,
-				line: usage.line ?? 0,
-				column: usage.column ?? 0,
-				hash: usage.hash,
-			});
+			request.usages.push({ ...loc, hash: usage.hash });
 		}
 	};
 
@@ -185,6 +221,10 @@ export async function runCompilePlugins(
 		await call(plugin, 'buildStart', () =>
 			plugin.buildStart?.(contextOf(plugin)),
 		);
+	}
+	// as written, before `preprocess` can change the templates
+	for (const template of templates) {
+		checkWritten(template.ast, template.path, template.source);
 	}
 	for (const plugin of plugins) {
 		await call(plugin, 'preprocess', () =>
@@ -244,7 +284,7 @@ export async function runCompilePlugins(
 			(request) => request.plugin === plugin.name,
 		);
 		const missing = own
-			.filter((request) => !partials.has(`${plugin.name}.${request.name}`))
+			.filter((request) => !partials.has(fullName(plugin.name, request.name)))
 			.map(({ name }) => name);
 
 		const provided = ownPartials(available, plugin.name);
@@ -264,8 +304,12 @@ export async function runCompilePlugins(
 					? ''
 					: ', partials provided by finalize can only use partials provided before';
 			const [first] = request.usages;
+			const partial =
+				request.name === MAIN_PARTIAL
+					? `its main partial '.' ({{> ${request.plugin}}})`
+					: `the partial '${request.name}'`;
 			throw new PluginError(
-				`Plugin '${request.plugin}' did not provide the partial '${request.name}' (used in ${describe(first)})${hint}`,
+				`Plugin '${request.plugin}' did not provide ${partial} (used in ${describe(first)})${hint}`,
 				{ loc: toLocation(first) },
 			);
 		}
@@ -301,14 +345,21 @@ export async function runCompilePlugins(
 	}
 
 	function addPartial(plugin: string, name: string, source: unknown): void {
-		assertName(name, `Partial of plugin '${plugin}'`);
+		if (name === '') {
+			throw new PluginError(`Partial of plugin '${plugin}' name is required`);
+		}
+		if (!isPartialKey(name)) {
+			throw new PluginError(
+				`Partial of plugin '${plugin}' name '${name}' is not valid`,
+			);
+		}
 		if (typeof source !== 'string') {
 			throw new PluginError(
 				`Partial '${name}' of plugin '${plugin}' must be a string, got: ${typeof source}`,
 			);
 		}
 
-		const full = `${plugin}.${name}`;
+		const full = fullName(plugin, name);
 		if (partials.has(full)) {
 			return;
 		}
@@ -327,6 +378,7 @@ export async function runCompilePlugins(
 
 		const chunk: PartialChunk = { name: full, source, parsed };
 		partials.set(full, chunk);
+		checkWritten(parsed, full, source);
 		collect(parsed, full);
 	}
 
@@ -380,12 +432,75 @@ function describe(loc: Location | undefined): string {
 	return loc.line > 0 ? `${loc.path}:${loc.line}:${loc.column}` : loc.path;
 }
 
-/** Names of the partials of `plugin` among full names, without the plugin name. */
+/** The key of the main partial of a plugin, `{{> plugin-name}}`. */
+const MAIN_PARTIAL = '.';
+
+/** Where something is used, `line` and `column` are 0 when unknown. */
+function locationOf(
+	path: string,
+	{ line, column }: { line?: number; column?: number },
+): Location {
+	return { path, line: line ?? 0, column: column ?? 0 };
+}
+
+/** The first part of a name, before a `.` or a `/`. */
+function pluginOf(name: string): string {
+	return /^[^./]*/.exec(name)?.[0] ?? '';
+}
+
+/** The name a partial is registered with: `p` for `.`, `p.a.b` for `a.b`. */
+function fullName(plugin: string, key: string): string {
+	return key === MAIN_PARTIAL ? plugin : `${plugin}.${key}`;
+}
+
+/** `.`, or names separated by single dots: `a`, `a.b`, `a-b.c_d`. */
+function isPartialKey(key: string): boolean {
+	return (
+		key === MAIN_PARTIAL ||
+		key
+			.split('.')
+			.every(
+				(part) =>
+					part !== '' &&
+					!NAME_DENYLIST_REGEX.test(part) &&
+					!FORBIDDEN_KEYS.has(part),
+			)
+	);
+}
+
+/**
+ * The key of a partial of `plugin` as it is written, `raw`, throws unless it
+ * is `p` or `p.name`. Handlebars reads `p.` and `p..a` as `p`, so it is
+ * checked as written.
+ */
+function partialKey(plugin: string, raw: string, loc: Location): string {
+	if (raw === plugin) {
+		return MAIN_PARTIAL;
+	}
+	const key = raw.slice(plugin.length + 1);
+	if (raw[plugin.length] === '.' && key !== MAIN_PARTIAL && isPartialKey(key)) {
+		return key;
+	}
+
+	const fixed = raw.replaceAll('/', '.');
+	const rule = `partial of plugin '${plugin}' is '${plugin}' or '${plugin}.name', with names separated by single dots`;
+	const message =
+		fixed !== raw && isPartialKey(fixed.slice(plugin.length + 1))
+			? `Invalid partial '${raw}', did you mean '${fixed}'? A ${rule}`
+			: `Invalid partial '${raw}': a ${rule}`;
+	throw new PluginError(withLocation(message, loc), { loc });
+}
+
+/** Keys of the partials of `plugin` among full names: `.` for `p`, `a` for `p.a`. */
 function ownPartials(names: readonly string[], plugin: string): string[] {
 	const prefix = `${plugin}.`;
-	return names
-		.filter((name) => name.startsWith(prefix))
-		.map((name) => name.slice(prefix.length));
+	return names.flatMap((name) =>
+		name === plugin
+			? [MAIN_PARTIAL]
+			: name.startsWith(prefix)
+				? [name.slice(prefix.length)]
+				: [],
+	);
 }
 
 type Hook =

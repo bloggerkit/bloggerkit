@@ -139,6 +139,18 @@ export default defineRuntimePlugin((api, options: { prefix: string }) => ({
 | `data({ provided, available, templates }, plugin)` | once, the values are JSON |
 | `buildEnd(plugin, error?)` | last, when the templates are compiled |
 
+### Partials of a plugin
+
+A plugin `my` provides its main partial and any names separated by single dots:
+
+| In a template | Key provided |
+| --- | --- |
+| `{{> my}}`, `{{#> my}}...{{/my}}` | `.` |
+| `{{> my.badge}}` | `badge` |
+| `{{> my.badge.small}}` | `badge.small` |
+
+A name is checked as it is written, `{{> my.}}`, `{{> my..badge}}`, `{{> my.badge.}}` and `{{> my/badge}}` are errors where they are, and a theme can not define an inline partial with a name of a plugin, `{{#*inline "my.badge"}}`. Partials of no plugin are left to Handlebars.
+
 Every hook gets the plugin context: `root`, `entry`, `mode`, `watch`, `resolve(specifier, importer?)` with the aliases, `addWatchFile(file)`, `warn(message, loc?)` and `error(message, loc?)`. `enforce: 'pre'` or `'post'` runs a plugin before or after the others.
 
 The runtime halves of all the plugins are bundled together, a module they share (a dependency of two plugins) is in `compiled.js` once and is the same instance for both. The runtime half is set up with `api` (`SafeString`, `escapeExpression`, `createFrame`, `HelperError`) and the options, which are JSON. Its helpers also work with `renderTemplate`, `prepare` and `transform` need `createRenderer`.

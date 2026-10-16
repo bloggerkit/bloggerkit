@@ -11,6 +11,7 @@ export function walk(node: Node, callback: (node: Node) => void): void {
 			break;
 
 		case 'MustacheStatement':
+		case 'Decorator':
 			walk(node.path, callback);
 			for (const param of node.params) {
 				walk(param, callback);
@@ -21,6 +22,7 @@ export function walk(node: Node, callback: (node: Node) => void): void {
 			break;
 
 		case 'BlockStatement':
+		case 'DecoratorBlock':
 			walk(node.path, callback);
 			for (const param of node.params) {
 				walk(param, callback);
