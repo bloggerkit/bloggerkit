@@ -49,6 +49,43 @@ export function attributeToPlugin(error: unknown, plugin: string): unknown {
 	return error;
 }
 
+/**
+ * What `plugin` threw in `hook`: its own `PluginError`, attributed to it, a
+ * `HelperError` as it is, as it says which helper it is, or anything else as
+ * the cause of a `PluginError`. By name too, a plugin can get the errors from
+ * another copy of the package.
+ */
+export function hookError(
+	error: unknown,
+	plugin: string,
+	hook: string,
+): unknown {
+	const name = (error as { name?: unknown } | null)?.name;
+	if (name === 'HelperError') {
+		return error;
+	}
+	if (name === 'PluginError') {
+		return attributeToPlugin(error, plugin);
+	}
+	return new PluginError(`Plugin '${plugin}' failed in '${hook}'`, {
+		plugin,
+		cause: error,
+	});
+}
+
+/** Calls a hook of `plugin`, what it throws made a `hookError`. */
+export async function callHook<T>(
+	plugin: string,
+	hook: string,
+	fn: () => T | Promise<T>,
+): Promise<T> {
+	try {
+		return await fn();
+	} catch (error) {
+		throw hookError(error, plugin, hook);
+	}
+}
+
 /** A place in a template, a partial provided by a plugin or a document. */
 export interface Location {
 	/**

@@ -125,6 +125,29 @@ describe('watchTemplate', () => {
 		assert.include(event.kind === 'compile' && event.output, '"new"');
 	});
 
+	test('resolves a template created or renamed between compilations', async () => {
+		const root = await createFixture({
+			'index.hbs': '<a>{{import "./part"}}</a>',
+		});
+		const watcher = await watchFixture(root);
+
+		let event = await watcher.next();
+		assert.strictEqual(event.kind, 'error');
+		assert.match(
+			event.kind === 'error' ? event.message : '',
+			/Failed to resolve '\.\/part'/,
+		);
+
+		await write(root, 'part.hbs', '<b>created</b>');
+		event = await watcher.next();
+		assert.include(event.kind === 'compile' && event.output, '<b>created</b>');
+
+		await fs.rename(path.join(root, 'part.hbs'), path.join(root, 'part.xml'));
+		await write(root, 'part.xml', '<b>renamed</b>');
+		event = await watcher.next();
+		assert.include(event.kind === 'compile' && event.output, '<b>renamed</b>');
+	});
+
 	test('waits for a missing entry', async () => {
 		const root = await createFixture({ 'other.hbs': '<a/>' });
 		const watcher = await watchFixture(root, 'later.hbs');

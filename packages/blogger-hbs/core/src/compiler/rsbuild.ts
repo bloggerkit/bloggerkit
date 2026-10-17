@@ -185,7 +185,15 @@ async function createAssetsRsbuild(
 			plugins: [
 				...(config.plugins ?? []),
 				internalsPlugin(environments),
-				capturePlugin(capture),
+				capturePlugin(
+					'blogger-hbs:capture',
+					(files, environment) => {
+						capture.results.set(environment, outputOf(files, capture));
+					},
+					(errors) => {
+						capture.errors = errors;
+					},
+				),
 				...plugins,
 			],
 		},
@@ -254,50 +262,72 @@ function collectBuild({ runtimeOf, results, errors }: Capture): AssetBuild {
 	return { outputs, runtimes };
 }
 
-function capturePlugin(capture: Capture): RsbuildPlugin {
-	const { entries, runtimeOf, results } = capture;
-	const runtimeNames = new Set(runtimeOf.values());
-
+/**
+ * Keeps what a build emits in memory instead of writing it: the files of
+ * every environment go to `onFiles`, by name, and the errors of the build to
+ * `onErrors`.
+ */
+export function capturePlugin(
+	name: string,
+	onFiles: (files: Map<string, string>, environment: string) => void,
+	onErrors: (errors: string[]) => void,
+): RsbuildPlugin {
 	return {
-		name: 'blogger-hbs:capture',
+		name,
 		setup(api) {
 			api.onAfterBuild(({ stats }) => {
 				const json = stats?.toJson({ all: false, errors: true });
-				capture.errors = (json?.errors ?? []).map((error) => error.message);
+				onErrors((json?.errors ?? []).map((error) => error.message));
 			});
 
 			api.processAssets(
 				{ stage: 'report' },
 				({ assets, compilation, environment }) => {
-					const result: EnvironmentOutput = {
-						outputs: new Map(),
-						runtimes: new Map(),
-						unexpected: [],
-					};
-
+					const files = new Map<string, string>();
 					for (const [file, source] of Object.entries(assets)) {
-						const [, name, extension] = /^(.+)\.(js|css)$/.exec(file) ?? [];
-						if (
-							name !== undefined &&
-							runtimeNames.has(name) &&
-							extension === 'js'
-						) {
-							result.runtimes.set(name, String(source.source()));
-						} else if (name === undefined || !Object.hasOwn(entries, name)) {
-							result.unexpected.push(file);
-						} else {
-							const output = result.outputs.get(name) ?? {};
-							output[extension as 'js' | 'css'] = String(source.source());
-							result.outputs.set(name, output);
-						}
+						files.set(file, String(source.source()));
 						compilation.deleteAsset(file);
 					}
-
-					results.set(environment.name, result);
+					onFiles(files, environment.name);
 				},
 			);
 		},
 	};
+}
+
+/** What the compiler needs of every build: a file of each entry, by its name, next to the others. */
+export const OUTPUT_FILES = {
+	legalComments: 'none',
+	cleanDistPath: false,
+	filename: { js: '[name].js', css: '[name].css' },
+	distPath: { js: '', css: '' },
+} as const;
+
+/** The captured files of an environment of the asset build, by entry. */
+function outputOf(
+	files: Map<string, string>,
+	{ entries, runtimeOf }: Capture,
+): EnvironmentOutput {
+	const runtimeNames = new Set(runtimeOf.values());
+	const result: EnvironmentOutput = {
+		outputs: new Map(),
+		runtimes: new Map(),
+		unexpected: [],
+	};
+
+	for (const [file, code] of files) {
+		const [, name, extension] = /^(.+)\.(js|css)$/.exec(file) ?? [];
+		if (name !== undefined && runtimeNames.has(name) && extension === 'js') {
+			result.runtimes.set(name, code);
+		} else if (name === undefined || !Object.hasOwn(entries, name)) {
+			result.unexpected.push(file);
+		} else {
+			const output = result.outputs.get(name) ?? {};
+			output[extension as 'js' | 'css'] = code;
+			result.outputs.set(name, output);
+		}
+	}
+	return result;
 }
 
 /** The object holding the chunk loading globals of the groups, `rspc[group]`. */
@@ -414,15 +444,16 @@ function internalsPlugin(
 						source: { ...config.source, entry: internal.source?.entry },
 						output: {
 							...config.output,
+							...OUTPUT_FILES,
 							target: 'web',
-							legalComments: 'none',
-							cleanDistPath: false,
 							filename: {
 								...config.output?.filename,
-								js: '[name].js',
-								css: '[name].css',
+								...OUTPUT_FILES.filename,
 							},
-							distPath: { ...config.output?.distPath, js: '', css: '' },
+							distPath: {
+								...config.output?.distPath,
+								...OUTPUT_FILES.distPath,
+							},
 						},
 						performance: {
 							...config.performance,

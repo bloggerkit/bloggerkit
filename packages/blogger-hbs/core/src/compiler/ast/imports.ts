@@ -1,4 +1,4 @@
-import { ATTRIBUTE_NAME_REGEX } from '../../constants';
+import { ATTRIBUTE_NAME_REGEX, OUTPUT_FLAGS } from '../../constants';
 import type {
 	BlockStatement,
 	Expression,
@@ -11,13 +11,6 @@ import { walk } from './walk';
 
 const ASSET_KEYS = new Set(['script', 'style']);
 const ASSET_ATTRIBUTE_REGEX = /^(?:script|style):(.+)$/s;
-/** Options rendering only the script or the styles of an import, raw without a tag. */
-const FLAG_KEYS = new Map<string, { tag: 'script' | 'style'; raw: boolean }>([
-	['script:raw', { tag: 'script', raw: true }],
-	['style:raw', { tag: 'style', raw: true }],
-	['script:only', { tag: 'script', raw: false }],
-	['style:only', { tag: 'style', raw: false }],
-]);
 
 interface Location {
 	start: [number, number];
@@ -105,7 +98,7 @@ export function extractImports(node: Node): Import[] {
 				continue;
 			}
 
-			if (FLAG_KEYS.has(key)) {
+			if (OUTPUT_FLAGS.has(key)) {
 				if (!isFlagValue(value)) {
 					reason = `'import' option '${key}' must be true, 'true' or '', got: ${describeValue(value)}`;
 					break;
@@ -125,15 +118,15 @@ export function extractImports(node: Node): Import[] {
 
 		// raw output has no tag, so there is nothing other options could apply to,
 		// and the options of the tag left out by `only` would be ignored
-		const flag = hashKeys.find((key) => FLAG_KEYS.has(key));
-		const mode = flag === undefined ? undefined : FLAG_KEYS.get(flag);
+		const flag = hashKeys.find((key) => OUTPUT_FLAGS.has(key));
+		const mode = flag === undefined ? undefined : OUTPUT_FLAGS.get(flag);
 		if (reason === undefined && flag !== undefined && mode !== undefined) {
 			const omitted = mode.tag === 'script' ? 'style' : 'script';
 			const conflict = hashKeys.find(
 				(key) =>
 					key !== flag &&
 					(mode.raw ||
-						FLAG_KEYS.has(key) ||
+						OUTPUT_FLAGS.has(key) ||
 						key === omitted ||
 						key.startsWith(`${omitted}:`)),
 			);

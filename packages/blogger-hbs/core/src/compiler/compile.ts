@@ -7,7 +7,7 @@ import {
 import type { CompilePlugin } from '../plugins';
 import type { PluginData } from '../runtime/chunks';
 import { toSpecifier } from '../utils/path';
-import { createResolver } from '../utils/resolver';
+import { createResolver, type Resolver } from '../utils/resolver';
 import { bundleAssets } from './bundle';
 import type { Chunks, PartialChunk } from './chunks';
 import { linkDependencies } from './dependencies';
@@ -72,14 +72,23 @@ export async function compileTemplate(
 	await assertDirectories(options);
 
 	const prepared = await prepareTemplate(options);
-	await bundleAssets(
-		prepared.chunks,
-		prepared.root,
-		options.rsbuild,
-		prepared.dependencies,
-	);
-	const bundle = await bundleRuntimes(prepared.root, prepared.runtimes);
-	return finishTemplate(prepared, bundle);
+	// two builds of their own, side by side, an error of the scripts and styles first
+	const [assets, runtimes] = await Promise.allSettled([
+		bundleAssets(
+			prepared.chunks,
+			prepared.root,
+			options.rsbuild,
+			prepared.dependencies,
+		),
+		bundleRuntimes(prepared.root, prepared.runtimes),
+	]);
+	if (assets.status === 'rejected') {
+		throw assets.reason;
+	}
+	if (runtimes.status === 'rejected') {
+		throw runtimes.reason;
+	}
+	return finishTemplate(prepared, runtimes.value);
 }
 
 /** A template compiled up to the bundling of its scripts, styles and plugin runtimes. */
@@ -104,29 +113,43 @@ export interface PrepareOptions {
 	onRead?: (file: string) => void;
 	/** Whether the template is compiled again on changes, told to plugins. */
 	watch?: boolean;
+	/**
+	 * The resolver to reuse between compilations, cleared when files change,
+	 * see `createTemplateResolver`. A new one without it.
+	 */
+	resolver?: Resolver;
 }
 
-/** Everything but bundling the scripts, styles and plugin runtimes, for validated options. */
-export async function prepareTemplate(
-	options: CompileTemplateOptions = {},
-	{ onRead, watch = false }: PrepareOptions = {},
-): Promise<PreparedTemplate> {
-	const { root, entry } = resolvePaths(options);
-	const { alias = {}, onWarn = console.warn } = options;
-	const plugins = sortPlugins(options.plugins ?? []);
-
-	onRead?.(entry);
-	await assertEntry(options);
-
-	const resolver = createResolver({
-		root,
-		alias,
+/** The resolver of the imports of the templates, for the root and aliases of the options. */
+export function createTemplateResolver(
+	options: CompileTemplateOptions,
+): Resolver {
+	return createResolver({
+		root: resolvePaths(options).root,
+		alias: options.alias ?? {},
 		extensions: {
 			index: [...INDEX_EXTENSIONS],
 			file: [...FILE_EXTENSIONS],
 			resolve: [...RESOLVE_EXTENSIONS],
 		},
 	});
+}
+
+/** Everything but bundling the scripts, styles and plugin runtimes, for validated options. */
+export async function prepareTemplate(
+	options: CompileTemplateOptions = {},
+	{
+		onRead,
+		watch = false,
+		resolver = createTemplateResolver(options),
+	}: PrepareOptions = {},
+): Promise<PreparedTemplate> {
+	const { root, entry } = resolvePaths(options);
+	const { onWarn = console.warn } = options;
+	const plugins = sortPlugins(options.plugins ?? []);
+
+	onRead?.(entry);
+	await assertEntry(options);
 
 	const contexts = createPluginContexts(plugins, {
 		root,
