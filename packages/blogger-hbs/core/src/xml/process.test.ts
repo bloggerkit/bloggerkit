@@ -541,6 +541,14 @@ describe('Blogger layout', () => {
 		);
 	});
 
+	test('a section and a widget can have the same id', () => {
+		processXml(
+			document(
+				"<b:section id='HTML1'><b:widget id='HTML1' type='HTML'/></b:section>",
+			),
+		);
+	});
+
 	test('accepts whitespace in them, tabs and blank lines too', () => {
 		processXml(
 			document(
@@ -679,6 +687,31 @@ describe('Blogger layout', () => {
 		[
 			"<b:includable id='main'/>",
 			'<b:includable> can only be in a <b:defaultmarkup> or a <b:widget>, it is in <html>',
+			[3, 7],
+		],
+		[
+			"<b:section id=''/>",
+			"The attribute 'id' of <b:section> can not be blank",
+			[3, 22],
+		],
+		[
+			"<b:section id='  '/>",
+			"The attribute 'id' of <b:section> can not be blank",
+			[3, 22],
+		],
+		[
+			"<b:section id='main'/><b:section id='main'/>",
+			"There can only be one <b:section> with the id 'main'",
+			[3, 44],
+		],
+		[
+			"<b:section id='a'><b:widget id='HTML1' type='HTML'/></b:section><b:section id='b'><b:widget id='HTML1' type='HTML'/></b:section>",
+			"There can only be one <b:widget> with the id 'HTML1'",
+			[3, 103],
+		],
+		[
+			"<b:section expr:id='data:x'/>",
+			"<b:section> has to have the attribute 'id', 'expr:id' is not used",
 			[3, 7],
 		],
 		[

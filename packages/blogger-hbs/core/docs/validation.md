@@ -37,6 +37,7 @@ The `b:` attributes of `<html>` are those Blogger knows, with the values it acce
 Its layout is checked as Blogger does when saving it, whitespace and comments aside:
 
 - `<b:section>` has only `<b:widget>` in it, and a `<b:widget>` is only in a `<b:section>`
+- a `<b:section>` has an `id`, not blank, different from those of the other sections
 - `<b:widget>` has at most one `<b:widget-settings>` and any `<b:includable>`, nothing else, and a `<b:widget-settings>` is only in a `<b:widget>`
 - `<b:widget-settings>` has only `<b:widget-setting>` in it, and a `<b:widget-setting>` is only in a `<b:widget-settings>`
 - `<b:defaultmarkups>` has only `<b:defaultmarkup>` in it, and a `<b:defaultmarkup>` is only in a `<b:defaultmarkups>`
@@ -93,11 +94,11 @@ Only the `b:` elements Blogger knows are accepted. An attribute Blogger does not
 
 `b:comment`, `b:default`, `b:defaultmarkups`, `b:else`, `b:template-skin` and `b:widget-settings` have no attributes.
 
-Some attributes are read by Blogger when saving, it ignores `expr:name` for them, with a warning: `id` and `type` of `<b:widget>`, `id` of `<b:includable>`, and `var` and `index` of `<b:loop>`. With both, Blogger uses `name`.
+Some attributes are read by Blogger when saving, it ignores `expr:name` for them, with a warning: `id` of `<b:section>`, `id` and `type` of `<b:widget>`, `id` of `<b:includable>`, and `var` and `index` of `<b:loop>`. With both, Blogger uses `name`.
 
 `type` of `<b:widget>` is a widget type Blogger has: `AdSense`, `Attribution`, `Blog`, `BlogArchive`, `BloggerButton`, `BlogList`, `BlogSearch`, `ContactForm`, `FeaturedPost`, `Feed`, `Followers`, `Header`, `HTML`, `Image`, `Label`, `LinkList`, `PageList`, `PopularPosts`, `Profile`, `ReportAbuse`, `Stats`, `Subscribe`, `Text`, `TextList`, `Translate` or `Wikipedia`.
 
-`id` of `<b:widget>` is its type and a number, `HTML1` or `Blog000`.
+`id` of `<b:widget>` is its type and a number, `HTML1` or `Blog000`, different from those of the other widgets.
 
 ```
 ✗ The rendered template is not valid XML

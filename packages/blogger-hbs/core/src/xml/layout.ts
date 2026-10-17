@@ -83,7 +83,7 @@ const ELEMENTS = new Map<string, Attributes>([
 	['b:message', { required: ['name'] }],
 	['b:param', { required: ['name', 'value'] }],
 	// other attributes too, for now
-	['b:section', { required: ['id'], others: 'allow' }],
+	['b:section', { required: ['id'], literal: ['id'], others: 'allow' }],
 	['b:skin', { optional: ['version'] }],
 	['b:switch', { required: ['var'] }],
 	['b:tag', { required: ['name'], others: 'allow' }],
@@ -153,6 +153,39 @@ const WIDGET_TYPES = [
 export interface Report {
 	error(message: string, offset: number): void;
 	warn(message: string, offset: number): void;
+}
+
+/**
+ * Reports a blank id of a section, and the id of a section or a widget
+ * another one has, ids being unique in the theme. A blank id of a widget is
+ * not its type and a number, `checkWidget` reports it.
+ */
+function checkId(
+	name: string,
+	attributes: readonly ScannedAttribute[],
+	seen: Set<string>,
+	report: Report,
+): void {
+	const id = attributes.find((attribute) => attribute.name === 'id');
+	if (id === undefined) {
+		return;
+	}
+	if (id.value.trim() === '') {
+		if (name === 'b:section') {
+			report.error(
+				`The attribute 'id' of <${name}> can not be blank`,
+				id.offset,
+			);
+		}
+		return;
+	}
+	if (seen.has(id.value)) {
+		report.error(
+			`There can only be one <${name}> with the id '${id.value}'`,
+			id.offset,
+		);
+	}
+	seen.add(id.value);
 }
 
 /** Reports unless the `type` of a widget is one Blogger has, and its `id` is the type and a number, `HTML1`. */
@@ -357,6 +390,11 @@ function warnOverridden(
 export function createLayoutCheck(report: Report): LayoutCheck {
 	/** The `<b:widget-settings>` of every widget open, by the offset of its start tag. */
 	const settings = new Map<number, number>();
+	/** The ids of the sections and of the widgets, each unique in the theme. */
+	const ids = new Map([
+		['b:section', new Set<string>()],
+		['b:widget', new Set<string>()],
+	]);
 	/** The `<b:if>`s open that have their `<b:else>`, by the offset of their start tag. */
 	const withElse = new Set<number>();
 	/** The `<b:switch>`es open that have their `<b:default>`, by the offset of their start tag. */
@@ -398,6 +436,10 @@ export function createLayoutCheck(report: Report): LayoutCheck {
 					checkAttributes(name, accepted, attributes, report, start);
 					if (name === 'b:widget') {
 						checkWidget(attributes, report);
+					}
+					const seen = ids.get(name);
+					if (seen !== undefined) {
+						checkId(name, attributes, seen, report);
 					}
 				}
 			}
