@@ -1,5 +1,15 @@
 # blogger-hbs
 
+## 0.0.7
+
+### Patch Changes
+
+- [#42](https://github.com/bloggerkit/bloggerkit/pull/42) [`9c022f1`](https://github.com/bloggerkit/bloggerkit/commit/9c022f15f7354a9ee80f0b0c2ef8100e688314c5) Thanks [@kumardeo](https://github.com/kumardeo)! - Compiling bundles the scripts and styles and the runtimes of the plugins side by side, and resolves the imports of a template together
+
+- [#42](https://github.com/bloggerkit/bloggerkit/pull/42) [`9c022f1`](https://github.com/bloggerkit/bloggerkit/commit/9c022f15f7354a9ee80f0b0c2ef8100e688314c5) Thanks [@kumardeo](https://github.com/kumardeo)! - Rendering does less work for every import: the newlines of CDATA sections are protected only where an import indents, imports are indented and the newlines restored in one pass each, and the output mode of a script or a style is read once
+
+- [#42](https://github.com/bloggerkit/bloggerkit/pull/42) [`9c022f1`](https://github.com/bloggerkit/bloggerkit/commit/9c022f15f7354a9ee80f0b0c2ef8100e688314c5) Thanks [@kumardeo](https://github.com/kumardeo)! - Resolving reads each directory once instead of trying every extension of an import with its own file system call, the file system still deciding the case of a name as an import does. In watch mode one resolver is kept, cleared before every compilation. Like an import, a file reached through a symlink resolves to the real file, so it is one chunk however it is reached, a file in the root keeping the root as it is given
+
 ## 0.0.6
 
 ### Patch Changes
