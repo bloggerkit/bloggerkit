@@ -21,13 +21,22 @@ interface Result {
 	stderr: string;
 }
 
+/**
+ * The environment of the CLI, without colors: `FORCE_COLOR`, which CI
+ * sets, would make Node.js warn on stderr that `NO_COLOR` is ignored.
+ */
+function envWithoutColors(): NodeJS.ProcessEnv {
+	const { FORCE_COLOR: _, ...env } = process.env;
+	return { ...env, NO_COLOR: '1' };
+}
+
 /** Runs the built CLI in `cwd`, with the colors left out of the output. */
 function run(cwd: string, ...args: string[]): Promise<Result> {
 	return new Promise((resolve) => {
 		execFile(
 			process.execPath,
 			[BIN, ...args],
-			{ cwd, env: { ...process.env, NO_COLOR: '1' } },
+			{ cwd, env: envWithoutColors() },
 			(error, stdout, stderr) => {
 				resolve({
 					code: typeof error?.code === 'number' ? error.code : 0,
@@ -283,7 +292,7 @@ describe('cli', () => {
 
 		const child = spawn(process.execPath, [BIN, '--watch'], {
 			cwd,
-			env: { ...process.env, NO_COLOR: '1' },
+			env: envWithoutColors(),
 		});
 		onTestFinished(() => {
 			child.kill('SIGKILL');
