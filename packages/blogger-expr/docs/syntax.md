@@ -114,6 +114,8 @@ In the body, the parameter is a word, `l.name`. Only the parameter of the innerm
 data:sections filter (s => data:widgets any (w => w.sectionId == data:s.id))
 ```
 
+The parameter is a word in lists and maps in the body too: `data:links map (l => { title: l.name })`.
+
 A lambda can be followed by another lambda, but `.` or an infix function after it needs parentheses around it: `(data:links map (l => l.url)).first`.
 
 ## Parentheses around a value

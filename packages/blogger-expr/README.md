@@ -9,6 +9,7 @@ Parser, evaluator and printer for the expressions of Blogger themes, the `cond='
 - Evaluate it with your data: `evaluate('data:post.labels map (l => l.name)', { data })`.
 - Print a tree back, on a single line or broken to fit a width, and it parses back to the same tree.
 - The functions of Blogger, `path`, `resizeImage`, `snippet` and the others, checked when parsing.
+- Blogger's images, URLs and widgets as values with their own properties: `data:widgets.Blog1`, `resizeImage(data:image, 640).width`.
 - Runs in any JavaScript runtime.
 
 ## Usage
