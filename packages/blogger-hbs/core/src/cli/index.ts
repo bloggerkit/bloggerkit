@@ -19,15 +19,10 @@ import {
 	resolvePaths,
 } from '../compiler/options';
 import { type LoadedConfig, loadConfig } from '../config';
-import { withLocation } from '../plugins';
+import { type Location, withLocation } from '../plugins';
 import { createRenderer } from '../runtime';
 import { didYouMean } from '../utils/suggest';
-import {
-	processXml,
-	type XmlError,
-	type XmlInfo,
-	type XmlResult,
-} from '../xml';
+import { processXml, XmlError, type XmlInfo, type XmlResult } from '../xml';
 import {
 	type BuildStats,
 	collectStats,
@@ -35,9 +30,9 @@ import {
 	type WrittenFile,
 } from './stats';
 
-const { version } = JSON.parse(
+const { version, license, repository } = JSON.parse(
 	await fs.readFile(new URL('../../package.json', import.meta.url), 'utf-8'),
-) as { version: string };
+) as { version: string; license: string; repository: { url: string } };
 
 interface BuildFlags {
 	config?: string;
@@ -71,16 +66,21 @@ interface BuildSetup {
 	theme?: BuildStats['theme'];
 }
 
-const log = {
-	success: (message: string) =>
-		console.log(`${styleText('green', '✓')} ${message}`),
-	info: (message: string) =>
-		console.log(`${styleText('cyan', '●')} ${message}`),
-	warn: (message: string) =>
-		console.warn(`${styleText('yellow', '⚠')} ${message}`),
-	error: (error: unknown) =>
-		console.error(`${styleText('red', '✗')} ${formatError(error)}`),
-};
+/** What the CLI prints, with `write`, warnings and errors on stderr. */
+function logTo(write: (text: string) => void) {
+	return {
+		write,
+		success: (message: string) =>
+			write(`${styleText('green', '✓')} ${message}`),
+		info: (message: string) => write(`${styleText('cyan', '●')} ${message}`),
+		warn: (message: string) =>
+			console.warn(`${styleText('yellow', '⚠')} ${message}`),
+		error: (error: unknown) =>
+			console.error(`${styleText('red', '✗')} ${formatError(error)}`),
+	};
+}
+
+const log = logTo(console.log);
 
 const cli = cac('blogger-hbs');
 
@@ -122,15 +122,60 @@ cli
 		}
 	});
 
+cli
+	.command('validate <file>', 'Validate a theme as Blogger reads it')
+	.option('--json', 'Print the result as JSON')
+	.example('blogger-hbs validate dist/theme.xml')
+	.example('blogger-hbs validate dist/theme.xml --json')
+	.action(async (file: unknown, flags: { json?: boolean }) => {
+		await processFile(String(file), { format: false, json: flags.json });
+	});
+
+cli
+	.command(
+		'format <file>',
+		'Format a theme as Blogger saves it, written to stdout, or to --out',
+	)
+	.option('-o, --out <file>', 'Write it to this file instead of stdout')
+	.option('--json', 'Print the result as JSON, the theme in it without --out')
+	.example('blogger-hbs format theme.xml')
+	.example('blogger-hbs format theme.xml -o theme.formatted.xml')
+	.action(async (file: unknown, flags: { out?: unknown; json?: boolean }) => {
+		const out = flags.out === undefined ? undefined : String(flags.out);
+		await processFile(String(file), { format: true, out, json: flags.json });
+	});
+
 cli.help();
-cli.version(version);
+// cac's own `--version` prints `name/version platform`, this one says more,
+// and the help still has the version in its heading
+cli.globalCommand.versionNumber = version;
+cli.option(
+	'-v, --version',
+	'Display the version, the copyright and the license',
+);
+
+/** Whether the header is printed, so that an error before a command runs prints it too. */
+let headerPrinted = false;
 
 try {
 	cli.parse(process.argv, { run: false });
-	await cli.runMatchedCommand();
+	if (cli.options.version) {
+		await printVersion();
+	} else {
+		await cli.runMatchedCommand();
+	}
 } catch (error) {
+	// with the theme on stdout, the header of an error is on stderr with it
+	if (!headerPrinted && !cli.options.json) {
+		printHeader(formatsToStdout() ? console.error : console.log);
+	}
 	log.error(describeCliError(error));
 	process.exitCode = 1;
+}
+
+/** Whether the command formats a theme to stdout, which has nothing else on it. */
+function formatsToStdout(): boolean {
+	return cli.matchedCommandName === 'format' && cli.options.out === undefined;
 }
 
 /** Adds a suggestion and a pointer to `--help` to the errors of the arguments. */
@@ -148,7 +193,7 @@ function describeCliError(error: unknown): unknown {
 	const hint = unknown ? didYouMean(unknown, flags, '`') : '';
 
 	return new Error(
-		`${error.message}${hint}\nRun 'blogger-hbs --help' to see the available options`,
+		`${error.message}${hint}\nRun 'blogger-hbs ${cli.matchedCommandName ? `${cli.matchedCommandName} ` : ''}--help' to see the available options`,
 	);
 }
 
@@ -622,14 +667,186 @@ async function writeTheme(
 	return { file: { path: shown, content: result.xml }, info: result.info };
 }
 
+interface ProcessFileOptions {
+	format: boolean;
+	/** The file to write the formatted theme to, stdout without it. */
+	out?: string;
+	/** Whether to print the result as JSON, alone on stdout. */
+	json?: boolean;
+}
+
+/**
+ * Validates the theme in `file`, and with `format` formats it, written to
+ * `out` or to stdout. Warnings are placed in what is written, errors in
+ * `file`, and nothing is written when it is not valid.
+ */
+async function processFile(
+	file: string,
+	{ format, out, json }: ProcessFileOptions,
+): Promise<void> {
+	if (json) {
+		const report = await reportOf(file, { format, out });
+		process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+		if (!report.valid) {
+			process.exitCode = 1;
+		}
+		return;
+	}
+
+	// a formatted theme on stdout has it to itself
+	const toStdout = format && out === undefined;
+	const print = toStdout ? logTo(console.error) : log;
+	// on stdout, only the theme, with warnings and errors besides it
+	if (!toStdout) {
+		printHeader(print.write);
+	}
+
+	const start = performance.now();
+	const { result, written } = await processTheme(file, { format, out });
+	for (const { message, loc } of result.warnings) {
+		print.warn(withLocation(message, loc));
+	}
+
+	if (!format) {
+		print.success(`Validated in ${elapsed(start)}`);
+	} else if (out === undefined) {
+		process.stdout.write(result.xml);
+	} else {
+		print.success(`Formatted in ${elapsed(start)}, written to ${written}`);
+	}
+}
+
+/**
+ * Reads, processes and, with `out`, writes the theme in `file`. Its
+ * warnings and info are placed in what is written, and an error throws.
+ */
+async function processTheme(
+	file: string,
+	{ format, out }: ProcessFileOptions,
+): Promise<{ result: XmlResult; written: string }> {
+	const shown = path.relative(process.cwd(), path.resolve(file));
+	const xml = await readTheme(file, shown);
+
+	let result: XmlResult;
+	try {
+		result = processXml(xml, { path: shown, format });
+	} catch (error) {
+		throw new Error(`${shown} is not valid XML`, { cause: error });
+	}
+
+	const written = !format
+		? shown
+		: out === undefined
+			? '<stdout>'
+			: path.relative(process.cwd(), path.resolve(out));
+	const at = <T extends { loc: Location }>(item: T): T => ({
+		...item,
+		loc: { ...item.loc, path: written },
+	});
+	result = {
+		...result,
+		warnings: result.warnings.map(at),
+		info: {
+			...result.info,
+			sections: result.info.sections.map(at),
+			widgets: result.info.widgets.map(at),
+		},
+	};
+
+	if (format && out !== undefined) {
+		await fs.mkdir(path.dirname(path.resolve(out)), { recursive: true });
+		await fs.writeFile(out, result.xml);
+	}
+	return { result, written };
+}
+
+/** What `--json` prints: the result of a valid theme, or every error. */
+type Report =
+	| {
+			valid: true;
+			warnings: XmlResult['warnings'];
+			info: XmlResult['info'];
+			/** The formatted theme, without `--out`. */
+			xml?: string;
+			/** Where the formatted theme is written, with `--out`. */
+			written?: string;
+	  }
+	| { valid: false; errors: { message: string; loc?: Location }[] };
+
+async function reportOf(
+	file: string,
+	{ format, out }: ProcessFileOptions,
+): Promise<Report> {
+	try {
+		const { result, written } = await processTheme(file, { format, out });
+		return {
+			valid: true,
+			warnings: result.warnings,
+			info: result.info,
+			...(format && out === undefined && { xml: result.xml }),
+			...(format && out !== undefined && { written }),
+		};
+	} catch (error) {
+		const cause = error instanceof Error ? error.cause : undefined;
+		return {
+			valid: false,
+			errors:
+				cause instanceof XmlError
+					? [...cause.errors]
+					: [{ message: messageOf(error) }],
+		};
+	}
+}
+
+/** The message of an error and of what caused it, on one line. */
+function messageOf(error: unknown): string {
+	const messages: string[] = [];
+	for (let current: unknown = error; current !== undefined; ) {
+		messages.push(current instanceof Error ? current.message : String(current));
+		current = current instanceof Error ? current.cause : undefined;
+	}
+	return messages.join(': ');
+}
+
+/** The text of the theme in `file`, an error saying so when it can not be read. */
+async function readTheme(file: string, shown: string): Promise<string> {
+	try {
+		return await fs.readFile(file, 'utf-8');
+	} catch (error) {
+		throw new Error(`Can not read ${shown}`, { cause: error });
+	}
+}
+
+/** The version, the copyright and the license, where the project is, and the runtime. */
+async function printVersion(): Promise<void> {
+	printHeader();
+	// the copyright of the license, npm publishing it with the package
+	const notice = await fs
+		.readFile(new URL('../../LICENSE.md', import.meta.url), 'utf-8')
+		.catch(() => '');
+	const copyright = /^Copyright .*$/m.exec(notice)?.[0];
+	console.log(
+		[
+			copyright,
+			`Released under the ${license} License, provided as is, without warranty.`,
+			repository.url,
+			'',
+			`Node.js ${process.version} on ${process.platform}-${process.arch}`,
+		]
+			.filter((line) => line !== undefined)
+			.join('\n'),
+	);
+}
+
 /**
  * A blank line, `blogger-hbs v0.0.4` right-aligned on a cyan line under it,
- * before what a build prints.
+ * before what a command prints, with `write`.
  */
-function printHeader(): void {
+function printHeader(write: (text: string) => void = console.log): void {
+	headerPrinted = true;
 	const text = `blogger-hbs v${version}`;
 	const width = text.length + 2;
-	console.log(
+	write(
 		`\n${' '.repeat(width - text.length)}${styleText('bold', 'blogger-hbs')} ${styleText('dim', `v${version}`)}\n${styleText('cyan', '─'.repeat(width))}`,
 	);
 }

@@ -48,23 +48,25 @@ The output directory is not cleaned when it is the root, the working directory, 
 ## CLI
 
 ```sh
-blogger-hbs [root] [options]
+blogger-hbs [root] [options]       # build
+blogger-hbs validate <file>        # validate a theme, see below
+blogger-hbs format <file> [-o]     # format a theme, see below
 ```
 
-| Option                | Description                                                       |
-| --------------------- | ----------------------------------------------------------------- |
-| `-c, --config <file>` | The config file                                                   |
-| `--entry <file>`      | The entry template, relative to the root                          |
-| `-o, --out-dir <dir>` | The output directory, relative to the root                        |
-| `--context <file>`    | A JSON file with the context, instead of the one of the config    |
-| `-w, --watch`         | Build again when a file changes, and restart when the config does |
-| `--no-clean`          | Keep the files in the output directory                            |
-| `--no-validate`       | Do not validate the rendered theme, nor format it                 |
-| `--no-format`         | Do not format the rendered theme                                  |
-| `-h, --help`          | All the options                                                   |
-| `-v, --version`       | The version                                                       |
+| Option                | Description                                                        |
+| --------------------- | ------------------------------------------------------------------ |
+| `-c, --config <file>` | The config file                                                    |
+| `--entry <file>`      | The entry template, relative to the root                           |
+| `-o, --out-dir <dir>` | The output directory, relative to the root                         |
+| `--context <file>`    | A JSON file with the context, instead of the one of the config     |
+| `-w, --watch`         | Build again when a file changes, and restart when the config does  |
+| `--no-clean`          | Keep the files in the output directory                             |
+| `--no-validate`       | Do not validate the rendered theme, nor format it                  |
+| `--no-format`         | Do not format the rendered theme                                   |
+| `-h, --help`          | All the options                                                    |
+| `-v, --version`       | The version, the copyright, the license and the URL of the project |
 
-The CLI shows its name and version first, `blogger-hbs v0.0.4`. After a build, it shows the files written, their size and gzipped size, and what the theme is made of, as [`processXml`](./validation.md#from-javascript) tells it when validating: its `<script>` elements, its `<style>`, `<b:skin>` and `<b:template-skin>` elements and the bytes in them, the rest as markup, adding up to its size. When watching, each rebuild starts with a line of its time and the file changed, `─── 14:32:05 · src/layout/header.hbs ───`, and shows the files written and what the theme is made of, each count and size followed by its change since the last build.
+The CLI shows its name and version first, `blogger-hbs v0.0.4`. After a build, it shows the files written, their size and gzipped size, and what the theme is made of: its scripts and styles, the bytes of each in the theme, a script or a style imported twice counting twice, the rest as markup, adding up to its size, and its templates, partials of plugins, sections and widgets. When watching, each rebuild starts with a line of its time and the file changed, `─── 14:32:05 · src/layout/header.hbs ───`, and shows the files written and what the theme is made of, each count and size followed by its change since the last build.
 
 ```
 
@@ -93,3 +95,56 @@ The CLI shows its name and version first, `blogger-hbs v0.0.4`. After a build, i
 Sizes are in kB of 1000 bytes.
 
 The options of the CLI go over those of the config. The templates and the partials of plugins are validated when compiling either way, `--no-validate` is about the rendered theme only.
+
+### Validating and formatting a theme
+
+`validate` and `format` check an XML theme the way a build checks the rendered one, see [Validation and formatting](./validation.md):
+
+```sh
+blogger-hbs validate theme.xml                          # its warnings, or its errors
+blogger-hbs format theme.xml                            # formatted, on stdout
+blogger-hbs format theme.xml -o theme.formatted.xml     # formatted, written to the file
+blogger-hbs format theme.xml -o theme.xml               # formatted in place
+blogger-hbs validate theme.xml --json                   # the result as JSON
+```
+
+| Option             | Description                                                  |
+| ------------------ | ------------------------------------------------------------ |
+| `-o, --out <file>` | `format`: write the formatted theme to this file, not stdout |
+| `--json`           | Print the result as JSON, alone on stdout, see below         |
+
+With the theme on stdout, only the warnings and the errors are printed besides it, on stderr. Nothing is written when the theme is not valid, and the command fails:
+
+```
+✗ theme.xml is not valid XML
+  Caused by: Unknown element <b:foo> (theme.xml:3:7)
+```
+
+With `--json`, stdout has a single JSON object and nothing else. A valid theme has its `warnings` and its `info`, as [`processXml`](./validation.md#from-javascript) returns them, and, when formatted, the theme in `xml`, or the file it is written to in `written` with `--out`:
+
+```json
+{
+  "valid": true,
+  "warnings": [
+    {
+      "message": "<b:if> has the attribute 'rel', Blogger only reads 'cond'",
+      "loc": { "path": "theme.xml", "line": 3794, "column": 71 }
+    }
+  ],
+  "info": { "root": { "b:layoutsVersion": "3" }, "sections": [], "widgets": [] }
+}
+```
+
+An invalid theme has every error, with its place, and the command fails. So does a theme that can not be read, its error without a place:
+
+```json
+{
+  "valid": false,
+  "errors": [
+    {
+      "message": "Unknown element <b:foo>",
+      "loc": { "path": "theme.xml", "line": 3, "column": 7 }
+    }
+  ]
+}
+```
