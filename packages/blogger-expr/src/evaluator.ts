@@ -1,15 +1,7 @@
 import type { Node } from './ast';
 import { FIXED_BUILTINS } from './builtins';
 import { parse } from './parser';
-
-/** Runtime value produced by evaluating an expression. */
-export type Value =
-	| string
-	| number
-	| boolean
-	| null
-	| Value[]
-	| { [key: string]: Value };
+import { plain, RichValue, type Value } from './values';
 
 export class EvaluateError extends Error {
 	constructor(
@@ -66,8 +58,6 @@ export class Evaluator {
 				return node.value;
 
 			case 'ListLiteral':
-				return node.elements.map((el) => this.evaluate(el));
-
 			case 'SetLiteral':
 				return node.elements.map((el) => this.evaluate(el));
 
@@ -89,8 +79,7 @@ export class Evaluator {
 				if (scoped.found) {
 					return scoped.value;
 				}
-				const val = (this.data as Record<string, unknown>)[node.name];
-				return this.toValue(val, node);
+				return this.orNull(this.data[node.name], node);
 			}
 
 			case 'Identifier': {
@@ -111,8 +100,8 @@ export class Evaluator {
 			}
 
 			case 'IndexExpression': {
-				const obj = this.evaluate(node.object);
-				const index = this.evaluate(node.index);
+				const obj = plain(this.evaluate(node.object));
+				const index = plain(this.evaluate(node.index));
 				return this.evaluateIndex(obj, index, node);
 			}
 
@@ -120,21 +109,19 @@ export class Evaluator {
 				return this.evaluateCall(node);
 
 			case 'UnaryExpression': {
-				const arg = this.evaluate(node.argument);
-				if (node.operator === '!') {
-					return !isTruthy(arg);
+				// `!` is the only one, a tree made by hand can have another
+				const { operator } = node as { operator: unknown };
+				if (operator !== '!') {
+					throw new EvaluateError(
+						`Unknown unary operator '${String(operator)}'`,
+						node,
+					);
 				}
-				if (node.operator === '-') {
-					return -this.toNumber(arg, node);
-				}
-				throw new EvaluateError(
-					`Unknown unary operator '${node.operator}'`,
-					node,
-				);
+				return !isTruthy(this.evaluate(node.argument));
 			}
 
 			case 'BinaryExpression':
-				return this.evaluateBinary(node.operator, node);
+				return this.evaluateBinary(node);
 
 			case 'LogicalExpression': {
 				const left = this.evaluate(node.left);
@@ -186,14 +173,15 @@ export class Evaluator {
 	}
 
 	private evaluateBinary(
-		operator: Extract<Node, { type: 'BinaryExpression' }>['operator'],
 		node: Extract<Node, { type: 'BinaryExpression' }>,
 	): Value {
-		const left = this.evaluate(node.left);
-		const right = this.evaluate(node.right);
+		const { operator } = node;
+		const left = plain(this.evaluate(node.left));
+		const right = plain(this.evaluate(node.right));
 
 		switch (operator) {
 			case '+':
+				// strings are joined, anything else is added as numbers
 				if (typeof left === 'string' || typeof right === 'string') {
 					return this.stringify(left) + this.stringify(right);
 				}
@@ -201,20 +189,13 @@ export class Evaluator {
 					this.toNumber(left, node.left) + this.toNumber(right, node.right)
 				);
 			case '-':
-				return (
-					this.toNumber(left, node.left) - this.toNumber(right, node.right)
-				);
 			case '*':
-				return (
-					this.toNumber(left, node.left) * this.toNumber(right, node.right)
-				);
 			case '/':
-				return (
-					this.toNumber(left, node.left) / this.toNumber(right, node.right)
-				);
 			case '%':
-				return (
-					this.toNumber(left, node.left) % this.toNumber(right, node.right)
+				return arithmetic(
+					operator,
+					this.toNumber(left, node.left),
+					this.toNumber(right, node.right),
 				);
 			case '==':
 				return valuesEqual(left, right);
@@ -269,15 +250,12 @@ export class Evaluator {
 		node: Extract<Node, { type: 'MembershipExpression' }>,
 	): boolean {
 		// `left in right` and `right contains left` share the same underlying test:
-		// is `item` a member of `collection`?
-		const item =
+		// is `item` a member of `collection`? The item is evaluated first.
+		const [item, collection] = (
 			node.operator === 'in'
-				? this.evaluate(node.left)
-				: this.evaluate(node.right);
-		const collection =
-			node.operator === 'in'
-				? this.evaluate(node.right)
-				: this.evaluate(node.left);
+				? [this.evaluate(node.left), this.evaluate(node.right)]
+				: [this.evaluate(node.right), this.evaluate(node.left)]
+		).map(plain);
 
 		if (typeof collection === 'string') {
 			return typeof item === 'string' && collection.includes(item);
@@ -300,7 +278,7 @@ export class Evaluator {
 	private evaluateLambda(
 		node: Extract<Node, { type: 'LambdaExpression' }>,
 	): Value {
-		const source = this.evaluate(node.source);
+		const source = plain(this.evaluate(node.source));
 		const list = Array.isArray(source)
 			? source
 			: this.coerceToList(source, node);
@@ -381,10 +359,18 @@ export class Evaluator {
 		if (!Number.isInteger(idx)) {
 			throw new EvaluateError('Array index must be an integer', node);
 		}
-		return this.fromMaybeMissing(obj[idx], node);
+		return this.orNull(obj[idx], node);
 	}
 
-	private getProperty(obj: Value, property: string, node: Node): Value {
+	/**
+	 * The built-in properties first, `.length`, `.first`, `.last` and the
+	 * items of a list, then those of a `RichValue`.
+	 */
+	private getProperty(rich: Value, property: string, node: Node): Value {
+		const obj = plain(rich);
+		const own = () =>
+			rich instanceof RichValue ? rich.property(property) : undefined;
+
 		if (obj === null || obj === undefined) {
 			if (this.strict) {
 				throw new EvaluateError(
@@ -406,18 +392,19 @@ export class Evaluator {
 			}
 			const idx = Number(property);
 			if (Number.isInteger(idx)) {
-				return this.fromMaybeMissing(obj[idx], node);
+				return this.orNull(obj[idx], node);
 			}
-			return null;
+			return own() ?? null;
 		}
 		if (typeof obj === 'object') {
-			return this.fromMaybeMissing(
-				(obj as Record<string, Value>)[property],
-				node,
-			);
+			return this.orNull((obj as Record<string, Value>)[property], node);
 		}
 		if (typeof obj === 'string' && property === 'length') {
 			return obj.length;
+		}
+		const value = own();
+		if (value !== undefined) {
+			return value;
 		}
 		if (this.strict) {
 			throw new EvaluateError(
@@ -428,17 +415,8 @@ export class Evaluator {
 		return null;
 	}
 
-	private fromMaybeMissing(v: Value | undefined, node: Node): Value {
-		if (v === undefined) {
-			if (this.strict) {
-				throw new EvaluateError('Value is undefined', node);
-			}
-			return null;
-		}
-		return v;
-	}
-
-	private toValue(v: unknown, node: Node): Value {
+	/** `null` for a missing value, an error with `strict`. */
+	private orNull(v: unknown, node: Node): Value {
 		if (v === undefined) {
 			if (this.strict) {
 				throw new EvaluateError('Value is undefined', node);
@@ -481,7 +459,8 @@ export class Evaluator {
 	}
 }
 
-export function isTruthy(v: Value): boolean {
+export function isTruthy(value: Value): boolean {
+	const v = plain(value);
 	if (v === null || v === undefined) {
 		return false;
 	}
@@ -494,13 +473,30 @@ export function isTruthy(v: Value): boolean {
 	if (typeof v === 'string') {
 		return v.length > 0;
 	}
-	if (Array.isArray(v)) {
-		return true;
-	}
-	return true; // non-null object
+	// a list or a map, even empty
+	return true;
 }
 
-export function valuesEqual(a: Value, b: Value): boolean {
+function arithmetic(
+	operator: '-' | '*' | '/' | '%',
+	left: number,
+	right: number,
+): number {
+	switch (operator) {
+		case '-':
+			return left - right;
+		case '*':
+			return left * right;
+		case '/':
+			return left / right;
+		case '%':
+			return left % right;
+	}
+}
+
+export function valuesEqual(left: Value, right: Value): boolean {
+	const a = plain(left);
+	const b = plain(right);
 	if (a === b) {
 		return true;
 	}
