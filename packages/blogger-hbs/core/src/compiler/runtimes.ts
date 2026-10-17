@@ -1,10 +1,11 @@
 import * as path from 'node:path';
-import { compileFunction } from 'node:vm';
-import { createRsbuild, type RsbuildPlugin, rspack } from '@rsbuild/core';
+import { createRsbuild, rspack } from '@rsbuild/core';
 import type { JsonValue, RuntimePluginSetup } from '../plugins';
 import type { BundledPlugin } from '../runtime/chunks';
 import { CompileError } from './errors';
+import { evaluate } from './evaluate';
 import type { RuntimeRequest } from './plugins';
+import { capturePlugin, OUTPUT_FILES } from './rsbuild';
 
 /** The runtime half of a compile plugin, bundled. */
 export interface BundledRuntime extends BundledPlugin {
@@ -65,25 +66,21 @@ export async function bundleRuntimes(
 	const unexpected: string[] = [];
 	let errors: string[] = [];
 
-	const capture: RsbuildPlugin = {
-		name: 'blogger-hbs:runtimes',
-		setup(api) {
-			api.onAfterBuild(({ stats }) => {
-				const json = stats?.toJson({ all: false, errors: true });
-				errors = (json?.errors ?? []).map((error) => error.message);
-			});
-			api.processAssets({ stage: 'report' }, ({ assets, compilation }) => {
-				for (const [file, source] of Object.entries(assets)) {
-					if (file === 'runtimes.js') {
-						output = String(source.source());
-					} else {
-						unexpected.push(file);
-					}
-					compilation.deleteAsset(file);
+	const capture = capturePlugin(
+		'blogger-hbs:runtimes',
+		(files) => {
+			for (const [file, code] of files) {
+				if (file === 'runtimes.js') {
+					output = code;
+				} else {
+					unexpected.push(file);
 				}
-			});
+			}
 		},
-	};
+		(found) => {
+			errors = found;
+		},
+	);
 
 	const rsbuild = await createRsbuild({
 		cwd: root,
@@ -96,10 +93,7 @@ export async function bundleRuntimes(
 				target: 'web-worker',
 				minify: { js: true, css: false },
 				sourceMap: { js: false, css: false },
-				legalComments: 'none',
-				cleanDistPath: false,
-				filename: { js: '[name].js' },
-				distPath: { js: '' },
+				...OUTPUT_FILES,
 			},
 			performance: {
 				chunkSplit: { strategy: 'all-in-one' },
@@ -162,7 +156,7 @@ export async function bundleRuntimes(
 
 	let exports: Record<string, unknown>;
 	try {
-		exports = compileFunction(`return ${code};`, []).apply(null);
+		exports = evaluate(code);
 	} catch (cause) {
 		throw new CompileError(
 			`Failed to load the runtime of ${describePlugins(requests)}`,

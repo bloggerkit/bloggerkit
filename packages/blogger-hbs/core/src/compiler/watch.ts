@@ -6,6 +6,7 @@ import { type AssetPlan, applyAssets, planAssets } from './bundle';
 import {
 	type CompiledTemplate,
 	type CompileTemplateOptions,
+	createTemplateResolver,
 	finishTemplate,
 	type PreparedTemplate,
 	prepareTemplate,
@@ -93,6 +94,11 @@ export async function watchTemplate(
 	let runtimes: { key: string; bundle?: RuntimeBundle } | undefined;
 	/** Source of the last compilation passed to `onCompile`. */
 	let previous: string | undefined;
+	/**
+	 * One resolver for every compilation, cleared before each, so every
+	 * directory is read once a compilation and not once an import.
+	 */
+	const resolver = createTemplateResolver(options);
 	/** The files changed since the last compilation started. */
 	const changedFiles = new Set<string>();
 
@@ -200,10 +206,13 @@ export async function watchTemplate(
 		try {
 			if (templates) {
 				const read = new Set<string>();
+				// anything can have changed, files that were read or not
+				resolver.clear();
 				try {
 					const next = await prepareTemplate(options, {
 						onRead: (file) => read.add(file),
 						watch: true,
+						resolver,
 					});
 					const runtimesKey = JSON.stringify(next.runtimes);
 					if (runtimes?.key !== runtimesKey) {

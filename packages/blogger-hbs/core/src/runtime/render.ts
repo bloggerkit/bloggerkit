@@ -6,7 +6,8 @@ import {
 } from '../constants';
 import {
 	assertPlugins,
-	attributeToPlugin,
+	callHook,
+	hookError,
 	PluginError,
 	type RuntimeApi,
 	type RuntimePlugin,
@@ -72,7 +73,7 @@ export function createRenderer(
 			for (const plugin of plugins) {
 				const { transform } = plugin;
 				if (transform) {
-					output = await call(plugin, 'transform', () =>
+					output = await callHook(plugin.name, 'transform', () =>
 						transform(output, context),
 					);
 					if (typeof output !== 'string') {
@@ -158,7 +159,7 @@ function setup(
 			try {
 				hooks = setup(api, options as never);
 			} catch (error) {
-				throw wrap(name, 'setup', error);
+				throw hookError(error, name, 'setup');
 			}
 			if (typeof hooks !== 'object' || hooks === null) {
 				throw new PluginError(
@@ -298,7 +299,7 @@ async function prepareData(
 		if (!plugin.prepare) {
 			continue;
 		}
-		const values = await call(plugin, 'prepare', () =>
+		const values = await callHook(plugin.name, 'prepare', () =>
 			plugin.prepare?.(context),
 		);
 		if (values === undefined) {
@@ -322,31 +323,4 @@ async function prepareData(
 	}
 
 	return data;
-}
-
-async function call<T>(
-	plugin: RuntimePlugin,
-	hook: string,
-	fn: () => T | Promise<T>,
-): Promise<T> {
-	try {
-		return await fn();
-	} catch (error) {
-		throw wrap(plugin.name, hook, error);
-	}
-}
-
-function wrap(plugin: string, hook: string, error: unknown): unknown {
-	// by name too, a plugin can get them from another copy of the package
-	const name = (error as { name?: unknown } | null)?.name;
-	if (name === 'HelperError') {
-		return error;
-	}
-	if (name === 'PluginError') {
-		return attributeToPlugin(error, plugin);
-	}
-	return new PluginError(`Plugin '${plugin}' failed in '${hook}'`, {
-		plugin,
-		cause: error,
-	});
 }

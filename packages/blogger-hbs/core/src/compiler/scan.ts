@@ -13,6 +13,7 @@ import { toSpecifier } from '../utils/path';
 import type { Resolver } from '../utils/resolver';
 import {
 	extractImports,
+	type Import,
 	type Program,
 	setHashString,
 	type ValidImport,
@@ -95,18 +96,31 @@ export async function scan(
 		const kinds = new Map<string, Chunk['type'] | undefined>();
 		const nested = new Set<string>();
 
-		for (const item of extractImports(parsed)) {
-			// 1-based column, as editors show it
-			const where: Location = {
-				path: id,
-				line: item.start[0],
-				column: item.start[1] + 1,
-			};
+		const imports = extractImports(parsed);
+		// 1-based column, as editors show it
+		const whereOf = (item: Import): Location => ({
+			path: id,
+			line: item.start[0],
+			column: item.start[1] + 1,
+		});
+		// resolved all at once, used in order, so the first error is the first in the template
+		const targets = await Promise.allSettled(
+			imports.map((item) =>
+				item.valid ? resolve(file, item.specifier, whereOf(item)) : '',
+			),
+		);
+
+		for (const [i, item] of imports.entries()) {
+			const where = whereOf(item);
 			if (!item.valid) {
 				throw located(item.reason, where);
 			}
+			const resolved = targets[i] as PromiseSettledResult<string>;
+			if (resolved.status === 'rejected') {
+				throw resolved.reason;
+			}
 
-			const target = await resolve(file, item.specifier, where);
+			const target = resolved.value;
 			const kind = getKind(target);
 			assertSupportedOptions(kind, item, where);
 

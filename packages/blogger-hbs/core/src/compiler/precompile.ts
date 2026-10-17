@@ -1,7 +1,7 @@
-import { compileFunction } from 'node:vm';
 import Handlebars from 'handlebars';
 import type { PartialChunk, TemplateChunk } from './chunks';
 import { CompileError } from './errors';
+import { evaluate } from './evaluate';
 
 /** Precompiles every template and partial chunk into its Handlebars spec. */
 export function precompileTemplates(
@@ -19,8 +19,6 @@ export function precompileTemplates(
 			throw new CompileError(`Failed to compile ${label}`, { cause: error });
 		}
 
-		chunk.spec = compileFunction(`return ${chunk.compiled};`, []).apply(
-			null,
-		) as object;
+		chunk.spec = evaluate<object>(chunk.compiled);
 	}
 }

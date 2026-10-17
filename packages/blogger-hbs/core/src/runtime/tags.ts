@@ -1,5 +1,5 @@
 import Handlebars, { type HelperOptions } from 'handlebars/runtime';
-import { ATTRIBUTE_NAME_REGEX } from '../constants';
+import { ATTRIBUTE_NAME_REGEX, OUTPUT_FLAGS } from '../constants';
 import { describeValue } from '../utils/suggest';
 import type { MinimalScriptChunk, MinimalStyleChunk } from './chunks';
 import { HelperError } from './helpers';
@@ -15,16 +15,17 @@ type Tag = 'script' | 'style';
  * rendered, and with `script:raw` / `style:raw` only their bare code, without
  * a tag or CDATA section.
  *
- * `runtime` is put in front of the script.
+ * `mode` is the one of `getOutputMode`, and `runtime` is put in front of the
+ * script.
  */
 export function renderAsset(
 	chunk: MinimalScriptChunk | MinimalStyleChunk,
 	options: HelperOptions,
+	mode: OutputMode | undefined,
 	runtime?: string,
 ): string {
 	const css = chunk.type === 'script' ? chunk.css : chunk.code;
 	const js = chunk.type === 'script' ? chunk.code : undefined;
-	const mode = getOutputMode(options);
 	const outputs: string[] = [];
 
 	if (css?.trim() && mode?.tag !== 'script') {
@@ -55,28 +56,15 @@ export interface OutputMode {
 
 /** Set by `script:only` / `style:only` / `script:raw` / `style:raw`. */
 export function getOutputMode(options: HelperOptions): OutputMode | undefined {
-	const modes: OutputMode[] = [];
-
-	for (const tag of ['script', 'style'] as const) {
-		for (const raw of [false, true]) {
-			if (isFlagValue(options.hash[flagKey(tag, raw)])) {
-				modes.push({ tag, raw });
-			}
-		}
-	}
-
-	if (modes.length > 1) {
-		const [a, b] = modes.map((mode) => flagKey(mode.tag, mode.raw));
-		throw new HelperError(`'${a}' cannot be combined with '${b}'`, {
+	const set = [...OUTPUT_FLAGS.keys()].filter((key) =>
+		isFlagValue(options.hash[key]),
+	);
+	if (set.length > 1) {
+		throw new HelperError(`'${set[0]}' cannot be combined with '${set[1]}'`, {
 			options,
 		});
 	}
-
-	return modes[0];
-}
-
-function flagKey(tag: Tag, raw: boolean): string {
-	return `${tag}:${raw ? 'raw' : 'only'}`;
+	return set[0] === undefined ? undefined : OUTPUT_FLAGS.get(set[0]);
 }
 
 /** The compiler only lets through `true`, `'true'` and `''`. */
@@ -110,7 +98,7 @@ function renderAttributes(tag: Tag, options: HelperOptions): string {
 
 	for (const [key, value] of Object.entries(options.hash)) {
 		// `script:only` is an option of the import, not an attribute of the tag
-		if (key.startsWith(`${tag}:`) && key !== flagKey(tag, false)) {
+		if (key.startsWith(`${tag}:`) && key !== `${tag}:only`) {
 			attributes[key.slice(tag.length + 1)] = value;
 		}
 	}

@@ -81,3 +81,17 @@ export const RESERVED_PLUGIN_NAMES = new Set([
 	'level',
 	'partial-block',
 ]);
+
+/**
+ * The options of an import rendering only the script or the styles of a
+ * file, with their tag or as their bare code, in the order they are read.
+ */
+export const OUTPUT_FLAGS: ReadonlyMap<
+	string,
+	{ tag: 'script' | 'style'; raw: boolean }
+> = new Map([
+	['script:only', { tag: 'script', raw: false }],
+	['script:raw', { tag: 'script', raw: true }],
+	['style:only', { tag: 'style', raw: false }],
+	['style:raw', { tag: 'style', raw: true }],
+]);

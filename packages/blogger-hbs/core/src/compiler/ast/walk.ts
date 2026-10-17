@@ -1,5 +1,6 @@
 import type { Node } from './types';
 
+/** Calls `callback` with `node` and every node in it, parents first. */
 export function walk(node: Node, callback: (node: Node) => void): void {
 	callback(node);
 
@@ -10,61 +11,26 @@ export function walk(node: Node, callback: (node: Node) => void): void {
 			}
 			break;
 
+		// a call: its name, its arguments and its hash, and the blocks of a block
 		case 'MustacheStatement':
 		case 'Decorator':
-			walk(node.path, callback);
-			for (const param of node.params) {
-				walk(param, callback);
-			}
-			if (node.hash) {
-				walk(node.hash, callback);
-			}
-			break;
-
+		case 'SubExpression':
 		case 'BlockStatement':
 		case 'DecoratorBlock':
-			walk(node.path, callback);
-			for (const param of node.params) {
-				walk(param, callback);
-			}
-			if (node.hash) {
-				walk(node.hash, callback);
-			}
-			walk(node.program, callback);
-
-			if (node.inverse) {
-				walk(node.inverse, callback);
-			}
-			break;
-
 		case 'PartialStatement':
-			walk(node.name, callback);
-			for (const param of node.params) {
-				walk(param, callback);
-			}
-			if (node.hash) {
-				walk(node.hash, callback);
-			}
-			break;
-
 		case 'PartialBlockStatement':
-			walk(node.name, callback);
+			walk('path' in node ? node.path : node.name, callback);
 			for (const param of node.params) {
 				walk(param, callback);
 			}
 			if (node.hash) {
 				walk(node.hash, callback);
 			}
-			walk(node.program, callback);
-			break;
-
-		case 'SubExpression':
-			walk(node.path, callback);
-			for (const param of node.params) {
-				walk(param, callback);
+			if ('program' in node && node.program) {
+				walk(node.program, callback);
 			}
-			if (node.hash) {
-				walk(node.hash, callback);
+			if ('inverse' in node && node.inverse) {
+				walk(node.inverse, callback);
 			}
 			break;
 
@@ -79,5 +45,3 @@ export function walk(node: Node, callback: (node: Node) => void): void {
 			break;
 	}
 }
-
-export * from './types';
