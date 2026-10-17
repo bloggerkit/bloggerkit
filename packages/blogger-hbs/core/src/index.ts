@@ -47,6 +47,8 @@ export { createRenderer, HelperError, renderTemplate } from './runtime';
 export {
 	type ProcessXmlOptions,
 	processXml,
+	type SkinGroup,
+	type SkinVariable,
 	XmlError,
 	type XmlInfo,
 	type XmlIssue,

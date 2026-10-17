@@ -165,7 +165,7 @@ const ENTITIES: Record<string, string> = {
 const ENTITY_REFERENCE = /&(#x[0-9a-f]+|#[0-9]+|\w+);/iy;
 
 /** The entity reference at `index` of `value`, and the text it is decoded to. */
-function entityAt(
+export function entityAt(
 	value: string,
 	index: number,
 ): { length: number; decoded: string } | undefined {
@@ -192,22 +192,8 @@ function decodeValue({ value }: ScannedAttribute): {
 		return { text: value, offsetOf: (index) => Math.min(index, value.length) };
 	}
 
-	let text = '';
-	let last = 0;
-	for (let i = value.indexOf('&'); i >= 0; i = value.indexOf('&', i)) {
-		const entity = entityAt(value, i);
-		if (entity === undefined) {
-			i++;
-			continue;
-		}
-		text += value.slice(last, i) + entity.decoded;
-		i += entity.length;
-		last = i;
-	}
-	text += value.slice(last);
-
 	return {
-		text,
+		text: decodeEntities(value),
 		offsetOf(index) {
 			// the decoded text is walked again, an entity is at the offset of its '&'
 			let decoded = 0;
@@ -223,6 +209,26 @@ function decodeValue({ value }: ScannedAttribute): {
 			return value.length;
 		},
 	};
+}
+
+/** `text` with its entity references decoded, those it does not know left as they are. */
+export function decodeEntities(text: string): string {
+	if (!text.includes('&')) {
+		return text;
+	}
+	let decoded = '';
+	let last = 0;
+	for (let i = text.indexOf('&'); i >= 0; i = text.indexOf('&', i)) {
+		const entity = entityAt(text, i);
+		if (entity === undefined) {
+			i++;
+			continue;
+		}
+		decoded += text.slice(last, i) + entity.decoded;
+		i += entity.length;
+		last = i;
+	}
+	return decoded + text.slice(last);
 }
 
 /** The character of `&name;`, undefined for an unknown name or code point. */

@@ -15,6 +15,8 @@ export {
 export {
 	type ProcessXmlOptions,
 	processXml,
+	type SkinGroup,
+	type SkinVariable,
 	XmlError,
 	type XmlInfo,
 	type XmlIssue,

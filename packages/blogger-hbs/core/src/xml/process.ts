@@ -12,11 +12,14 @@ import { createLayoutCheck, type Report } from './layout';
 import {
 	createLocate,
 	type Locate,
+	type OpenElement,
 	type Position,
 	type ScannedDeclaration,
 	XmlScanner,
 	XmlSyntaxError,
 } from './scanner';
+import { readSkin, SKINS } from './skin';
+import { createVariableCheck } from './variables';
 
 /** An error or a warning, `message` without its place, which is `loc`. */
 export interface XmlIssue {
@@ -140,7 +143,22 @@ function scanDocument(xml: string, path: string, formatter?: Formatter): Scan {
 
 	const layout = createLayoutCheck(report);
 	const collector = createInfoCollector();
+	const variables = createVariableCheck(report);
 	const declarations: ScannedDeclaration[] = [];
+
+	/** Reads what is in a skin once, for its checks and the formatter. */
+	const onSkin = (element: OpenElement, contentEnd: number) => {
+		const skin = readSkin(xml, element.contentStart, contentEnd);
+		if ('found' in skin) {
+			report.error(
+				`<${element.name}> can only have text and CDATA in it, found ${skin.found}`,
+				skin.offset,
+			);
+			return;
+		}
+		const tags = element.name === 'b:skin' ? variables.check(skin) : undefined;
+		formatter?.onSkin(element, contentEnd, skin, tags);
+	};
 
 	const scanner = new XmlScanner({
 		document: true,
@@ -152,7 +170,12 @@ function scanDocument(xml: string, path: string, formatter?: Formatter): Scan {
 				formatter?.onStartTag(tag, expressions);
 			});
 		},
-		onEndTag: layout.onEndTag,
+		onEndTag: (element, contentEnd) => {
+			layout.onEndTag(element, contentEnd);
+			if (contentEnd !== undefined && SKINS.has(element.name)) {
+				onSkin(element, contentEnd);
+			}
+		},
 		onText: layout.onText,
 		onDeclaration: (declaration) => declarations.push(declaration),
 	});
@@ -160,6 +183,7 @@ function scanDocument(xml: string, path: string, formatter?: Formatter): Scan {
 	reportSyntaxError(errorAt, () => {
 		scanner.feed(xml, locate);
 		scanner.finish(locate(xml.length));
+		layout.finish();
 		checkDeclarations(xml, declarations, errorAt, formatter === undefined);
 	});
 
@@ -170,7 +194,12 @@ function scanDocument(xml: string, path: string, formatter?: Formatter): Scan {
 			),
 		);
 	}
-	return { declarations, locate, warnings, info: collector.info };
+	return {
+		declarations,
+		locate,
+		warnings,
+		info: (locOf) => ({ ...collector.info(locOf), ...variables.info(locOf) }),
+	};
 }
 
 /** Runs `scan`, an `XmlSyntaxError` it throws is reported. */

@@ -76,8 +76,11 @@ export interface ScannerOptions {
 	 * fed in one piece, `ScannedAttribute.positionOf` always is.
 	 */
 	onStartTag?(tag: ScannedStartTag): void;
-	/** Called when an element ends, with its end tag or self-closed. */
-	onEndTag?(element: OpenElement): void;
+	/**
+	 * Called when an element ends, with the offset of the `<` of its end tag,
+	 * where what is in it ends, or self-closed, without.
+	 */
+	onEndTag?(element: OpenElement, contentEnd?: number): void;
 	/**
 	 * Called with the offset of the first character that is not whitespace in
 	 * every run of text, a run ending at a tag, of every entity in it and of
@@ -123,6 +126,8 @@ export interface OpenElement {
 	position: Position;
 	/** Offset of the `<` of its start tag. */
 	start: number;
+	/** Offset right after its start tag, where what is in it starts. */
+	contentStart: number;
 }
 
 const ENTITY = /^(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+)$/;
@@ -884,6 +889,7 @@ export class XmlScanner {
 			name: this.tagName,
 			position: this.tagPosition,
 			start: this.tagStart,
+			contentStart: end,
 		};
 		if (selfClosing) {
 			if (this.stack.length === 0) {
@@ -912,7 +918,7 @@ export class XmlScanner {
 			);
 		}
 		const closed = this.stack.pop() as OpenElement;
-		this.options.onEndTag?.(closed);
+		this.options.onEndTag?.(closed, this.tagStart);
 		if (this.stack.length === 0) {
 			this.rootClosed = true;
 		}

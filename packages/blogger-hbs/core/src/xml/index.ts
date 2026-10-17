@@ -14,3 +14,4 @@ export {
 	XmlScanner,
 	XmlSyntaxError,
 } from './scanner';
+export type { SkinGroup, SkinVariable } from './variables';

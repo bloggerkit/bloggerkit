@@ -5,6 +5,8 @@ import type {
 	ScannedDeclaration,
 	ScannedStartTag,
 } from './scanner';
+import { inCdata, type SkinText } from './skin';
+import { isTrimmed, type SkinTag } from './variables';
 
 /** The XML declaration Blogger writes, the first line of a theme. */
 export const XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8" ?>';
@@ -42,6 +44,16 @@ export interface Formatter {
 		tag: ScannedStartTag,
 		expressions: ReadonlyMap<ScannedAttribute, ParsedExpression>,
 	): void;
+	/**
+	 * Formats what is in a skin, read once, with its `<Group>` and
+	 * `<Variable>` tags, of `<b:skin>`, when they are well-formed.
+	 */
+	onSkin(
+		element: OpenElement,
+		contentEnd: number,
+		skin: SkinText,
+		tags?: readonly SkinTag[],
+	): void;
 	/** The document formatted, once it is scanned. */
 	finish(declarations: readonly ScannedDeclaration[]): FormattedDocument;
 }
@@ -58,6 +70,8 @@ export interface Formatter {
  * - expressions (`b:if cond`, `expr:*`, ...) printed by `blogger-expr` on a
  *   single line, `data:a&amp;&amp;data:b` as `data:a and data:b`
  * - the children of sections, widgets and their settings each on a line
+ * - what is in a skin in a single CDATA section, the entities of its text
+ *   decoded
  *
  * Everything else is left as it is.
  */
@@ -78,6 +92,25 @@ export function createFormatter(xml: string): Formatter {
 				end: end ?? tag.end,
 				...formatStartTag(tag, end !== undefined, expressions),
 			});
+		},
+
+		onSkin({ contentStart }, contentEnd, skin, tags) {
+			// an empty skin is self-closed
+			if (contentEnd === contentStart) {
+				return;
+			}
+			const { text, values } = tags
+				? formatSkinTags(skin, tags)
+				: { text: skin.text, values: [] };
+			const wrapped = inCdata(text);
+			if (wrapped !== xml.slice(contentStart, contentEnd)) {
+				edits.push({
+					start: contentStart,
+					end: contentEnd,
+					text: wrapped,
+					values,
+				});
+			}
 		},
 
 		finish(declarations) {
@@ -248,36 +281,122 @@ function emptyElementEnd(
 /** The rest of an end tag after its name, matched where `lastIndex` is. */
 const END_TAG_CLOSE = /\s*>/y;
 
+/** Where the text of a skin starts in its CDATA section. */
+const CDATA_START_LENGTH = '<![CDATA['.length;
+
+/**
+ * The text of `<b:skin>` with its `<Group>` and `<Variable>` tags formatted
+ * as the other tags are, `name` and `description` trimmed, and where each
+ * tag and value is in its CDATA section, by its offset in the document. The
+ * other tags are left as they are.
+ */
+function formatSkinTags(
+	{ text, sourceOf }: SkinText,
+	tags: readonly SkinTag[],
+): Pick<Edit, 'text' | 'values'> {
+	const parts: string[] = [];
+	const values: number[] = [];
+	let length = CDATA_START_LENGTH;
+	let last = 0;
+	const push = (part: string) => {
+		parts.push(part);
+		length += part.length;
+	};
+
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (tag.name !== 'Group' && tag.name !== 'Variable') {
+			continue;
+		}
+		push(text.slice(last, tag.start));
+		last = tag.end;
+		if (tag.closing) {
+			push(`</${tag.name}>`);
+			continue;
+		}
+		// an end tag right after it, nothing in it
+		const next = tags[i + 1];
+		const empty =
+			!tag.selfClosing &&
+			next?.closing === true &&
+			next.name === tag.name &&
+			next.start === tag.end;
+		if (empty) {
+			last = next.end;
+			i++;
+		}
+		const formatted = formatTag(
+			tag.name,
+			tag.attributes.map((attribute) => {
+				const value = collapseLineBreaks(attribute.value);
+				return {
+					name: attribute.name,
+					offset: sourceOf(attribute.index),
+					value: singleQuoted(
+						attribute,
+						isTrimmed(tag.name, attribute.name) ? value.trim() : value,
+					),
+				};
+			}),
+			tag.selfClosing || empty,
+		);
+		values.push(sourceOf(tag.start), length);
+		for (let j = 0; j < formatted.values.length; j += 2) {
+			values.push(formatted.values[j], length + formatted.values[j + 1]);
+		}
+		push(formatted.text);
+	}
+	parts.push(text.slice(last));
+	return { text: parts.join(''), values };
+}
+
 /** The start tag formatted, self-closed with `selfClose`, and where the value of each attribute is in it. */
 function formatStartTag(
-	{ name: tagName, attributes, selfClosing }: ScannedStartTag,
+	{ name, attributes, selfClosing }: ScannedStartTag,
 	selfClose: boolean,
 	expressions: ReadonlyMap<ScannedAttribute, ParsedExpression>,
 ): Pick<Edit, 'text' | 'values'> {
-	let text = `<${tagName}`;
-	const values: number[] = [];
+	return formatTag(
+		name,
+		attributes.map((attribute) => {
+			const parsed = expressions.get(attribute);
+			return {
+				name: attribute.name,
+				offset: attribute.offset,
+				value:
+					(parsed && formatExpression(parsed)) ??
+					singleQuoted(attribute, collapseLineBreaks(attribute.value)),
+			};
+		}),
+		selfClosing || selfClose,
+	);
+}
 
+/**
+ * A start tag with its attributes sorted by name, their values formatted and
+ * in single quotes, and where each value is in it, by its offset in the
+ * document.
+ */
+function formatTag(
+	name: string,
+	attributes: readonly { name: string; offset: number; value: string }[],
+	selfClosed: boolean,
+): { text: string; values: number[] } {
+	let text = `<${name}`;
+	const values: number[] = [];
 	for (const attribute of sortedByName(attributes)) {
-		const parsed = expressions.get(attribute);
 		text += ` ${attribute.name}='`;
 		values.push(attribute.offset, text.length);
-		text += `${
-			(parsed && formatExpression(parsed)) ??
-			singleQuoted(attribute, collapseLineBreaks(attribute.value))
-		}'`;
+		text += `${attribute.value}'`;
 	}
-
-	return {
-		text: `${text}${selfClosing || selfClose ? '/>' : '>'}`,
-		values,
-	};
+	return { text: `${text}${selfClosed ? '/>' : '>'}`, values };
 }
 
 /**
  * A value written in double quotes, rewritten for single quotes: `'` escaped
  * as `&apos;` and `&quot;` unescaped. Other entities are left as they are.
  */
-function singleQuoted({ quote }: ScannedAttribute, value: string): string {
+function singleQuoted({ quote }: { quote: '"' | "'" }, value: string): string {
 	return quote === "'"
 		? value
 		: value.replace(/'/g, '&apos;').replace(/&quot;/g, '"');
@@ -289,9 +408,9 @@ function collapseLineBreaks(value: string): string {
 }
 
 /** The attributes sorted by name, as they are when they already are, as is most often. */
-function sortedByName(
-	attributes: readonly ScannedAttribute[],
-): readonly ScannedAttribute[] {
+function sortedByName<T extends { name: string }>(
+	attributes: readonly T[],
+): readonly T[] {
 	for (let i = 1; i < attributes.length; i++) {
 		if (attributes[i - 1].name > attributes[i].name) {
 			return [...attributes].sort((a, b) =>
