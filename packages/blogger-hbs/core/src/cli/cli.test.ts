@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assert, beforeAll, describe, onTestFinished, test } from 'vitest';
 import { createFixture } from '../../test/fixture';
-import { DOCTYPE, XML_DECLARATION } from '../xml';
+import { DOCTYPE, XML_DECLARATION } from '../xml/format';
 
 const PACKAGE = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
@@ -195,15 +195,18 @@ describe('cli', () => {
 		);
 	});
 
-	test('shows where the rendered template is not valid', async () => {
+	test('shows every place the rendered template is not valid', async () => {
 		const cwd = await createFixture({
 			'index.hbs': '<html>\n  <body/>\n</html>',
 		});
 		const { code, output } = await run(cwd, '--no-format');
 		assert.strictEqual(code, 1);
-		assert.match(
+		assert.include(
 			output,
-			/The rendered template is not valid XML\n {2}Caused by: The first line has to be the XML declaration, .* \(dist\/theme\.xml:1:1\)/,
+			`The rendered template is not valid XML
+  Caused by: 2 errors:
+    The first line has to be the XML declaration, ${XML_DECLARATION} (dist/theme.xml:1:1)
+    The second line has to be the doctype, ${DOCTYPE} (dist/theme.xml:2:1)`,
 		);
 		// written anyway, to look at where it is invalid
 		assert.isTrue(existsSync(path.join(cwd, 'dist/theme.xml')));

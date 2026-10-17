@@ -86,16 +86,20 @@ const LITERAL_TYPES: ReadonlySet<Node['type']> = new Set([
 export const isLiteral = (node: Node): boolean => LITERAL_TYPES.has(node.type);
 
 /** Checks an argument, returns the problem or null. */
-type ArgValidator = (node: Node) => string | null;
+/** What is wrong with an item of a list argument, and the item. */
+interface ItemProblem {
+	problem: string;
+	index: number;
+	node: Node;
+}
+
+/** Checks an argument, returns the problem, of the argument or of one of its items, or null. */
+type ArgValidator = (node: Node) => string | ItemProblem | null;
 
 const anyType: ArgValidator = () => null;
 const stringType: ArgValidator = (n) =>
 	isLiteral(n) && n.type !== 'StringLiteral'
 		? 'must be a string literal'
-		: null;
-const numberType: ArgValidator = (n) =>
-	isLiteral(n) && n.type !== 'NumberLiteral'
-		? 'must be a number literal'
 		: null;
 const mapType: ArgValidator = (n) =>
 	isLiteral(n) && n.type !== 'MapLiteral'
@@ -105,6 +109,44 @@ const listType: ArgValidator = (n) =>
 	isLiteral(n) && n.type !== 'ListLiteral'
 		? 'must be a list literal, e.g. [1, 2, 3]'
 		: null;
+/** What a width of an image has to be, for errors. */
+export const WIDTH_PROBLEM =
+	'must be an integer of 0 or more, a number or a string of digits only, 640 or "640"';
+
+/**
+ * A width of an image: an integer of 0 or more, given as a number or as a
+ * string of digits only, `640` or `"640"`. Undefined for anything else,
+ * `" 640"` too, as Blogger does not render it.
+ */
+export function widthOf(value: unknown): number | undefined {
+	const width =
+		typeof value === 'number'
+			? value
+			: typeof value === 'string' && /^\d+$/.test(value)
+				? Number(value)
+				: Number.NaN;
+	return Number.isInteger(width) && width >= 0 ? width : undefined;
+}
+
+const widthType: ArgValidator = (n) => {
+	if (n.type === 'NumberLiteral' || n.type === 'StringLiteral') {
+		return widthOf(n.value) === undefined ? WIDTH_PROBLEM : null;
+	}
+	return isLiteral(n) ? WIDTH_PROBLEM : null;
+};
+const widthsType: ArgValidator = (n) => {
+	if (n.type !== 'ListLiteral') {
+		return listType(n);
+	}
+	for (const [index, node] of n.elements.entries()) {
+		const problem = widthType(node);
+		if (typeof problem === 'string') {
+			return { problem, index, node };
+		}
+	}
+	return null;
+};
+
 interface FunctionSignature {
 	readonly min: number;
 	readonly max: number;
@@ -120,12 +162,12 @@ const FUNCTION_SIGNATURES: Record<FunctionName, FunctionSignature> = {
 	resizeImage: {
 		min: 2,
 		max: 3,
-		args: [stringType, numberType, stringType],
+		args: [stringType, widthType, stringType],
 	},
 	sourceSet: {
 		min: 2,
 		max: 3,
-		args: [stringType, listType, stringType],
+		args: [stringType, widthsType, stringType],
 	},
 	format: { min: 2, max: 2, args: [anyType, stringType] },
 };
@@ -167,8 +209,14 @@ export function checkCall(
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i] as Node;
 		const problem = signature.args[i]?.(arg);
-		if (problem) {
+		if (typeof problem === 'string') {
 			return { message: `${name}(): argument ${i + 1} ${problem}`, node: arg };
+		}
+		if (problem) {
+			return {
+				message: `${name}(): item ${problem.index + 1} of argument ${i + 1} ${problem.problem}`,
+				node: problem.node,
+			};
 		}
 	}
 

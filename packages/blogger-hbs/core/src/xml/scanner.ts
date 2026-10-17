@@ -38,6 +38,8 @@ export interface ScannedAttribute {
 	 * Handlebars expression or block, `value` is then only the text around it.
 	 */
 	dynamic: boolean;
+	/** Offset of the first character of `value` in the text fed, see `ScannerOptions.onStartTag`. */
+	offset: number;
 	/** Position of the character of `value` at `index`, of the closing quote at its length. */
 	positionOf(index: number): Position;
 }
@@ -77,10 +79,11 @@ export interface ScannerOptions {
 	/** Called when an element ends, with its end tag or self-closed. */
 	onEndTag?(element: OpenElement): void;
 	/**
-	 * Called with what is not whitespace in the text of an element:
-	 * characters, entities and CDATA sections.
+	 * Called with the offset of the first character that is not whitespace in
+	 * every run of text, a run ending at a tag, of every entity in it and of
+	 * every CDATA section, offsets as in `onStartTag`.
 	 */
-	onText?(position: Position, parent: OpenElement | undefined): void;
+	onText?(offset: number, parent: OpenElement | undefined): void;
 	/** Called with the XML declaration and the doctype, like `onStartTag`. */
 	onDeclaration?(declaration: ScannedDeclaration): void;
 }
@@ -122,12 +125,80 @@ export interface OpenElement {
 	start: number;
 }
 
-const NAME_START = /[A-Za-z_:À-￿]/;
-const NAME_CHAR = /[A-Za-z0-9_:.\-·À-￿]/;
-const WHITESPACE = /[ \t\r\n]/;
 const ENTITY = /^(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+)$/;
-const ENTITY_CHAR = /[A-Za-z0-9#]/;
 const MARKUP = ['--', '[CDATA[', 'DOCTYPE'];
+
+const LT = 0x3c;
+const AMP = 0x26;
+
+function isWhitespace(code: number): boolean {
+	return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d;
+}
+
+/** `[A-Za-z_:]`, and everything from U+00C0, as names have them. */
+function isNameStart(code: number): boolean {
+	return (
+		(code >= 0x61 && code <= 0x7a) ||
+		(code >= 0x41 && code <= 0x5a) ||
+		code === 0x5f ||
+		code === 0x3a ||
+		code >= 0xc0
+	);
+}
+
+/** A name start, `[0-9.-]` or `·`. */
+function isNameChar(code: number): boolean {
+	return (
+		isNameStart(code) ||
+		(code >= 0x30 && code <= 0x39) ||
+		code === 0x2e ||
+		code === 0x2d ||
+		code === 0xb7
+	);
+}
+
+/** `[A-Za-z0-9#]`, in entity references. */
+function isEntityChar(code: number): boolean {
+	return (
+		(code >= 0x61 && code <= 0x7a) ||
+		(code >= 0x41 && code <= 0x5a) ||
+		(code >= 0x30 && code <= 0x39) ||
+		code === 0x23
+	);
+}
+
+// the end of a run from `i`, the first character not in it or the length of `text`,
+// a loop for each, as calling a test passed in would be slower
+
+function nameEnd(text: string, i: number): number {
+	let end = i;
+	while (end < text.length && isNameChar(text.charCodeAt(end))) {
+		end++;
+	}
+	return end;
+}
+
+function whitespaceEnd(text: string, i: number): number {
+	let end = i;
+	while (end < text.length && isWhitespace(text.charCodeAt(end))) {
+		end++;
+	}
+	return end;
+}
+
+function entityNameEnd(text: string, i: number): number {
+	let end = i;
+	while (end < text.length && isEntityChar(text.charCodeAt(end))) {
+		end++;
+	}
+	return end;
+}
+
+/** The index of `search` in `text` from `from`, or the length of `text`. */
+function indexOrEnd(text: string, search: string, from: number): number {
+	const index = text.indexOf(search, from);
+	return index < 0 ? text.length : index;
+}
 
 const DESCRIPTIONS: Record<Mode, string> = {
 	text: 'text',
@@ -162,19 +233,30 @@ export class XmlScanner {
 	private tagPosition: Position = { line: 1, column: 0 };
 	private tagStart = 0;
 	private attributes: ScannedAttribute[] = [];
-	private attributeNames = new Set<string>();
+	/** The names of the attributes of the tag, without the ones Handlebars renders. */
+	private attributeNames: string[] = [];
 	private attrName = '';
 	private attrDynamic = false;
 	private attrValue = '';
 	private attrValueDynamic = false;
 	private attrValueSegments: ValueSegment[] = [];
+	private attrValueOffset = 0;
+	/** Where the part of the value not in `attrValue` yet starts in the text fed. */
+	private valueFrom = 0;
 	private quote: '"' | "'" = '"';
+	/** Whether the text since the last tag is reported, see `ScannerOptions.onText`. */
+	private textReported = false;
 	/** Whether whitespace (or an expression) separates the next attribute. */
 	private separated = false;
 	private buffer = '';
 	private count = 0;
 	private entityReturn: 'text' | 'attrValue' = 'text';
-	private entityPosition: Position = { line: 1, column: 0 };
+	/** Where the entity, comment or CDATA section being scanned starts, placed only for an error. */
+	private entityLocate: Locate = () => ({ line: 1, column: 0 });
+	private entityIndex = 0;
+	/** Where the character being scanned is, for `fail`. */
+	private locate: Locate = () => ({ line: 1, column: 0 });
+	private index = 0;
 
 	constructor(options: ScannerOptions = {}) {
 		this.options = options;
@@ -186,7 +268,7 @@ export class XmlScanner {
 		Object.assign(copy, this, {
 			stack: [...this.stack],
 			attributes: [...this.attributes],
-			attributeNames: new Set(this.attributeNames),
+			attributeNames: [...this.attributeNames],
 			attrValueSegments: [...this.attrValueSegments],
 		});
 		return copy;
@@ -223,17 +305,121 @@ export class XmlScanner {
 
 	/** Scans `text`, `base` is added to the offsets of `onStartTag`. */
 	feed(text: string, locate: Locate, base = 0): void {
-		if (this.mode === 'attrValue') {
+		this.locate = locate;
+		if (this.inAttributeValue()) {
 			this.addValueSegment(this.attrValue.length, locate, 0);
-		} else if (this.mode === 'entity' && this.entityReturn === 'attrValue') {
-			this.addValueSegment(
-				this.attrValue.length + this.buffer.length,
-				locate,
-				0,
-			);
+			this.valueFrom = 0;
 		}
-		for (let i = 0; i < text.length; i++) {
-			this.step(text[i], i, locate, base);
+		for (
+			let i = this.skip(text, 0);
+			i < text.length;
+			i = this.skip(text, this.step(text, i, locate, base))
+		) {}
+		// the value goes on in the next piece
+		if (this.inAttributeValue()) {
+			this.attrValue += text.slice(this.valueFrom);
+		}
+	}
+
+	/** Whether an attribute value is being scanned, an entity in it too. */
+	private inAttributeValue(): boolean {
+		return (
+			this.mode === 'attrValue' ||
+			(this.mode === 'entity' && this.entityReturn === 'attrValue')
+		);
+	}
+
+	/**
+	 * The index of the next character from `i` the scan has to look at, the
+	 * others are taken as they are. It only skips what the mode accepts anyway,
+	 * so the errors are the same, and stops at the end of `text`, so text fed
+	 * in pieces is scanned the same.
+	 */
+	private skip(text: string, i: number): number {
+		switch (this.mode) {
+			case 'text': {
+				// once the text is reported, only a tag or an entity ends it
+				let end = i;
+				for (; end < text.length; end++) {
+					const code = text.charCodeAt(end);
+					if (
+						code === LT ||
+						code === AMP ||
+						(!this.textReported && !isWhitespace(code))
+					) {
+						break;
+					}
+				}
+				return end;
+			}
+
+			case 'attrValue': {
+				const quote = this.quote.charCodeAt(0);
+				let end = i;
+				for (; end < text.length; end++) {
+					const code = text.charCodeAt(end);
+					if (code === quote || code === LT || code === AMP) {
+						break;
+					}
+				}
+				return end;
+			}
+
+			// right after '-', ']' or '?', the next character ends it or not
+			case 'comment':
+				return this.count === 0 ? indexOrEnd(text, '-', i) : i;
+			case 'cdata':
+				return this.count === 0 ? indexOrEnd(text, ']', i) : i;
+			case 'pi': {
+				if (this.count > 0) {
+					return i;
+				}
+				const end = indexOrEnd(text, '?', i);
+				this.buffer += text.slice(i, end);
+				return end;
+			}
+
+			// a run of name characters, the character after it ends the name or not
+			case 'startTagName':
+			case 'attrName':
+			case 'endTagName': {
+				// an end tag name starts with a name start, which `step` checks
+				if (this.mode === 'endTagName' && this.tagName === '') {
+					return i;
+				}
+				const end = nameEnd(text, i);
+				if (this.mode === 'attrName') {
+					this.attrName += text.slice(i, end);
+				} else {
+					this.tagName += text.slice(i, end);
+				}
+				return end;
+			}
+
+			// whitespace between attributes, and around `=` and in end tags
+			case 'inTag':
+			case 'afterAttrName':
+			case 'beforeAttrValue':
+			case 'afterEndTagName': {
+				const end = whitespaceEnd(text, i);
+				if (end > i && this.mode === 'inTag') {
+					this.separated = true;
+				}
+				return end;
+			}
+
+			// the name of an entity, up to the 32 characters `step` accepts
+			case 'entity': {
+				const end = Math.min(
+					entityNameEnd(text, i),
+					i + 32 - this.buffer.length,
+				);
+				this.buffer += text.slice(i, end);
+				return end;
+			}
+
+			default:
+				return i;
 		}
 	}
 
@@ -299,7 +485,7 @@ export class XmlScanner {
 				this.mode === 'comment' ||
 					this.mode === 'cdata' ||
 					this.mode === 'entity'
-					? this.entityPosition
+					? this.entityPosition()
 					: this.tagPosition,
 			);
 		}
@@ -315,10 +501,12 @@ export class XmlScanner {
 		}
 	}
 
-	private step(char: string, i: number, locate: Locate, base: number): void {
-		const fail = (message: string): never => {
-			throw new XmlSyntaxError(message, locate(i));
-		};
+	/** Scans the character of `text` at `i`, returns the index of the next one to scan. */
+	private step(text: string, i: number, locate: Locate, base: number): number {
+		const char = text[i];
+		const code = text.charCodeAt(i);
+		const next = i + 1;
+		this.index = i;
 
 		switch (this.mode) {
 			case 'text':
@@ -326,16 +514,17 @@ export class XmlScanner {
 					this.mode = 'tagOpen';
 					this.tagStart = base + i;
 					this.tagPosition = locate(i);
+					this.textReported = false;
 				} else if (char === '&') {
-					this.options.onText?.(locate(i), this.stack.at(-1));
-					this.startEntity('text', locate(i));
-				} else if (!WHITESPACE.test(char)) {
+					this.reportText(base + i);
+					this.startEntity('text', i);
+				} else if (!isWhitespace(code)) {
 					if (this.options.document && this.stack.length === 0) {
-						fail(`Text out of the root element: '${char}'`);
+						this.fail(`Text out of the root element: '${char}'`);
 					}
-					this.options.onText?.(locate(i), this.stack.at(-1));
+					this.reportText(base + i);
 				}
-				return;
+				return next;
 
 			case 'tagOpen':
 				if (char === '/') {
@@ -348,22 +537,25 @@ export class XmlScanner {
 					this.mode = 'pi';
 					this.count = 0;
 					this.buffer = '';
-				} else if (NAME_START.test(char)) {
+				} else if (isNameStart(code)) {
+					// the name at once, a slice of the text
+					const end = nameEnd(text, next);
 					this.mode = 'startTagName';
-					this.tagName = char;
+					this.tagName = text.slice(i, end);
 					this.attributes = [];
-					this.attributeNames.clear();
+					this.attributeNames = [];
+					return end;
 				} else {
-					fail(
+					this.fail(
 						`Invalid character '${char}' after '<', escape a literal '<' as '&lt;'`,
 					);
 				}
-				return;
+				return next;
 
 			case 'startTagName':
-				if (NAME_CHAR.test(char)) {
+				if (isNameChar(code)) {
 					this.tagName += char;
-				} else if (WHITESPACE.test(char)) {
+				} else if (isWhitespace(code)) {
 					this.mode = 'inTag';
 					this.separated = true;
 				} else if (char === '>') {
@@ -371,110 +563,116 @@ export class XmlScanner {
 				} else if (char === '/') {
 					this.mode = 'selfClose';
 				} else {
-					fail(`Invalid character '${char}' in the name of <${this.tagName}>`);
+					this.fail(
+						`Invalid character '${char}' in the name of <${this.tagName}>`,
+					);
 				}
-				return;
+				return next;
 
 			case 'inTag':
-				if (WHITESPACE.test(char)) {
+				if (isWhitespace(code)) {
 					this.separated = true;
 				} else if (char === '>') {
 					this.endStartTag(false, base + i + 1);
 				} else if (char === '/') {
 					this.mode = 'selfClose';
-				} else if (NAME_START.test(char)) {
+				} else if (isNameStart(code)) {
 					if (!this.separated) {
-						fail(
+						this.fail(
 							`Missing whitespace between the attributes of <${this.tagName}>`,
 						);
 					}
+					const end = nameEnd(text, next);
 					this.mode = 'attrName';
-					this.attrName = char;
+					this.attrName = text.slice(i, end);
 					this.attrDynamic = false;
+					return end;
 				} else {
-					fail(`Invalid character '${char}' in <${this.tagName}>`);
+					this.fail(`Invalid character '${char}' in <${this.tagName}>`);
 				}
-				return;
+				return next;
 
 			case 'attrName':
-				if (NAME_CHAR.test(char)) {
+				if (isNameChar(code)) {
 					this.attrName += char;
-				} else if (WHITESPACE.test(char)) {
+				} else if (isWhitespace(code)) {
 					this.mode = 'afterAttrName';
 				} else if (char === '=') {
 					this.mode = 'beforeAttrValue';
 				} else {
-					this.missingValue(fail);
+					this.missingValue();
 				}
-				return;
+				return next;
 
 			case 'afterAttrName':
 				if (char === '=') {
 					this.mode = 'beforeAttrValue';
-				} else if (!WHITESPACE.test(char)) {
-					this.missingValue(fail);
+				} else if (!isWhitespace(code)) {
+					this.missingValue();
 				}
-				return;
+				return next;
 
 			case 'beforeAttrValue':
 				if (char === '"' || char === "'") {
 					this.mode = 'attrValue';
 					this.quote = char;
 					this.attrValue = '';
+					this.valueFrom = next;
 					this.attrValueDynamic = false;
 					this.attrValueSegments = [];
+					this.attrValueOffset = base + i + 1;
 					this.addValueSegment(0, locate, i + 1);
-				} else if (!WHITESPACE.test(char)) {
-					fail(
+				} else if (!isWhitespace(code)) {
+					this.fail(
 						`The value of the attribute '${this.attrName}' of <${this.tagName}> has to be quoted`,
 					);
 				}
-				return;
+				return next;
 
 			case 'attrValue':
 				if (char === this.quote) {
-					this.endAttribute(fail);
+					// the value at once, after what is in the pieces before
+					this.attrValue += text.slice(this.valueFrom, i);
+					this.endAttribute();
 				} else if (char === '<') {
-					fail(
+					this.fail(
 						`'<' is not allowed in the value of the attribute '${this.attrName}', escape it as '&lt;'`,
 					);
-				} else {
-					if (char === '&') {
-						this.startEntity('attrValue', locate(i));
-					}
-					this.attrValue += char;
+				} else if (char === '&') {
+					this.startEntity('attrValue', i);
 				}
-				return;
+				return next;
 
 			case 'selfClose':
 				if (char === '>') {
 					this.endStartTag(true, base + i + 1);
 				} else {
-					fail(`Expected '>' after '/' in <${this.tagName}>`);
+					this.fail(`Expected '>' after '/' in <${this.tagName}>`);
 				}
-				return;
+				return next;
 
 			case 'endTagName':
-				if (
-					this.tagName === '' ? NAME_START.test(char) : NAME_CHAR.test(char)
-				) {
-					this.tagName += char;
-				} else if (this.tagName !== '' && WHITESPACE.test(char)) {
+				if (this.tagName === '' ? isNameStart(code) : isNameChar(code)) {
+					const end = nameEnd(text, next);
+					this.tagName += text.slice(i, end);
+					return end;
+				}
+				if (this.tagName !== '' && isWhitespace(code)) {
 					this.mode = 'afterEndTagName';
 				} else if (this.tagName !== '' && char === '>') {
 					this.endEndTag();
 				} else {
-					fail(`Invalid character '${char}' in a closing tag`);
+					this.fail(`Invalid character '${char}' in a closing tag`);
 				}
-				return;
+				return next;
 
 			case 'afterEndTagName':
 				if (char === '>') {
 					this.endEndTag();
-				} else if (!WHITESPACE.test(char)) {
-					fail(`Expected '>' in the closing tag </${this.tagName}>`);
+				} else if (!isWhitespace(code)) {
+					this.fail(`Expected '>' in the closing tag </${this.tagName}>`);
 				}
-				return;
+				return next;
 
 			case 'markup': {
 				this.buffer += char;
@@ -482,7 +680,7 @@ export class XmlScanner {
 					markup.startsWith(this.buffer.toUpperCase()),
 				);
 				if (match === undefined) {
-					fail(
+					this.fail(
 						`Invalid markup '<!${this.buffer}', expected a comment, a CDATA section or the doctype`,
 					);
 				} else if (match === this.buffer.toUpperCase()) {
@@ -496,10 +694,11 @@ export class XmlScanner {
 							this.tagPosition,
 						);
 					}
-					this.entityPosition = this.tagPosition;
+					const { tagPosition } = this;
+					this.entityLocate = () => tagPosition;
 					this.count = 0;
 					if (match === '[CDATA[') {
-						this.options.onText?.(this.tagPosition, this.stack.at(-1));
+						this.options.onText?.(this.tagStart, this.stack.at(-1));
 					}
 					this.mode =
 						match === '--'
@@ -508,7 +707,7 @@ export class XmlScanner {
 								? 'doctype'
 								: 'cdata';
 				}
-				return;
+				return next;
 			}
 
 			case 'comment':
@@ -517,13 +716,13 @@ export class XmlScanner {
 				} else {
 					if (this.count >= 2) {
 						if (char !== '>') {
-							fail("'--' is not allowed inside a comment");
+							this.fail("'--' is not allowed inside a comment");
 						}
 						this.mode = 'text';
 					}
 					this.count = 0;
 				}
-				return;
+				return next;
 
 			case 'cdata':
 				if (char === ']') {
@@ -534,7 +733,7 @@ export class XmlScanner {
 					}
 					this.count = 0;
 				}
-				return;
+				return next;
 
 			case 'doctype':
 				if (char === '[') {
@@ -544,10 +743,10 @@ export class XmlScanner {
 				} else if (char === '>' && this.count <= 0) {
 					this.mode = 'text';
 					this.declare('doctype', this.buffer, base + i + 1);
-					return;
+					return next;
 				}
 				this.buffer += char;
-				return;
+				return next;
 
 			case 'pi':
 				if (char === '>' && this.count > 0) {
@@ -563,11 +762,11 @@ export class XmlScanner {
 						}
 						this.declare('xml', content, base + i + 1);
 					}
-					return;
+					return next;
 				}
 				this.buffer += char;
 				this.count = char === '?' ? 1 : 0;
-				return;
+				return next;
 
 			case 'entity':
 				if (char === ';') {
@@ -576,22 +775,19 @@ export class XmlScanner {
 							this.buffer === ''
 								? "'&' has to be escaped as '&amp;'"
 								: `Undefined entity '&${this.buffer};', XML only has &amp; &lt; &gt; &quot; &apos;, use a numeric reference like '&#160;' for others`,
-							this.entityPosition,
+							this.entityPosition(),
 						);
 					}
 					this.mode = this.entityReturn;
-					if (this.mode === 'attrValue') {
-						this.attrValue += `${this.buffer};`;
-					}
-				} else if (ENTITY_CHAR.test(char) && this.buffer.length < 32) {
+				} else if (isEntityChar(code) && this.buffer.length < 32) {
 					this.buffer += char;
 				} else {
 					throw new XmlSyntaxError(
 						"'&' has to be escaped as '&amp;'",
-						this.entityPosition,
+						this.entityPosition(),
 					);
 				}
-				return;
+				return next;
 		}
 	}
 
@@ -613,33 +809,56 @@ export class XmlScanner {
 		this.attrValueSegments.push({ index, locate, textIndex });
 	}
 
-	private startEntity(from: 'text' | 'attrValue', position: Position): void {
+	private startEntity(from: 'text' | 'attrValue', index: number): void {
 		this.mode = 'entity';
 		this.entityReturn = from;
-		this.entityPosition = position;
+		this.entityLocate = this.locate;
+		this.entityIndex = index;
 		this.buffer = '';
 	}
 
-	private missingValue(fail: (message: string) => never): never {
-		return fail(
+	private entityPosition(): Position {
+		return this.entityLocate(this.entityIndex);
+	}
+
+	/** Throws at the character being scanned. */
+	private fail(message: string): never {
+		throw new XmlSyntaxError(message, this.locate(this.index));
+	}
+
+	/** Reports the text being scanned, once a run, see `ScannerOptions.onText`. */
+	private reportText(offset: number): void {
+		if (!this.textReported) {
+			this.textReported = true;
+			this.options.onText?.(offset, this.stack.at(-1));
+		}
+	}
+
+	private missingValue(): never {
+		return this.fail(
 			`The attribute '${this.attrName}' of <${this.tagName}> has no value, XML requires one: ${this.attrName}='...'`,
 		);
 	}
 
-	private endAttribute(fail: (message: string) => never): void {
+	private endAttribute(): void {
 		if (!this.attrDynamic) {
-			if (this.attributeNames.has(this.attrName)) {
-				fail(`Duplicate attribute '${this.attrName}' in <${this.tagName}>`);
+			if (this.attributeNames.includes(this.attrName)) {
+				this.fail(
+					`Duplicate attribute '${this.attrName}' in <${this.tagName}>`,
+				);
 			}
-			this.attributeNames.add(this.attrName);
+			this.attributeNames.push(this.attrName);
 		}
-		this.attributes.push({
-			name: this.attrName,
-			value: this.attrValue,
-			quote: this.quote,
-			dynamic: this.attrDynamic || this.attrValueDynamic,
-			positionOf: positionInSegments(this.attrValueSegments),
-		});
+		this.attributes.push(
+			new Attribute(
+				this.attrName,
+				this.attrValue,
+				this.quote,
+				this.attrDynamic || this.attrValueDynamic,
+				this.attrValueOffset,
+				this.attrValueSegments,
+			),
+		);
 		this.mode = 'inTag';
 		this.separated = false;
 	}
@@ -706,12 +925,22 @@ function describeElement({ name, position }: OpenElement): string {
 	return `<${name}> (opened at ${position.line}:${position.column + 1})`;
 }
 
-function positionInSegments(segments: ValueSegment[]) {
-	return (index: number): Position => {
+/** An attribute as scanned, a method placing its characters instead of a function for each. */
+class Attribute implements ScannedAttribute {
+	constructor(
+		readonly name: string,
+		readonly value: string,
+		readonly quote: '"' | "'",
+		readonly dynamic: boolean,
+		readonly offset: number,
+		private readonly segments: readonly ValueSegment[],
+	) {}
+
+	positionOf(index: number): Position {
 		const segment =
-			segments.findLast((item) => item.index <= index) ?? segments[0];
+			this.segments.findLast((item) => item.index <= index) ?? this.segments[0];
 		return segment.locate(segment.textIndex + index - segment.index);
-	};
+	}
 }
 
 /** Positions in a single text, computed from the offsets of its line starts. */
@@ -720,10 +949,8 @@ export function createLocate(
 	start: Position = { line: 1, column: 0 },
 ): Locate {
 	const lineStarts = [0];
-	for (let i = 0; i < text.length; i++) {
-		if (text[i] === '\n') {
-			lineStarts.push(i + 1);
-		}
+	for (let i = text.indexOf('\n'); i >= 0; i = text.indexOf('\n', i + 1)) {
+		lineStarts.push(i + 1);
 	}
 
 	return (index) => {

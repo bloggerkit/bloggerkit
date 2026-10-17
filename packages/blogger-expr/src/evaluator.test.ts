@@ -268,7 +268,9 @@ test('builtins: resizeImage and sourceSet take a ratio, not a height', () => {
 	);
 	expect(() =>
 		evaluate(`resizeImage("${image}", 400, data:h)`, { data: { h: 300 } }),
-	).toThrow(/resizeImage\(\): argument 3 must be a ratio like "16:9"/);
+	).toThrow(
+		/resizeImage\(\): argument 3 must be a ratio of positive integers like "16:9"/,
+	);
 	expect(() => evaluate(`sourceSet("${image}", [400], "wide")`)).toThrow(
 		/sourceSet\(\): argument 3 must be a ratio/,
 	);

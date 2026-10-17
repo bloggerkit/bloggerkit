@@ -127,7 +127,8 @@ export interface CallExpression extends BaseNode {
 	readonly args: Node[];
 }
 
-export type UnaryOperator = '!' | '-';
+/** `!a` and `not a`. A negative number is a `NumberLiteral`, `-5`. */
+export type UnaryOperator = '!';
 export interface UnaryExpression extends BaseNode {
 	readonly type: 'UnaryExpression';
 	readonly operator: UnaryOperator;

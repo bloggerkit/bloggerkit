@@ -1,4 +1,4 @@
-import { assert, test } from 'vitest';
+import { assert, describe, test } from 'vitest';
 import { parse } from './parser';
 
 test('only the fixed function set can be called', () => {
@@ -26,7 +26,7 @@ test('call arity and literal argument types are validated at parse time', () => 
 	);
 	assert.throws(
 		() => parse('resizeImage(data:img, "wide")'),
-		/must be a number literal/,
+		/argument 2 must be an integer of 0 or more/,
 	);
 	assert.throws(
 		() => parse('snippet(data:str, { length: "x" })'),
@@ -91,4 +91,77 @@ test('bare access to an outer lambda parameter is barred inside a nested lambda 
 			),
 		/Unknown identifier 'id'/,
 	);
+});
+
+describe('minus, as Blogger reads it', () => {
+	const strip = (node: unknown) =>
+		JSON.parse(
+			JSON.stringify(node, (key, value) =>
+				key === 'span' ? undefined : value,
+			),
+		);
+	const same = (source: string, as: string) =>
+		assert.deepEqual(strip(parse(source)), strip(parse(as)), source);
+
+	test('a negative number is a literal, with no space after the `-`', () => {
+		assert.deepEqual(strip(parse('-5')), { type: 'NumberLiteral', value: -5 });
+		assert.deepEqual(strip(parse('-1.5')), {
+			type: 'NumberLiteral',
+			value: -1.5,
+		});
+		assert.deepEqual(strip(parse('-.5')), {
+			type: 'NumberLiteral',
+			value: -0.5,
+		});
+		same('[-1, 2]', '[-1, 2]');
+		same('5 * -3', '5 * -3');
+		same('5 - -3', '5 - -3');
+		assert.throws(() => parse('- 5'), /with no value before it/);
+	});
+
+	test('a `-` with no value before it is only before parentheses, and read without it', () => {
+		same('-(5)', '5');
+		same('-(-5)', '-5');
+		same('5 * -(2)', '5 * 2');
+		same('-(data:a + 1)', 'data:a + 1');
+		for (const source of ['--5', '-data:n', '- (5)']) {
+			assert.throws(() => parse(source), /with no value before it/, source);
+		}
+	});
+
+	test('a `-` between two values has a space or a parenthesis on each side', () => {
+		same('5 -(2)', '5 - 2');
+		same('5 -(data:n)', '5 - data:n');
+		same('(5)- 3', '5 - 3');
+		same('5 -(3)', '5 - 3');
+		for (const source of [
+			'5-3',
+			'5 -3',
+			'(5)-3',
+			'5-(3)',
+			'5--3',
+			'5 -data:n',
+			'data:list[0]-1',
+		]) {
+			assert.throws(
+				() => parse(source),
+				/needs a space before and after it/,
+				source,
+			);
+		}
+	});
+
+	test('other operators need no spaces', () => {
+		same('5+3', '5 + 3');
+		same('5+data:n', '5 + data:n');
+		same('5*3', '5 * 3');
+	});
+
+	test('a `-` in a `data:` path is part of the name', () => {
+		assert.deepEqual(strip(parse('data:n-3')), {
+			type: 'DataReference',
+			name: 'n-3',
+		});
+		same('data:n - 3', 'data:n - 3');
+	});
 });

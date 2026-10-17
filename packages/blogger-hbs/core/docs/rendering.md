@@ -21,4 +21,4 @@ export default {
 };
 ```
 
-`createRenderer(theme, { plugins })` takes runtime plugins of the host rendering the theme, for example with data of the request in `prepare`. The helpers of the theme itself are in `compiled.js`, see [Helpers of the theme](./helpers.md#helpers-of-the-theme). `formatXml` and `validateXml` are in `blogger-hbs/runtime` as well. A compiled module is rendered by the version of `blogger-hbs` it is compiled with, `createRenderer` checks it.
+`createRenderer(theme, { plugins })` takes runtime plugins of the host rendering the theme, for example with data of the request in `prepare`. The helpers of the theme itself are in `compiled.js`, see [Helpers of the theme](./helpers.md#helpers-of-the-theme). `processXml` is in `blogger-hbs/runtime` as well. A compiled module is rendered by the version of `blogger-hbs` it is compiled with, `createRenderer` checks it.

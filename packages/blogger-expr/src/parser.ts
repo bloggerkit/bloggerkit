@@ -36,24 +36,42 @@ const KEYWORD_BINARY_OPS: Record<string, BinaryOperator> = {
 	gte: '>=',
 };
 
+const MINUS_SPACING =
+	"A '-' between two values needs a space before and after it, 'a - b', or parentheses next to it, '(a)- b' or 'a -(b)'";
+
+const isSpace = (char: string | undefined): boolean =>
+	char === ' ' || char === '\t' || char === '\n' || char === '\r';
+
+/** The operators of each binary level, as symbols and as keywords. */
+const EQUALITY = { symbols: ['==', '!='], keywords: ['eq', 'ne'] };
+const RELATIONAL = {
+	symbols: ['<=', '>=', '<', '>'],
+	keywords: ['lte', 'gte', 'lt', 'gt'],
+};
+const ADDITIVE = { symbols: ['+', '-'], keywords: [] };
+type MembershipOperator = 'in' | 'contains';
+const MEMBERSHIP_OPERATORS: readonly MembershipOperator[] = ['in', 'contains'];
+const MULTIPLICATIVE = { symbols: ['*', '/', '%'], keywords: [] };
+
+/** What `node` is, with its article, for messages: `An operator expression`. */
 function describeNode(node: Node): string {
 	switch (node.type) {
 		case 'BinaryExpression':
-			return 'operator expression';
+			return 'An operator expression';
 		case 'LogicalExpression':
-			return "'and'/'or' expression";
+			return "An 'and'/'or' expression";
 		case 'MembershipExpression':
-			return "'in'/'contains' expression";
+			return "An 'in'/'contains' expression";
 		case 'ConditionalExpression':
-			return "conditional ('?:') expression";
+			return "A conditional ('?:') expression";
 		case 'ElvisExpression':
-			return "elvis ('?:') expression";
+			return "An elvis ('?:') expression";
 		case 'NamedOperatorExpression':
-			return 'infix function call';
+			return 'An infix function call';
 		case 'LambdaExpression':
-			return "'filter'/'map'/'any'/'all'/'none' chain";
+			return "A 'filter'/'map'/'any'/'all'/'none' chain";
 		default:
-			return 'expression';
+			return 'An expression';
 	}
 }
 
@@ -107,19 +125,31 @@ class Parser {
 		return { start, end: this.tokens[this.pos]?.start ?? this.source.length };
 	}
 
-	private isKeyword(...names: string[]): boolean {
-		const t = this.peek();
-		return t.type === 'IDENT' && names.includes(t.value);
+	// whether the token `offset` tokens ahead is this one
+
+	private isKeyword(name: string, offset = 0): boolean {
+		const t = this.peek(offset);
+		return t.type === 'IDENT' && t.value === name;
 	}
 
-	private isOp(value: string): boolean {
-		const t = this.peek();
+	private isOp(value: string, offset = 0): boolean {
+		const t = this.peek(offset);
 		return t.type === 'OP' && t.value === value;
 	}
 
-	private isPunct(value: string): boolean {
-		const t = this.peek();
+	private isPunct(value: string, offset = 0): boolean {
+		const t = this.peek(offset);
 		return t.type === 'PUNCT' && t.value === value;
+	}
+
+	/** Items separated by commas, `parseItem` reading each, with its index. */
+	private parseSeparated<T>(parseItem: (index: number) => T): T[] {
+		const items = [parseItem(0)];
+		while (this.isPunct(',')) {
+			this.advance();
+			items.push(parseItem(items.length));
+		}
+		return items;
 	}
 
 	private expectPunct(value: string): Token {
@@ -167,7 +197,7 @@ class Parser {
 		const node = this.parseUnary();
 		if (!this.parenWrapped.has(node) && REQUIRES_WRAPPING.has(node.type)) {
 			throw new ParseError(
-				`A ${describeNode(node)} must be wrapped in parentheses to be used as ${context}, e.g. '(${this.source.slice(node.span.start, node.span.end)})'`,
+				`${describeNode(node)} must be wrapped in parentheses to be used as ${context}, e.g. '(${this.source.slice(node.span.start, node.span.end)})'`,
 				node.span.start,
 			);
 		}
@@ -246,78 +276,47 @@ class Parser {
 		const start = this.peek().start;
 		let left = this.parseEquality();
 		for (;;) {
-			if (this.isKeyword('in')) {
-				this.advance();
-				const right = this.parseEquality();
-				left = {
-					type: 'MembershipExpression',
-					operator: 'in',
-					negated: false,
-					left,
-					right,
-					span: this.span(start),
-				};
-				continue;
+			const membership = this.membershipOperator();
+			if (!membership) {
+				break;
 			}
-			if (this.isKeyword('contains')) {
+			this.advance();
+			if (membership.negated) {
 				this.advance();
-				const right = this.parseEquality();
-				left = {
-					type: 'MembershipExpression',
-					operator: 'contains',
-					negated: false,
-					left,
-					right,
-					span: this.span(start),
-				};
-				continue;
 			}
-			if (
-				this.isKeyword('not') &&
-				this.peek(1).type === 'IDENT' &&
-				this.peek(1).value === 'in'
-			) {
-				this.advance();
-				this.advance();
-				const right = this.parseEquality();
-				left = {
-					type: 'MembershipExpression',
-					operator: 'in',
-					negated: true,
-					left,
-					right,
-					span: this.span(start),
-				};
-				continue;
-			}
-			if (
-				this.isKeyword('not') &&
-				this.peek(1).type === 'IDENT' &&
-				this.peek(1).value === 'contains'
-			) {
-				this.advance();
-				this.advance();
-				const right = this.parseEquality();
-				left = {
-					type: 'MembershipExpression',
-					operator: 'contains',
-					negated: true,
-					left,
-					right,
-					span: this.span(start),
-				};
-				continue;
-			}
-			break;
+			const right = this.parseEquality();
+			left = {
+				type: 'MembershipExpression',
+				operator: membership.operator,
+				negated: membership.negated,
+				left,
+				right,
+				span: this.span(start),
+			};
 		}
 		return left;
+	}
+
+	/** `in`, `contains`, `not in` or `not contains`, if it is next. */
+	private membershipOperator():
+		| { operator: MembershipOperator; negated: boolean }
+		| undefined {
+		for (const operator of MEMBERSHIP_OPERATORS) {
+			if (this.isKeyword(operator)) {
+				return { operator, negated: false };
+			}
+			if (this.isKeyword('not') && this.isKeyword(operator, 1)) {
+				return { operator, negated: true };
+			}
+		}
+		return undefined;
 	}
 
 	private parseEquality(): Node {
 		const start = this.peek().start;
 		let left = this.parseRelational();
 		for (;;) {
-			const op = this.matchBinaryOp(['==', '!='], ['eq', 'ne']);
+			const op = this.matchBinaryOp(EQUALITY);
 			if (!op) {
 				break;
 			}
@@ -337,10 +336,7 @@ class Parser {
 		const start = this.peek().start;
 		let left = this.parseAdditive();
 		for (;;) {
-			const op = this.matchBinaryOp(
-				['<=', '>=', '<', '>'],
-				['lte', 'gte', 'lt', 'gt'],
-			);
+			const op = this.matchBinaryOp(RELATIONAL);
 			if (!op) {
 				break;
 			}
@@ -360,9 +356,17 @@ class Parser {
 		const start = this.peek().start;
 		let left = this.parseMultiplicative();
 		for (;;) {
-			const op = this.matchBinaryOp(['+', '-'], []);
+			const token = this.peek();
+			// `a -3` and `a-3`: a negative number right after a value
+			if (token.type === 'NUMBER' && token.value.startsWith('-')) {
+				throw new ParseError(MINUS_SPACING, token.start);
+			}
+			const op = this.matchBinaryOp(ADDITIVE);
 			if (!op) {
 				break;
+			}
+			if (op === '-') {
+				this.checkMinusSpacing(token);
 			}
 			const right = this.parseMultiplicative();
 			left = {
@@ -380,7 +384,7 @@ class Parser {
 		const start = this.peek().start;
 		let left = this.parseUnary();
 		for (;;) {
-			const op = this.matchBinaryOp(['*', '/', '%'], []);
+			const op = this.matchBinaryOp(MULTIPLICATIVE);
 			if (!op) {
 				break;
 			}
@@ -396,10 +400,13 @@ class Parser {
 		return left;
 	}
 
-	private matchBinaryOp(
-		symbols: string[],
-		keywords: string[],
-	): BinaryOperator | null {
+	private matchBinaryOp({
+		symbols,
+		keywords,
+	}: {
+		symbols: readonly string[];
+		keywords: readonly string[];
+	}): BinaryOperator | null {
 		const t = this.peek();
 		if (t.type === 'OP' && symbols.includes(t.value)) {
 			this.advance();
@@ -410,6 +417,22 @@ class Parser {
 			return KEYWORD_BINARY_OPS[t.value] as BinaryOperator;
 		}
 		return null;
+	}
+
+	/**
+	 * A `-` between two values has a space or `)` before it, and a space or
+	 * `(` after it: `-` is in names too, `data:n-3`, and starts negative
+	 * numbers, `-3`.
+	 */
+	private checkMinusSpacing({ start }: Token): void {
+		const before = this.source[start - 1];
+		const after = this.source[start + 1];
+		if (
+			!(isSpace(before) || before === ')') ||
+			!(isSpace(after) || after === '(')
+		) {
+			throw new ParseError(MINUS_SPACING, start);
+		}
 	}
 
 	private parseUnary(): Node {
@@ -424,15 +447,17 @@ class Parser {
 				span: this.span(start),
 			};
 		}
+		// with no value before it, a `-` is only in a negative number, `-5`,
+		// or before parentheses, which Blogger reads without it: `-(5)` is `5`
 		if (this.isOp('-')) {
-			this.advance();
-			const argument = this.parseUnary();
-			return {
-				type: 'UnaryExpression',
-				operator: '-',
-				argument,
-				span: this.span(start),
-			};
+			const minus = this.advance();
+			if (this.source[minus.end] !== '(') {
+				throw new ParseError(
+					"A '-' with no value before it is only in a negative number, '-5', or before parentheses, '-(...)', which Blogger reads without the '-'",
+					minus.start,
+				);
+			}
+			return this.parseUnary();
 		}
 		return this.parsePostfix();
 	}
@@ -506,8 +531,7 @@ class Parser {
 			if (
 				this.peek().type === 'IDENT' &&
 				LAMBDA_OPERATORS.has(this.peek().value as LambdaOperator) &&
-				this.peek(1).type === 'PUNCT' &&
-				this.peek(1).value === '('
+				this.isPunct('(', 1)
 			) {
 				const operator = this.advance().value as LambdaOperator;
 				this.advance(); // '('
@@ -573,150 +597,151 @@ class Parser {
 	}
 
 	private parseArgList(): Node[] {
-		const args: Node[] = [];
 		if (this.isPunct(')')) {
-			return args;
+			return [];
 		}
-		args.push(this.parseRestrictedValue('a function argument'));
-		while (this.isPunct(',')) {
-			this.advance();
-			args.push(this.parseRestrictedValue('a function argument'));
-		}
-		return args;
+		return this.parseSeparated(() =>
+			this.parseRestrictedValue('a function argument'),
+		);
 	}
 
 	private parsePrimary(): Node {
 		const t = this.peek();
-		const start = t.start;
-
-		if (t.type === 'NUMBER') {
-			this.advance();
-			return {
-				type: 'NumberLiteral',
-				value: Number(t.value),
-				span: this.span(start),
-			};
-		}
-
-		if (t.type === 'STRING') {
-			this.advance();
-			return { type: 'StringLiteral', value: t.value, span: this.span(start) };
-		}
-
-		if (t.type === 'DATA') {
-			this.advance();
-			const segments = t.value.split('.').filter((s) => s.length > 0);
-			if (segments.length === 0) {
-				return { type: 'EmptyDataReference', span: this.span(start) };
-			}
-			let node: Node = {
-				type: 'DataReference',
-				name: segments[0],
-				span: this.span(start),
-			};
-			for (let k = 1; k < segments.length; k++) {
-				node = {
-					type: 'MemberExpression',
-					object: node,
-					property: segments[k] as string,
-					span: this.span(start),
-				};
-			}
-			return node;
-		}
-
-		if (t.type === 'IDENT') {
-			if (
-				t.value === 'true' ||
-				t.value === 'false' ||
-				t.value === 'yes' ||
-				t.value === 'no'
-			) {
+		switch (t.type) {
+			case 'NUMBER':
 				this.advance();
 				return {
-					type: 'BooleanLiteral',
-					value: t.value === 'true' || t.value === 'yes',
-					span: this.span(start),
+					type: 'NumberLiteral',
+					value: Number(t.value),
+					span: this.span(t.start),
 				};
-			}
-			if (t.value === 'null' || t.value === 'nil') {
-				throw new ParseError(
-					`Blogger does not support a '${t.value}' literal — there is no way to write a literal null value`,
-					t.start,
-				);
-			}
-			const followedByCall =
-				this.peek(1).type === 'PUNCT' && this.peek(1).value === '(';
-			if (!followedByCall && t.value !== this.activeParam) {
-				throw new ParseError(
-					`Unknown identifier '${t.value}' — values must be accessed as 'data:${t.value}'` +
-						(this.activeParam
-							? `, or by referencing the in-scope lambda parameter '${this.activeParam}'`
-							: ' (no lambda parameter is in scope here)'),
-					t.start,
-				);
-			}
-			this.advance();
-			return { type: 'Identifier', name: t.value, span: this.span(start) };
-		}
-
-		if (t.type === 'PUNCT' && t.value === '(') {
-			this.advance();
-			const expr = this.parseExpression();
-			this.expectPunct(')');
-			// Mark this exact node object as having come straight out of a
-			// paren group, so `parseRestrictedValue` and the postfix guards
-			// above can tell a wrapped expression apart from a bare one even
-			// though the node shape is otherwise identical.
-			this.parenWrapped.add(expr);
-			return expr;
-		}
-
-		if (t.type === 'PUNCT' && t.value === '[') {
-			this.advance();
-			const elements: Node[] = [];
-			if (!this.isPunct(']')) {
-				elements.push(this.parseRestrictedValue('a list element'));
-				while (this.isPunct(',')) {
-					this.advance();
-					elements.push(this.parseRestrictedValue('a list element'));
+			case 'STRING':
+				this.advance();
+				return {
+					type: 'StringLiteral',
+					value: t.value,
+					span: this.span(t.start),
+				};
+			case 'DATA':
+				return this.parseDataPath(t);
+			case 'IDENT':
+				return this.parseWord(t);
+			case 'PUNCT':
+				if (t.value === '(') {
+					return this.parseParenthesized();
 				}
-			}
-			this.expectPunct(']');
-			return { type: 'ListLiteral', elements, span: this.span(start) };
-		}
-
-		if (t.type === 'PUNCT' && t.value === '{') {
-			this.advance();
-			let node: Node;
-			if (this.isPunct('}')) {
-				node = { type: 'SetLiteral', elements: [], span: this.span(start) };
-			} else if (this.peekIsMapKey()) {
-				const entries: MapEntry[] = [this.parseMapEntry()];
-				while (this.isPunct(',')) {
-					this.advance();
-					entries.push(this.parseMapEntry());
+				if (t.value === '[') {
+					return this.parseList(t);
 				}
-				node = { type: 'MapLiteral', entries, span: this.span(start) };
-			} else {
-				const elements: Node[] = [this.parseRestrictedValue('a set element')];
-				while (this.isPunct(',')) {
-					this.advance();
-					if (this.peekIsMapKey()) {
-						throw new ParseError(
-							"Cannot mix a keyed map entry into a set literal ('{a, b}' vs '{a: 1, b: 2}')",
-							this.peek().start,
-						);
-					}
-					elements.push(this.parseRestrictedValue('a set element'));
+				if (t.value === '{') {
+					return this.parseBraces(t);
 				}
-				node = { type: 'SetLiteral', elements, span: this.span(start) };
-			}
-			this.expectPunct('}');
-			return node;
 		}
-
 		throw new ParseError(`Unexpected token '${t.value || t.type}'`, t.start);
+	}
+
+	/** `data:a.b.c`, a reference with a member for each segment after the first. */
+	private parseDataPath(t: Token): Node {
+		this.advance();
+		const segments = t.value.split('.').filter((s) => s.length > 0);
+		if (segments.length === 0) {
+			return { type: 'EmptyDataReference', span: this.span(t.start) };
+		}
+		let node: Node = {
+			type: 'DataReference',
+			name: segments[0],
+			span: this.span(t.start),
+		};
+		for (let k = 1; k < segments.length; k++) {
+			node = {
+				type: 'MemberExpression',
+				object: node,
+				property: segments[k] as string,
+				span: this.span(t.start),
+			};
+		}
+		return node;
+	}
+
+	/** A boolean, a function name, or the parameter of the lambda it is in. */
+	private parseWord(t: Token): Node {
+		if (
+			t.value === 'true' ||
+			t.value === 'false' ||
+			t.value === 'yes' ||
+			t.value === 'no'
+		) {
+			this.advance();
+			return {
+				type: 'BooleanLiteral',
+				value: t.value === 'true' || t.value === 'yes',
+				span: this.span(t.start),
+			};
+		}
+		if (t.value === 'null' || t.value === 'nil') {
+			throw new ParseError(
+				`Blogger does not support a '${t.value}' literal — there is no way to write a literal null value`,
+				t.start,
+			);
+		}
+		if (!this.isPunct('(', 1) && t.value !== this.activeParam) {
+			throw new ParseError(
+				`Unknown identifier '${t.value}' — values must be accessed as 'data:${t.value}'` +
+					(this.activeParam
+						? `, or by referencing the in-scope lambda parameter '${this.activeParam}'`
+						: ' (no lambda parameter is in scope here)'),
+				t.start,
+			);
+		}
+		this.advance();
+		return { type: 'Identifier', name: t.value, span: this.span(t.start) };
+	}
+
+	private parseParenthesized(): Node {
+		this.advance();
+		const expr = this.parseExpression();
+		this.expectPunct(')');
+		// Mark this exact node object as having come straight out of a
+		// paren group, so `parseRestrictedValue` and the postfix guards
+		// above can tell a wrapped expression apart from a bare one even
+		// though the node shape is otherwise identical.
+		this.parenWrapped.add(expr);
+		return expr;
+	}
+
+	/** `[a, b]` */
+	private parseList(t: Token): Node {
+		this.advance();
+		const elements = this.isPunct(']')
+			? []
+			: this.parseSeparated(() => this.parseRestrictedValue('a list element'));
+		this.expectPunct(']');
+		return { type: 'ListLiteral', elements, span: this.span(t.start) };
+	}
+
+	/** `{}` and `{a, b}`, a set, or `{a: 1, b: 2}`, a map. */
+	private parseBraces(t: Token): Node {
+		this.advance();
+		let node: Node;
+		if (this.isPunct('}')) {
+			node = { type: 'SetLiteral', elements: [], span: this.span(t.start) };
+		} else if (this.peekIsMapKey()) {
+			const entries = this.parseSeparated(() => this.parseMapEntry());
+			node = { type: 'MapLiteral', entries, span: this.span(t.start) };
+		} else {
+			const elements = this.parseSeparated((index) => {
+				if (index > 0 && this.peekIsMapKey()) {
+					throw new ParseError(
+						"Cannot mix a keyed map entry into a set literal ('{a, b}' vs '{a: 1, b: 2}')",
+						this.peek().start,
+					);
+				}
+				return this.parseRestrictedValue('a set element');
+			});
+			node = { type: 'SetLiteral', elements, span: this.span(t.start) };
+		}
+		this.expectPunct('}');
+		return node;
 	}
 
 	private peekIsMapKey(): boolean {

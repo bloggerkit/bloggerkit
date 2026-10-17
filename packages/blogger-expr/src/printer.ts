@@ -131,7 +131,7 @@ function levelOf(node: Node): Level {
 		case 'UnaryExpression':
 			return Level.Unary;
 		case 'NumberLiteral':
-			// printed with a leading `-`, which is a unary minus when read
+			// printed with a leading `-`, kept in parentheses where a `.` follows
 			return isNegative(node.value) ? Level.Unary : Level.Primary;
 		case 'MemberExpression':
 		case 'IndexExpression':
@@ -228,7 +228,7 @@ const child = (parent: TreePath, segment: string): TreePath => ({
 const ROOT: TreePath = { parent: null, segment: 'root' };
 
 const BINARY_OPERATORS = new Set(Object.keys(BINARY_LEVELS));
-const UNARY_OPERATORS = new Set(['!', '-']);
+const UNARY_OPERATORS = new Set(['!']);
 const LOGICAL_OPERATORS = new Set(['and', 'or']);
 const MEMBERSHIP_OPERATORS = new Set(['in', 'contains']);
 
@@ -936,7 +936,14 @@ const group = (doc: Doc): Group => ({ kind: 'group', doc });
 const indent = (doc: Doc): Indent => ({ kind: 'indent', doc });
 
 function join(separator: Doc, docs: Doc[]): Doc[] {
-	return docs.flatMap((doc, i) => (i === 0 ? [doc] : [separator, doc]));
+	const joined: Doc[] = [];
+	for (let i = 0; i < docs.length; i++) {
+		if (i > 0) {
+			joined.push(separator);
+		}
+		joined.push(docs[i] as Doc);
+	}
+	return joined;
 }
 
 function parenthesize(doc: Doc): Doc {

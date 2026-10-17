@@ -1,17 +1,19 @@
 import { BloggerImage } from 'blogger-images';
 import type { FunctionName } from './ast';
-import type { Value } from './evaluator';
+import { WIDTH_PROBLEM, widthOf } from './grammar';
+import { imageValue, plain, RichValue, type Value } from './values';
 
 /**
  * The fixed, non-extensible set of functions callable from an expression.
  * There is no way to register additional functions — see `FUNCTION_NAMES` in
- * parser.ts, which enforces (at parse time) that only these names are ever
+ * grammar.ts, which enforces (at parse time) that only these names are ever
  * called, and `FUNCTION_SIGNATURES`, which enforces their arity and (for
  * literal arguments) their types.
  */
 export type BuiltinFunction = (...args: Value[]) => Value;
 
-function asString(v: Value, fnName: string, argIndex: number): string {
+function asString(value: Value, fnName: string, argIndex: number): string {
+	const v = plain(value);
 	if (typeof v === 'string') {
 		return v;
 	}
@@ -24,7 +26,8 @@ function asString(v: Value, fnName: string, argIndex: number): string {
 	throw new TypeError(`${fnName}(): argument ${argIndex + 1} must be a string`);
 }
 
-function asNumber(v: Value, fnName: string, argIndex: number): number {
+function asNumber(value: Value, fnName: string, argIndex: number): number {
+	const v = plain(value);
 	if (typeof v === 'number') {
 		return v;
 	}
@@ -34,18 +37,37 @@ function asNumber(v: Value, fnName: string, argIndex: number): number {
 	throw new TypeError(`${fnName}(): argument ${argIndex + 1} must be a number`);
 }
 
+/** A width of an image, see `widthOf`, the argument or an item of it, at `itemIndex`. */
+function asWidth(
+	value: Value,
+	fnName: string,
+	argIndex: number,
+	itemIndex?: number,
+): number {
+	const width = widthOf(plain(value));
+	if (width === undefined) {
+		const item = itemIndex === undefined ? '' : `item ${itemIndex + 1} of `;
+		throw new TypeError(
+			`${fnName}(): ${item}argument ${argIndex + 1} ${WIDTH_PROBLEM}, got: ${JSON.stringify(value)}`,
+		);
+	}
+	return width;
+}
+
 function asMap(
-	v: Value,
+	value: Value,
 	fnName: string,
 	argIndex: number,
 ): Record<string, Value> {
+	const v = plain(value);
 	if (v && typeof v === 'object' && !Array.isArray(v)) {
 		return v as Record<string, Value>;
 	}
 	throw new TypeError(`${fnName}(): argument ${argIndex + 1} must be a map`);
 }
 
-function asList(v: Value, fnName: string, argIndex: number): Value[] {
+function asList(value: Value, fnName: string, argIndex: number): Value[] {
+	const v = plain(value);
 	if (Array.isArray(v)) {
 		return v;
 	}
@@ -89,7 +111,8 @@ function withParams(
 	const [base, query] = splitQuery(rest);
 	// appended after the parameters of the URL, or instead of them
 	const searchParams = new URLSearchParams(append ? query : '');
-	for (const [key, value] of Object.entries(extra)) {
+	for (const [key, extraValue] of Object.entries(extra)) {
+		const value = plain(extraValue);
 		if (value !== null && typeof value === 'object') {
 			throw new TypeError(
 				`The value of the parameter '${key}' must be a string, a number or a boolean`,
@@ -227,14 +250,12 @@ const pad2 = (n: number): string => String(n).padStart(2, '0');
  * h, mm, m, ss, s, a. Text in single quotes is kept as it is, `''` is a quote.
  */
 const format: BuiltinFunction = (...args) => {
-	const raw = args[0];
+	const raw = plain(args[0] ?? null) as unknown;
 	const pattern = asString(args[1] ?? 'yyyy-MM-dd', 'format', 1);
 	let date: Date;
 	if (raw instanceof Date) {
 		date = raw;
-	} else if (typeof raw === 'number') {
-		date = new Date(raw);
-	} else if (typeof raw === 'string') {
+	} else if (typeof raw === 'number' || typeof raw === 'string') {
 		date = new Date(raw);
 	} else {
 		throw new TypeError(
@@ -285,31 +306,46 @@ const format: BuiltinFunction = (...args) => {
  * `resizeImage(image, width, [ratio])`
  *
  * Resizes a Blogger hosted image (`blogger.googleusercontent.com`,
- * `bp.blogspot.com`) to `width`, cropped to the ratio when one is given:
- * `...=w640-h360-p-k-no-nu`. `ratio` is a `"W:H"` string, e.g. `"16:9"`.
- * Other URLs are returned unchanged.
+ * `bp.blogspot.com`) to `width`, an integer of 0 or more as a number or a
+ * string of digits only, `...=w640`, and crops it to `ratio` when
+ * Blogger supports it, `...=w640-h360-p-k-no-nu`. `ratio` is a `"W:H"`
+ * string of positive integers, `"16:9"`, its first one at least as large as
+ * the second: a taller one, `"9:16"`, is ignored. Other URLs are returned
+ * unchanged.
+ *
+ * The image it gives has `.isResizable`, `.width` and `.height`, `null` when
+ * it is not known.
  */
 const resizeImage: BuiltinFunction = (...args) => {
 	const url = asString(args[0] ?? '', 'resizeImage', 0);
-	const width = Math.round(asNumber(args[1] ?? 0, 'resizeImage', 1));
-	if (!Number.isFinite(width) || width < 1) {
-		throw new TypeError('resizeImage(): argument 2 must be a positive number');
-	}
+	const width = asWidth(args[1] ?? null, 'resizeImage', 1);
 	const height = resolveHeight(width, args[2], 'resizeImage');
 
 	// the size of the URL is replaced, other URLs are left as they are
 	const image = new BloggerImage(url, { existing: false, passThrough: true });
 	if (!image.isSupported()) {
-		return url;
+		return imageValue(url);
 	}
 	image.width(width);
-	if (height) {
-		image.height(height).alternateCrop(true);
+	if (height !== null) {
+		image
+			.height(height)
+			.alternateCrop(true)
+			.disableAnimation(true)
+			.noButton(true)
+			.noUpscaling(true);
 	}
-	return image.disableAnimation(true).noButton(true).noUpscaling(true).url();
+	return new RichValue(image.url(), { isResizable: true, width, height });
 };
 
-/** The height for `width` at a `"W:H"` ratio, e.g. `"16:9"`, if one is given. */
+/** A ratio, `"16:9"`, spaces allowed around its numbers. */
+const RATIO = /^\s*(\d+)\s*:\s*(\d+)\s*$/;
+
+/**
+ * The height for `width` at a `"W:H"` ratio, `null` without one, and for a
+ * ratio Blogger does not crop to, taller than wide. A ratio that is not two
+ * positive integers is an error, Blogger does not render it.
+ */
 function resolveHeight(
 	width: number,
 	ratioArg: Value | undefined,
@@ -318,16 +354,16 @@ function resolveHeight(
 	if (ratioArg === undefined || ratioArg === null) {
 		return null;
 	}
-	const match =
-		typeof ratioArg === 'string' ? /^(\d+):(\d+)$/.exec(ratioArg) : null;
+	const ratio = plain(ratioArg);
+	const match = typeof ratio === 'string' ? RATIO.exec(ratio) : null;
 	const w = Number(match?.[1]);
 	const h = Number(match?.[2]);
 	if (!match || w === 0 || h === 0) {
 		throw new TypeError(
-			`${fnName}(): argument 3 must be a ratio like "16:9", got: ${JSON.stringify(ratioArg)}`,
+			`${fnName}(): argument 3 must be a ratio of positive integers like "16:9", got: ${JSON.stringify(ratioArg)}`,
 		);
 	}
-	return Math.round((width * h) / w);
+	return w >= h ? Math.round((width * h) / w) : null;
 }
 
 /**
@@ -344,10 +380,10 @@ const sourceSet: BuiltinFunction = (...args) => {
 	// checked here, for the error to name this function
 	resolveHeight(1, ratioArg, 'sourceSet');
 	return widths
-		.map((w) => {
-			const width = Math.round(asNumber(w, 'sourceSet', 1));
+		.map((w, index) => {
+			const width = asWidth(w, 'sourceSet', 1, index);
 			const resized = resizeImage(image, width, ratioArg as Value);
-			return `${resized} ${width}w`;
+			return `${String(plain(resized))} ${width}w`;
 		})
 		.join(', ');
 };

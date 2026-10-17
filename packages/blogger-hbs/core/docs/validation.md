@@ -16,7 +16,14 @@ Every template, and every partial a plugin provides, is checked as XML with its 
 
 ## The rendered theme
 
-With `output.validate`, `true` by default, the rendered theme is checked as Blogger reads it: well-formed XML, the XML declaration on the first line and the doctype on the second, `<html>` as the root element, and every expression parsing.
+With `output.validate`, `true` by default, the rendered theme is checked as Blogger reads it: well-formed XML, the XML declaration on the first line and the doctype on the second, `<html>` as the root element, and every expression parsing. Every error is reported at once, but nothing after a syntax error, an unclosed tag or an invalid entity, can be checked:
+
+```
+✗ The rendered template is not valid XML
+  Caused by: 2 errors:
+    Unknown widget type 'Html', did you mean 'HTML'? (dist/theme.xml:12:31)
+    <b:section> can only have <b:widget> in it, found <div> (dist/theme.xml:20:5)
+```
 
 The `b:` attributes of `<html>` are those Blogger knows, with the values it accepts, the others are left as they are:
 
@@ -32,13 +39,15 @@ Its layout is checked as Blogger does when saving it, whitespace and comments as
 - `<b:section>` has only `<b:widget>` in it, and a `<b:widget>` is only in a `<b:section>`
 - `<b:widget>` has at most one `<b:widget-settings>` and any `<b:includable>`, nothing else, and a `<b:widget-settings>` is only in a `<b:widget>`
 - `<b:widget-settings>` has only `<b:widget-setting>` in it, and a `<b:widget-setting>` is only in a `<b:widget-settings>`
+- `<b:defaultmarkups>` has only `<b:defaultmarkup>` in it, and a `<b:defaultmarkup>` is only in a `<b:defaultmarkups>`
+- `<b:defaultmarkup>` has only `<b:includable>` in it, and a `<b:includable>` is only in a `<b:defaultmarkup>` or a `<b:widget>`
 
 ```
 ✗ The rendered template is not valid XML
   Caused by: <b:widget> can only have one <b:widget-settings> (dist/theme.xml:12:5)
 ```
 
-Only the `b:` elements Blogger knows are accepted, with their attributes. Every attribute can be written as `expr:name` as well, `expr:value='data:x'`. With both, on any element, Blogger uses `expr:name` and a warning says so:
+Only the `b:` elements Blogger knows are accepted. An attribute Blogger does not read on one is a warning, `<b:if> has the attribute 'rel', Blogger only reads 'cond'`, and it is kept, except on `<b:section>` and `<b:tag>`, which can have any. Every attribute but those below can be written as `expr:name` as well, `expr:value='data:x'`. With both, on any element, Blogger uses `expr:name` and a warning says so:
 
 | Element            | Has to have     | Can have                                        |
 | ------------------ | --------------- | ----------------------------------------------- |
@@ -63,6 +72,12 @@ Only the `b:` elements Blogger knows are accepted, with their attributes. Every 
 | `b:with`           | `var`, `value`  |                                                 |
 
 `b:comment`, `b:default`, `b:defaultmarkups`, `b:else`, `b:template-skin` and `b:widget-settings` have no attributes.
+
+Some attributes are read by Blogger when saving, it ignores `expr:name` for them, with a warning: `id` and `type` of `<b:widget>`, `id` of `<b:includable>`, and `var` and `index` of `<b:loop>`. With both, Blogger uses `name`.
+
+`type` of `<b:widget>` is a widget type Blogger has: `AdSense`, `Attribution`, `Blog`, `BlogArchive`, `BloggerButton`, `BlogList`, `BlogSearch`, `ContactForm`, `FeaturedPost`, `Feed`, `Followers`, `Header`, `HTML`, `Image`, `Label`, `LinkList`, `PageList`, `PopularPosts`, `Profile`, `ReportAbuse`, `Stats`, `Subscribe`, `Text`, `TextList`, `Translate` or `Wikipedia`.
+
+`id` of `<b:widget>` is its type and a number, `HTML1` or `Blog000`.
 
 ```
 ✗ The rendered template is not valid XML
@@ -89,10 +104,27 @@ The theme is written even when it is not valid, to look at where it is not.
 
 ## From JavaScript
 
-`validateXml(xml, { path?, onWarn? })` and `formatXml(xml, { path?, onWarn? })` do the same, from `blogger-hbs` or `blogger-hbs/runtime`, a Cloudflare Worker too. They throw an `XmlError`, its place in `loc`, see [Errors](./errors.md), and give the warnings to `onWarn`, `console.warn` by default.
+`processXml(xml, { path?, format? })` does the same, from `blogger-hbs` or `blogger-hbs/runtime`, a Cloudflare Worker too. It validates the theme, formats it with `format`, and returns it with its warnings and what it is made of. It throws an `XmlError` with every error in `errors`, see [Errors](./errors.md).
 
 ```ts
-import { formatXml } from "blogger-hbs/runtime";
+import { processXml } from "blogger-hbs/runtime";
 
-const xml = formatXml(await renderer.render(context));
+const { xml, warnings, info } = processXml(await renderer.render(context), {
+  path: "theme.xml",
+  format: true,
+});
 ```
+
+| Result     | Is                                                                   |
+| ---------- | -------------------------------------------------------------------- |
+| `xml`      | the theme, formatted with `format`                                   |
+| `warnings` | `{ message, loc }`, in `xml`, so the places are in the theme written |
+| `info`     | what `xml` is made of, the CLI shows it after a build                |
+
+| `info`     | Is                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------- |
+| `root`     | the `b:` attributes of `<html>`, `{ 'b:layoutsVersion': '3' }`                      |
+| `sections` | `{ id, loc }` of every `<b:section>`                                                |
+| `widgets`  | `{ id, type, section, loc }` of every `<b:widget>`, `section` the id of its section |
+| `scripts`  | `{ count, size }` of the `<script>` elements, `size` the bytes in them              |
+| `styles`   | `{ count, size }` of the `<style>`, `<b:skin>` and `<b:template-skin>` elements     |

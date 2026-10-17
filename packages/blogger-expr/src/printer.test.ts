@@ -154,7 +154,8 @@ describe('operators', () => {
 		['(1 + 2) * 3', '(1 + 2) * 3'],
 		['(1 - 2) - 3', '1 - 2 - 3'],
 		['1 - (2 - 3)', '1 - (2 - 3)'],
-		['-(1 + 2)', '-(1 + 2)'],
+		// Blogger reads `-(...)` without its `-`
+		['-(1 + 2)', '1 + 2'],
 		['(data:a or data:b) and data:c', '(data:a or data:b) and data:c'],
 		['data:a in [1] not in [2]', 'data:a in [1] not in [2]'],
 		['data:a in ([1] contains 1)', 'data:a in ([1] contains 1)'],

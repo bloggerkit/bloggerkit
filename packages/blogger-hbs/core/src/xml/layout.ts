@@ -1,31 +1,37 @@
-import { suggest } from '../utils/suggest';
-import {
-	type OpenElement,
-	type Position,
-	type ScannedAttribute,
-	type ScannedStartTag,
-	XmlSyntaxError,
-} from './scanner';
+import { didYouMean, suggest } from '../utils/suggest';
+import type { OpenElement, ScannedAttribute, ScannedStartTag } from './scanner';
 
 /** The only elements Blogger accepts in these, whitespace and comments aside. */
 const CHILDREN = new Map([
 	['b:section', ['b:widget']],
 	['b:widget', ['b:widget-settings', 'b:includable']],
 	['b:widget-settings', ['b:widget-setting']],
+	['b:defaultmarkups', ['b:defaultmarkup']],
+	['b:defaultmarkup', ['b:includable']],
 ]);
 
-/** The only element Blogger accepts these in. */
+/** The only elements Blogger accepts these in. */
 const PARENTS = new Map([
-	['b:widget', 'b:section'],
-	['b:widget-settings', 'b:widget'],
-	['b:widget-setting', 'b:widget-settings'],
+	['b:widget', ['b:section']],
+	['b:widget-settings', ['b:widget']],
+	['b:widget-setting', ['b:widget-settings']],
+	['b:includable', ['b:defaultmarkup', 'b:widget']],
+	['b:defaultmarkup', ['b:defaultmarkups']],
 ]);
 
-interface Attributes {
+export interface Attributes {
 	required?: string[];
 	optional?: string[];
-	/** Any other attribute too, as `<b:tag>` renders a tag with them. */
-	any?: true;
+	/** Of those, the ones Blogger reads when saving, it ignores `expr:name` for them. */
+	literal?: string[];
+	/**
+	 * What another attribute is: `'warn'`, by default, as Blogger keeps it but
+	 * does not read it, `'error'`, or `'allow'`, as `<b:tag>` renders a tag
+	 * with them.
+	 */
+	others?: 'allow' | 'warn' | 'error';
+	/** `required` and `optional`, set once for every element. */
+	known?: Set<string>;
 }
 
 /**
@@ -45,27 +51,114 @@ const ELEMENTS = new Map<string, Attributes>([
 	['b:eval', { required: ['expr'] }],
 	['b:if', { required: ['cond'] }],
 	['b:include', { required: ['name'], optional: ['data', 'cond'] }],
-	['b:includable', { required: ['id'], optional: ['var'] }],
-	['b:loop', { required: ['values', 'var'], optional: ['index'] }],
+	['b:includable', { required: ['id'], optional: ['var'], literal: ['id'] }],
+	[
+		'b:loop',
+		{
+			required: ['values', 'var'],
+			optional: ['index'],
+			literal: ['var', 'index'],
+		},
+	],
 	['b:message', { required: ['name'] }],
 	['b:param', { required: ['name', 'value'] }],
 	// other attributes too, for now
-	['b:section', { required: ['id'], any: true }],
+	['b:section', { required: ['id'], others: 'allow' }],
 	['b:skin', { optional: ['version'] }],
 	['b:switch', { required: ['var'] }],
-	['b:tag', { required: ['name'], any: true }],
+	['b:tag', { required: ['name'], others: 'allow' }],
 	['b:template-skin', {}],
 	[
 		'b:widget',
 		{
 			required: ['id', 'type'],
 			optional: ['locked', 'title', 'version', 'visible', 'cond'],
+			literal: ['id', 'type'],
 		},
 	],
 	['b:widget-setting', { required: ['name'] }],
 	['b:widget-settings', {}],
 	['b:with', { required: ['var', 'value'] }],
 ]);
+
+for (const attributes of ELEMENTS.values()) {
+	attributes.known = new Set([
+		...(attributes.required ?? []),
+		...(attributes.optional ?? []),
+	]);
+}
+
+/** `name` without `expr:`. */
+function baseOf(name: string): string {
+	return name.startsWith('expr:') ? name.slice('expr:'.length) : name;
+}
+
+/** The widget types Blogger has, for `<b:widget type>`. */
+const WIDGET_TYPES = [
+	'AdSense',
+	'Attribution',
+	'Blog',
+	'BlogArchive',
+	'BloggerButton',
+	'BlogList',
+	'BlogSearch',
+	'ContactForm',
+	'FeaturedPost',
+	'Feed',
+	'Followers',
+	'Header',
+	'HTML',
+	'Image',
+	'Label',
+	'LinkList',
+	'PageList',
+	'PopularPosts',
+	'Profile',
+	'ReportAbuse',
+	'Stats',
+	'Subscribe',
+	'Text',
+	'TextList',
+	'Translate',
+	'Wikipedia',
+];
+
+/** Reports an error or a warning at an offset in the document, placed only when reported. */
+export interface Report {
+	error(message: string, offset: number): void;
+	warn(message: string, offset: number): void;
+}
+
+/** Reports unless the `type` of a widget is one Blogger has, and its `id` is the type and a number, `HTML1`. */
+function checkWidget(
+	attributes: readonly ScannedAttribute[],
+	report: Report,
+): void {
+	const type = attributes.find((attribute) => attribute.name === 'type');
+	if (type === undefined) {
+		return;
+	}
+	if (!WIDGET_TYPES.includes(type.value)) {
+		report.error(
+			`Unknown widget type '${type.value}'${didYouMean(type.value, WIDGET_TYPES)}`,
+			type.offset,
+		);
+		return;
+	}
+	const id = attributes.find((attribute) => attribute.name === 'id');
+	if (
+		id !== undefined &&
+		!(
+			id.value.startsWith(type.value) &&
+			/^\d+$/.test(id.value.slice(type.value.length))
+		)
+	) {
+		report.error(
+			`The attribute 'id' of <b:widget> has to be '${type.value}' and a number, '${type.value}1', got: '${id.value}'`,
+			id.offset,
+		);
+	}
+}
 
 /** `'a'`, `'a' and 'b'`, `'a', 'b' and 'c'`, or with `or` */
 function listOf(names: readonly string[], last: 'and' | 'or' = 'and'): string {
@@ -103,96 +196,138 @@ const ROOT_ATTRIBUTES = new Map<string, RootAttribute>([
 	['b:templateVersion', anything],
 ]);
 
-/** Throws unless the `b:` attributes of the root element are those Blogger accepts. */
-function checkRootAttributes(attributes: readonly ScannedAttribute[]): void {
+/** Reports the `b:` attributes of the root element Blogger does not accept. */
+function checkRootAttributes(
+	attributes: readonly ScannedAttribute[],
+	report: Report,
+): void {
 	for (const attribute of attributes) {
 		if (!attribute.name.startsWith('b:')) {
 			continue;
 		}
 		const accepted = ROOT_ATTRIBUTES.get(attribute.name);
 		if (accepted === undefined) {
-			throw new XmlSyntaxError(
+			report.error(
 				`<html> can not have the attribute '${attribute.name}', only ${listOf([...ROOT_ATTRIBUTES.keys()])}`,
-				attribute.positionOf(0),
+				attribute.offset,
 			);
-		}
-		if (!accepted.test(attribute.value)) {
-			throw new XmlSyntaxError(
+		} else if (!accepted.test(attribute.value)) {
+			report.error(
 				`The attribute '${attribute.name}' of <html> has to be ${accepted.accepts}, got: '${attribute.value}'`,
-				attribute.positionOf(0),
+				attribute.offset,
 			);
 		}
 	}
 }
 
-/** Throws unless the attributes are those Blogger accepts on `name`. */
-function checkAttributes(
+/**
+ * Reports the attributes of `<name>` it does not know, as `others` says,
+ * and the required ones it misses, at `start`.
+ */
+export function checkAttributes(
 	name: string,
-	{ required = [], optional = [], any }: Attributes,
+	{
+		required = [],
+		literal = [],
+		others = 'warn',
+		known = new Set(),
+	}: Attributes,
 	attributes: readonly ScannedAttribute[],
-	fail: (message: string) => never,
+	report: Report,
+	start: number,
 ): void {
-	const known = [...required, ...optional];
 	const names = new Set(attributes.map((attribute) => attribute.name));
 
 	for (const attribute of attributes) {
-		const base = attribute.name.replace(/^expr:/, '');
-		if (!any && !known.includes(base)) {
-			throw new XmlSyntaxError(
-				known.length === 0
+		if (others === 'allow' || known.has(baseOf(attribute.name))) {
+			continue;
+		}
+		if (others === 'error') {
+			report.error(
+				known.size === 0
 					? `<${name}> can not have attributes, found '${attribute.name}'`
-					: `<${name}> can not have the attribute '${attribute.name}', only ${listOf(known)}`,
-				attribute.positionOf(0),
+					: `<${name}> can not have the attribute '${attribute.name}', only ${listOf([...known])}`,
+				attribute.offset,
+			);
+		} else {
+			report.warn(
+				known.size === 0
+					? `<${name}> has the attribute '${attribute.name}', Blogger reads no attribute on it`
+					: `<${name}> has the attribute '${attribute.name}', Blogger only reads ${listOf([...known])}`,
+				attribute.offset,
 			);
 		}
 	}
 
 	for (const key of required) {
-		if (!names.has(key) && !names.has(`expr:${key}`)) {
-			fail(`<${name}> has to have the attribute '${key}'`);
+		if (
+			names.has(key) ||
+			(!literal.includes(key) && names.has(`expr:${key}`))
+		) {
+			continue;
 		}
+		report.error(
+			`<${name}> has to have the attribute '${key}'${names.has(`expr:${key}`) ? `, 'expr:${key}' is not used` : ''}`,
+			start,
+		);
 	}
 }
 
 export interface LayoutCheck {
 	onStartTag(tag: ScannedStartTag): void;
 	onEndTag(element: OpenElement): void;
-	onText(position: Position, parent: OpenElement | undefined): void;
+	onText(offset: number, parent: OpenElement | undefined): void;
 }
 
 /**
- * Checks the layout elements of a theme as Blogger does when saving it:
- * widgets are in sections, settings and includables in widgets.
- */
-/**
  * Warns about an attribute written both as `x` and `expr:x`, on any element:
- * Blogger uses `expr:x`, `x` never reaches the page.
+ * Blogger uses `expr:x`, or `x` when it is `literal`, and ignores `expr:x`
+ * of a literal alone.
  */
 function warnOverridden(
 	name: string,
 	attributes: readonly ScannedAttribute[],
-	warn: (message: string, position: Position) => void,
+	literal: readonly string[],
+	{ warn }: Report,
 ): void {
+	// both forms, or `expr:` of a literal, need an `expr:` attribute
+	if (!attributes.some((attribute) => attribute.name.startsWith('expr:'))) {
+		return;
+	}
 	const names = new Set(attributes.map((attribute) => attribute.name));
 	for (const attribute of attributes) {
-		if (
-			!attribute.name.startsWith('expr:') &&
-			names.has(`expr:${attribute.name}`)
-		) {
+		const base = baseOf(attribute.name);
+		if (literal.includes(base)) {
+			if (base !== attribute.name && !names.has(base)) {
+				warn(
+					`Blogger ignores '${attribute.name}' on <${name}>, '${base}' can not be an expression`,
+					attribute.offset,
+				);
+			} else if (base === attribute.name && names.has(`expr:${base}`)) {
+				warn(
+					`<${name}> has both '${base}' and 'expr:${base}', Blogger uses '${base}'`,
+					attribute.offset,
+				);
+			}
+		} else if (base === attribute.name && names.has(`expr:${base}`)) {
 			warn(
 				`<${name}> has both '${attribute.name}' and 'expr:${attribute.name}', Blogger uses 'expr:${attribute.name}'`,
-				attribute.positionOf(0),
+				attribute.offset,
 			);
 		}
 	}
 }
 
-export function createLayoutCheck(
-	locate: (offset: number) => Position,
-	warn: (message: string, position: Position) => void,
-): LayoutCheck {
+/**
+ * Checks the layout elements of a theme as Blogger does when saving it:
+ * widgets are in sections, settings and includables in widgets. Every error
+ * is reported, the scan goes on.
+ */
+export function createLayoutCheck(report: Report): LayoutCheck {
 	/** The `<b:widget-settings>` of every widget open, by the offset of its start tag. */
 	const settings = new Map<number, number>();
+	/** The elements text is reported in, once each, by the offset of their start tag. */
+	const withText = new Set<number>();
 
 	const describe = (name: string): string | undefined =>
 		CHILDREN.get(name)
@@ -201,41 +336,44 @@ export function createLayoutCheck(
 
 	return {
 		onStartTag({ name, start, parent, attributes }) {
-			warnOverridden(name, attributes, warn);
-
-			const fail = (message: string): never => {
-				throw new XmlSyntaxError(message, locate(start));
-			};
-
-			if (parent === undefined && name !== 'html') {
-				fail(`The root element has to be <html>, found <${name}>`);
-			}
 			if (parent === undefined) {
-				checkRootAttributes(attributes);
+				if (name !== 'html') {
+					report.error(
+						`The root element has to be <html>, found <${name}>`,
+						start,
+					);
+				}
+				checkRootAttributes(attributes, report);
 			}
 
 			if (name.startsWith('b:')) {
 				const accepted = ELEMENTS.get(name);
 				if (accepted === undefined) {
 					const match = suggest(name, ELEMENTS.keys());
-					fail(
+					report.error(
 						`Unknown element <${name}>${match ? `, did you mean <${match}>?` : ''}`,
+						start,
 					);
 				} else {
-					checkAttributes(name, accepted, attributes, fail);
+					checkAttributes(name, accepted, attributes, report, start);
+					if (name === 'b:widget') {
+						checkWidget(attributes, report);
+					}
 				}
 			}
 
-			const required = PARENTS.get(name);
-			if (required !== undefined && parent?.name !== required) {
-				fail(
-					`<${name}> can only be in a <${required}>, it is ${parent ? `in <${parent.name}>` : 'at the top'}`,
-				);
-			}
+			// one error for an element in the wrong place, of the element or of its parent
+			const parents = PARENTS.get(name);
 			const allowed = parent && CHILDREN.get(parent.name);
-			if (parent && allowed && !allowed.includes(name)) {
-				fail(
+			if (parents !== undefined && !parents.includes(parent?.name ?? '')) {
+				report.error(
+					`<${name}> can only be in ${parents.map((element) => `a <${element}>`).join(' or ')}, it is ${parent ? `in <${parent.name}>` : 'at the top'}`,
+					start,
+				);
+			} else if (parent && allowed && !allowed.includes(name)) {
+				report.error(
 					`<${parent.name}> can only have ${describe(parent.name)} in it, found <${name}>`,
+					start,
 				);
 			}
 
@@ -246,9 +384,19 @@ export function createLayoutCheck(
 				const count = (settings.get(parent.start) ?? 0) + 1;
 				settings.set(parent.start, count);
 				if (count > 1) {
-					fail('<b:widget> can only have one <b:widget-settings>');
+					report.error(
+						'<b:widget> can only have one <b:widget-settings>',
+						start,
+					);
 				}
 			}
+
+			warnOverridden(
+				name,
+				attributes,
+				ELEMENTS.get(name)?.literal ?? [],
+				report,
+			);
 		},
 
 		onEndTag({ name, start }) {
@@ -257,11 +405,12 @@ export function createLayoutCheck(
 			}
 		},
 
-		onText(position, parent) {
-			if (parent && CHILDREN.has(parent.name)) {
-				throw new XmlSyntaxError(
+		onText(offset, parent) {
+			if (parent && CHILDREN.has(parent.name) && !withText.has(parent.start)) {
+				withText.add(parent.start);
+				report.error(
 					`<${parent.name}> can only have ${describe(parent.name)} in it, found text`,
-					position,
+					offset,
 				);
 			}
 		},

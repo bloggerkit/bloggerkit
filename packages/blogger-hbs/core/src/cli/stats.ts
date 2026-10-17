@@ -1,6 +1,7 @@
 import { promisify, styleText } from 'node:util';
 import { gzip as gzipCallback } from 'node:zlib';
 import type { CompiledTemplate } from '../compiler';
+import type { XmlInfo } from '../xml';
 
 export interface WrittenFile {
 	/** As shown, relative to the working directory. */
@@ -10,7 +11,7 @@ export interface WrittenFile {
 
 export interface BuildStats {
 	files: { path: string; size: number; gzip: number }[];
-	/** What the rendered theme is made of, when it is written. */
+	/** What the rendered theme is made of, when it is validated. */
 	theme?: {
 		path: string;
 		scripts: { count: number; size: number };
@@ -41,10 +42,15 @@ function inlineSize(
 	return size;
 }
 
+/**
+ * The sizes of the files written, and what the theme is made of when it is
+ * validated: its scripts and styles from the chunks, its sections and
+ * widgets from `processXml`.
+ */
 export async function collectStats(
 	compiled: CompiledTemplate,
 	files: readonly WrittenFile[],
-	theme?: WrittenFile,
+	theme?: WrittenFile & { info: XmlInfo },
 ): Promise<BuildStats> {
 	const stats: BuildStats = {
 		files: await Promise.all(
@@ -81,8 +87,8 @@ export async function collectStats(
 		markup: Math.max(0, bytes(xml) - scriptSize - styleSize),
 		templates: chunks.filter((chunk) => chunk.type === 'template').length,
 		partials: compiled.pluginPartials.size,
-		sections: xml.match(/<b:section[\s/>]/g)?.length ?? 0,
-		widgets: xml.match(/<b:widget[\s/>]/g)?.length ?? 0,
+		sections: theme.info.sections.length,
+		widgets: theme.info.widgets.length,
 	};
 	return stats;
 }
