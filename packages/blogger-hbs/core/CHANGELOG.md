@@ -1,5 +1,17 @@
 # blogger-hbs
 
+## 0.0.8
+
+### Patch Changes
+
+- [#44](https://github.com/bloggerkit/bloggerkit/pull/44) [`3dd4d3f`](https://github.com/bloggerkit/bloggerkit/commit/3dd4d3ffd25c187b5d98a6d7473f924ce3eb42ea) Thanks [@kumardeo](https://github.com/kumardeo)! - `<b:elseif>` and `<b:else>` are only in a `<b:if>`, with at most one `<b:else>`, after every `<b:elseif>`, and `<b:case>` and `<b:default>` only in a `<b:switch>`, with at most one `<b:default>`, after every `<b:case>`: `<b:else> can only be in a <b:if>, it is in <div>`, `<b:case> can not come after the <b:default> of its <b:switch>`. `<b:message>` has only `<b:param>` in it, and `<b:param>` is only in a `<b:message>`. `<b:attr>`, `<b:class>`, `<b:eval>`, `<b:elseif>`, `<b:else>`, `<b:case>`, `<b:default>`, `<b:include>` and `<b:param>` have to be empty: `<b:else> has to be empty, as <b:else/>`
+
+- [#44](https://github.com/bloggerkit/bloggerkit/pull/44) [`3dd4d3f`](https://github.com/bloggerkit/bloggerkit/commit/3dd4d3ffd25c187b5d98a6d7473f924ce3eb42ea) Thanks [@kumardeo](https://github.com/kumardeo)! - The `<Group>` and `<Variable>` tags of `<b:skin>`, the settings of the Theme Designer, are checked as Blogger reads them, from the text and the CDATA sections, where `<` and a name starts a tag that has to be well-formed, `<x` is an error, `< x` text: a unique `description` for each group, not empty, a unique `name` of letters, digits and dots for each variable, a `description` unique in its group and not empty, both read trimmed, a `type` Blogger has and a `default`, with the attributes of the type. Formatting writes them as the other tags, `name` and `description` trimmed, and `info` has them, `groups` and `variables`
+
+- [#44](https://github.com/bloggerkit/bloggerkit/pull/44) [`3dd4d3f`](https://github.com/bloggerkit/bloggerkit/commit/3dd4d3ffd25c187b5d98a6d7473f924ce3eb42ea) Thanks [@kumardeo](https://github.com/kumardeo)! - A theme has one `<b:skin>` and at most one `<b:template-skin>`, with only text and CDATA sections in them: `The theme has to have a <b:skin>`, `<b:skin> can only have text and CDATA in it, found a comment`. Formatting puts what is in them in a single CDATA section, as Blogger saves it, the entities of the text decoded
+
+- [#46](https://github.com/bloggerkit/bloggerkit/pull/46) [`6403d07`](https://github.com/bloggerkit/bloggerkit/commit/6403d07e47ddeac12fd6e2fb7662a728d227e9f5) Thanks [@kumardeo](https://github.com/kumardeo)! - Every `<b:section>` has an `id`, not blank, and not an expression, different from those of the other sections, and every `<b:widget>` an `id` different from those of the other widgets: `There can only be one <b:widget> with the id 'HTML1'`
+
 ## 0.0.7
 
 ### Patch Changes
