@@ -44,4 +44,11 @@ export type {
 	RenderTemplateOptions,
 } from './runtime';
 export { createRenderer, HelperError, renderTemplate } from './runtime';
-export { formatXml, validateXml, XmlError } from './xml';
+export {
+	type ProcessXmlOptions,
+	processXml,
+	XmlError,
+	type XmlInfo,
+	type XmlIssue,
+	type XmlResult,
+} from './xml';

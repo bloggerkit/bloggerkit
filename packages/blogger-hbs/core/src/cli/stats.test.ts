@@ -3,6 +3,7 @@ import { assert, describe, test } from 'vitest';
 import { createFixture } from '../../test/fixture';
 import { compileTemplate } from '../compiler';
 import { renderTemplate } from '../runtime';
+import { processXml } from '../xml';
 import { collectStats, formatSize, formatStats } from './stats';
 
 const bytes = (text: string) => Buffer.byteLength(text);
@@ -17,7 +18,7 @@ describe('collectStats', () => {
   <style>{{import "./style.css" style:raw=true}}</style>
   {{> p.x}}
   {{import "./part.hbs"}}
-  <b:section id='s'><b:widget id='A' type='HTML'/></b:section>
+  <b:section id='s'><b:widget id='HTML1' type='HTML'/></b:section>
 </html>`,
 			'part.hbs': '<p/>',
 			'a.ts': "import './a.css';\nexport const a = 1;\nconsole.log('a');\n",
@@ -29,12 +30,14 @@ describe('collectStats', () => {
 			root,
 			plugins: [{ name: 'p', provide: () => ({ x: '<i/>' }) }],
 		});
-		const xml = renderTemplate(compiled);
+		const { xml, info } = processXml(renderTemplate(compiled), {
+			format: true,
+		});
 
 		const { files, theme } = await collectStats(
 			compiled,
 			[{ path: 'dist/theme.xml', content: xml }],
-			{ path: 'dist/theme.xml', content: xml },
+			{ path: 'dist/theme.xml', content: xml, info },
 		);
 
 		assert.strictEqual(files[0].size, bytes(xml));

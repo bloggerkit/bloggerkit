@@ -76,7 +76,7 @@ export function parseExpressions(
 			continue;
 		}
 
-		const { text, offsets } = decodeValue(attribute);
+		const { text, offsetOf } = decodeValue(attribute);
 		if (
 			tag.name === 'b:include' &&
 			attribute.name === 'data' &&
@@ -113,7 +113,7 @@ export function parseExpressions(
 			const message = error.message.replace(/ \(at position \d+\)$/, '');
 			throw new XmlSyntaxError(
 				`Invalid expression in the attribute '${attribute.name}' of <${tag.name}>: ${message}`,
-				attribute.positionOf(offsets[error.position] ?? attribute.value.length),
+				attribute.positionOf(offsetOf(error.position)),
 			);
 		}
 	}
@@ -143,11 +143,15 @@ export function formatExpression(
 		throw error;
 	}
 
-	return printed
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/'/g, '&apos;');
+	return printed.replace(/[&<']/g, (char) => ESCAPED[char] ?? char);
 }
+
+/** What has to be escaped in a value in single quotes. */
+const ESCAPED: Record<string, string> = {
+	'&': '&amp;',
+	'<': '&lt;',
+	"'": '&apos;',
+};
 
 const ENTITIES: Record<string, string> = {
 	amp: '&',
@@ -157,40 +161,68 @@ const ENTITIES: Record<string, string> = {
 	apos: "'",
 };
 
+/** An entity reference, matched where `lastIndex` is. */
+const ENTITY_REFERENCE = /&(#x[0-9a-f]+|#[0-9]+|\w+);/iy;
+
+/** The entity reference at `index` of `value`, and the text it is decoded to. */
+function entityAt(
+	value: string,
+	index: number,
+): { length: number; decoded: string } | undefined {
+	ENTITY_REFERENCE.lastIndex = index;
+	const entity = ENTITY_REFERENCE.exec(value);
+	if (entity === null) {
+		return undefined;
+	}
+	const [whole, name] = entity;
+	return { length: whole.length, decoded: decodeEntity(name) ?? whole };
+}
+
 /**
  * The value with its entities decoded, as Blogger parses it, and the offset
- * in the written value of each character of it.
+ * in the written value of each character of it, found again only when asked
+ * for, an error is.
  */
 function decodeValue({ value }: ScannedAttribute): {
 	text: string;
-	offsets: number[];
+	/** The offset in `value` of the character of `text` at `index`, its length after it. */
+	offsetOf(index: number): number;
 } {
-	let text = '';
-	const offsets: number[] = [];
+	if (!value.includes('&')) {
+		return { text: value, offsetOf: (index) => Math.min(index, value.length) };
+	}
 
-	for (let i = 0; i < value.length; i++) {
-		const entity =
-			value[i] === '&'
-				? /^&(#x[0-9a-f]+|#[0-9]+|\w+);/i.exec(value.slice(i))
-				: null;
-		if (entity === null) {
-			text += value[i];
-			offsets.push(i);
+	let text = '';
+	let last = 0;
+	for (let i = value.indexOf('&'); i >= 0; i = value.indexOf('&', i)) {
+		const entity = entityAt(value, i);
+		if (entity === undefined) {
+			i++;
 			continue;
 		}
-
-		const [whole, name] = entity;
-		const decoded = decodeEntity(name) ?? whole;
-		text += decoded;
-		// one per UTF-16 unit, as positions in `text` are
-		for (let unit = 0; unit < decoded.length; unit++) {
-			offsets.push(i);
-		}
-		i += whole.length - 1;
+		text += value.slice(last, i) + entity.decoded;
+		i += entity.length;
+		last = i;
 	}
-	offsets.push(value.length);
+	text += value.slice(last);
 
-	return { text, offsets };
+	return {
+		text,
+		offsetOf(index) {
+			// the decoded text is walked again, an entity is at the offset of its '&'
+			let decoded = 0;
+			for (let i = 0; i < value.length; ) {
+				const entity = value[i] === '&' ? entityAt(value, i) : undefined;
+				const units = entity ? entity.decoded.length : 1;
+				if (index < decoded + units) {
+					return i;
+				}
+				decoded += units;
+				i += entity ? entity.length : 1;
+			}
+			return value.length;
+		},
+	};
 }
 
 /** The character of `&name;`, undefined for an unknown name or code point. */

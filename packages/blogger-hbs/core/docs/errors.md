@@ -8,12 +8,12 @@ An error says what it is about and where it is, the same way when compiling, in 
 ✗ Invalid XML: expected </b> to close <b> (opened at 2:3), found </a> (./index.hbs:2:6)
 ```
 
-| Error          | Of                            | Has                                  |
-| -------------- | ----------------------------- | ------------------------------------ |
-| `CompileError` | the templates and the options | `loc` when it is in a template       |
-| `PluginError`  | a plugin                      | `plugin`, and `loc` when it is given |
-| `HelperError`  | a helper                      | `helper` and `loc`                   |
-| `XmlError`     | `validateXml` and `formatXml` | `loc`, its path the `path` option    |
+| Error          | Of                            | Has                                                   |
+| -------------- | ----------------------------- | ----------------------------------------------------- |
+| `CompileError` | the templates and the options | `loc` when it is in a template                        |
+| `PluginError`  | a plugin                      | `plugin`, and `loc` when it is given                  |
+| `HelperError`  | a helper                      | `helper` and `loc`                                    |
+| `XmlError`     | `processXml`                  | `errors`, each with its `loc`, and `loc` of the first |
 
 `loc` is `{ path, line, column }`, both 1-based. The path is the id of the template, `./index.hbs`, the name of a partial of a plugin, `p.x`, or the file of a document.
 

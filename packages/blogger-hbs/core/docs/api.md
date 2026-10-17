@@ -67,7 +67,7 @@ Renders once, synchronously. Runtime plugins with `prepare` or `transform` need 
 | -------------------------------------------------------- | -------------------------------------------------------------- |
 | `defineConfig(config)`                                   | Types for a config file                                        |
 | `defineRuntimePlugin(setup)`                             | Types for the runtime of a plugin, see [Plugins](./plugins.md) |
-| `validateXml(xml)`, `formatXml(xml)`                     | See [Validation and formatting](./validation.md)               |
+| `processXml(xml, { path, format })`                      | See [Validation and formatting](./validation.md)               |
 | `CompileError`, `PluginError`, `HelperError`, `XmlError` | See [Errors](./errors.md)                                      |
 
-`blogger-hbs/runtime` has `createRenderer`, `renderTemplate`, `defineRuntimePlugin`, `validateXml`, `formatXml` and the errors of rendering, without the compiler or Node.js.
+`blogger-hbs/runtime` has `createRenderer`, `renderTemplate`, `defineRuntimePlugin`, `processXml` and the errors of rendering, without the compiler or Node.js.

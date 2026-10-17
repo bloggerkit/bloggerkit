@@ -19,9 +19,15 @@ import {
 	resolvePaths,
 } from '../compiler/options';
 import { type LoadedConfig, loadConfig } from '../config';
+import { withLocation } from '../plugins';
 import { createRenderer } from '../runtime';
 import { didYouMean } from '../utils/suggest';
-import { formatXml, validateXml, type XmlError } from '../xml';
+import {
+	processXml,
+	type XmlError,
+	type XmlInfo,
+	type XmlResult,
+} from '../xml';
 import {
 	type BuildStats,
 	collectStats,
@@ -142,7 +148,7 @@ function describeCliError(error: unknown): unknown {
 	const hint = unknown ? didYouMean(unknown, flags, '`') : '';
 
 	return new Error(
-		`${error.message}${hint}\n  Run 'blogger-hbs --help' to see the available options`,
+		`${error.message}${hint}\nRun 'blogger-hbs --help' to see the available options`,
 	);
 }
 
@@ -525,7 +531,7 @@ async function write(
 ) {
 	const { outDir, moduleFile, templateFile } = current;
 	const written: WrittenFile[] = [];
-	let theme: WrittenFile | undefined;
+	let theme: WrittenTheme | undefined;
 
 	if (moduleFile) {
 		const file = path.join(outDir, moduleFile);
@@ -537,10 +543,14 @@ async function write(
 	}
 	if (templateFile) {
 		theme = await writeTheme(current, compiled, templateFile);
-		written.unshift(theme);
+		written.unshift(theme.file);
 	}
 
-	const stats = await collectStats(compiled, written, theme);
+	const stats = await collectStats(
+		compiled,
+		written,
+		theme?.info && { ...theme.file, info: theme.info },
+	);
 	console.log(
 		formatStats(stats, current.sizes, { previousTheme: current.theme }),
 	);
@@ -562,12 +572,18 @@ function formatDivider(files: readonly string[]): string {
 	return `\n${styleText('dim', text + '─'.repeat(Math.max(3, 50 - text.length)))}`;
 }
 
+interface WrittenTheme {
+	file: WrittenFile;
+	/** What it is made of, when it is validated. */
+	info?: XmlInfo;
+}
+
 /** Renders, validates and formats the theme, as enabled, and writes it. */
 async function writeTheme(
 	current: BuildSetup,
 	compiled: CompiledTemplate,
 	templateFile: string,
-): Promise<WrittenFile> {
+): Promise<WrittenTheme> {
 	const { outDir, context } = current;
 	const file = path.join(outDir, templateFile);
 	const shown = path.relative(process.cwd(), file);
@@ -578,10 +594,15 @@ async function writeTheme(
 	const rendered = await renderer.render(context);
 	log.success(`Rendered in ${elapsed(start)}`);
 
+	if (!current.validate) {
+		await fs.writeFile(file, rendered);
+		return { file: { path: shown, content: rendered } };
+	}
+
 	start = performance.now();
-	let output: string;
+	let result: XmlResult;
 	try {
-		output = finalizeXml(current, rendered, shown);
+		result = processXml(rendered, { path: shown, format: current.format });
 	} catch (error) {
 		// written anyway, to look at where it is invalid
 		await fs.writeFile(file, rendered);
@@ -590,33 +611,15 @@ async function writeTheme(
 			loc: (error as XmlError).loc,
 		});
 	}
-	if (current.validate) {
-		log.success(
-			`${current.format ? 'Formatted' : 'Validated'} in ${elapsed(start)}`,
-		);
+	for (const { message, loc } of result.warnings) {
+		log.warn(withLocation(message, loc));
 	}
+	log.success(
+		`${current.format ? 'Formatted' : 'Validated'} in ${elapsed(start)}`,
+	);
 
-	await fs.writeFile(file, output);
-	return { path: shown, content: output };
-}
-
-/** Validates and formats the rendered template, as enabled. */
-function finalizeXml(
-	{ validate, format }: BuildSetup,
-	xml: string,
-	path: string,
-): string {
-	if (!validate) {
-		return xml;
-	}
-	if (!format) {
-		validateXml(xml, { path, onWarn: log.warn });
-		return xml;
-	}
-	// warned about the formatted output, where the places are in the file written
-	const formatted = formatXml(xml, { path, onWarn: () => {} });
-	validateXml(formatted, { path, onWarn: log.warn });
-	return formatted;
+	await fs.writeFile(file, result.xml);
+	return { file: { path: shown, content: result.xml }, info: result.info };
 }
 
 /**
@@ -637,7 +640,8 @@ function elapsed(start: number): string {
 
 /**
  * The message of the error and of everything that caused it, a cause whose
- * message is already in the one before is not repeated.
+ * message is already in the one before is not repeated. The lines of a
+ * message are indented under its first.
  */
 function formatError(error: unknown): string {
 	const lines: string[] = [];
@@ -648,7 +652,9 @@ function formatError(error: unknown): string {
 		const message =
 			current instanceof Error ? current.message : String(current);
 		if (lines.length === 0 || !previous.includes(message)) {
-			lines.push(`${lines.length === 0 ? '' : 'Caused by: '}${message}`);
+			lines.push(
+				`${lines.length === 0 ? '' : 'Caused by: '}${message.replaceAll('\n', '\n  ')}`,
+			);
 		}
 		previous = message;
 		current = current instanceof Error ? current.cause : undefined;

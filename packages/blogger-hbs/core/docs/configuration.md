@@ -64,7 +64,7 @@ blogger-hbs [root] [options]
 | `-h, --help`          | All the options                                                   |
 | `-v, --version`       | The version                                                       |
 
-The CLI shows its name and version first, `blogger-hbs v0.0.4`. After a build, it shows the files written, their size and gzipped size, and what the theme is made of. The sizes in the theme add up to its size, a script or a style imported twice counting twice. When watching, each rebuild starts with a line of its time and the file changed, `─── 14:32:05 · src/layout/header.hbs ───`, and shows the files written and what the theme is made of, each count and size followed by its change since the last build.
+The CLI shows its name and version first, `blogger-hbs v0.0.4`. After a build, it shows the files written, their size and gzipped size, and what the theme is made of, as [`processXml`](./validation.md#from-javascript) tells it when validating: its `<script>` elements, its `<style>`, `<b:skin>` and `<b:template-skin>` elements and the bytes in them, the rest as markup, adding up to its size. When watching, each rebuild starts with a line of its time and the file changed, `─── 14:32:05 · src/layout/header.hbs ───`, and shows the files written and what the theme is made of, each count and size followed by its change since the last build.
 
 ```
 

@@ -1,164 +1,171 @@
-import { type Location, withLocation } from '../plugins';
-import {
-	formatExpression,
-	type ParsedExpression,
-	parseExpressions,
-} from './expressions';
-import { createLayoutCheck } from './layout';
-import {
-	createLocate,
-	type Position,
-	type ScannedAttribute,
-	type ScannedDeclaration,
-	type ScannedStartTag,
-	XmlScanner,
-	XmlSyntaxError,
+import { formatExpression, type ParsedExpression } from './expressions';
+import type {
+	OpenElement,
+	ScannedAttribute,
+	ScannedDeclaration,
+	ScannedStartTag,
 } from './scanner';
-
-/**
- * An error in a document, `message (theme.xml:3:7)`, or `message (3:7)`
- * when the document has no path.
- */
-export class XmlError extends Error {
-	readonly loc: Location;
-	readonly #reason: string;
-
-	constructor(message: string, { line, column }: Position, path = '') {
-		const loc = { path, line, column: column + 1 };
-		super(withLocation(message, loc));
-		this.name = 'XmlError';
-		this.loc = loc;
-		this.#reason = message;
-	}
-
-	/** The same error in the document at `path`. */
-	withPath(path: string): XmlError {
-		const { line, column } = this.loc;
-		return new XmlError(this.#reason, { line, column: column - 1 }, path);
-	}
-}
-
-export interface XmlOptions {
-	/** Path of the document, shown in errors and warnings. */
-	path?: string;
-	/** Called with warnings, with their place, `console.warn` by default. */
-	onWarn?: (message: string) => void;
-}
-
-/** Runs `check`, its errors in the document at `path`. */
-function atPath<T>(path: string | undefined, check: () => T): T {
-	try {
-		return check();
-	} catch (error) {
-		throw path && error instanceof XmlError ? error.withPath(path) : error;
-	}
-}
 
 /** The XML declaration Blogger writes, the first line of a theme. */
 export const XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8" ?>';
 /** The doctype Blogger writes, the second line of a theme. */
 export const DOCTYPE = '<!DOCTYPE html>';
 
-/**
- * Throws an `XmlError` unless `xml` is a well-formed document starting with
- * the XML declaration on the first line and the doctype on the second, both
- * as `formatXml` requires them (XML 1.0 in UTF-8, an `html` doctype), whose
- * expressions (`b:if cond`, `expr:*`, ...) parse with `blogger-expr`.
- */
-export function validateXml(xml: string, options: XmlOptions = {}): void {
-	atPath(options.path, () => checkDocument(xml, options));
+/** The root of a doctype and the identifiers after it, `html` and `''` for `<!DOCTYPE html>`. */
+export function parseDoctype(content: string): {
+	root?: string;
+	identifiers: string;
+} {
+	const [, root, rest = ''] =
+		/^DOCTYPE\s+([^\s[>]+)([\s\S]*)$/i.exec(content) ?? [];
+	return { root, identifiers: rest.trim().replace(/\s+/g, ' ') };
 }
 
-function checkDocument(xml: string, options: XmlOptions): void {
-	const { declarations } = scanDocument(xml, options);
-	const [first, second] = [...xml.split('\n', 2)].map((line) =>
-		line.replace(/\r$/, ''),
-	);
-	const xmlDeclaration = declarations.find((item) => item.kind === 'xml');
-	const doctype = declarations.find((item) => item.kind === 'doctype');
+/** A range of the document replaced by `text`. */
+interface Edit {
+	start: number;
+	end: number;
+	text: string;
+	/** Where the value of each attribute is in `text`, by its offset in the document, in pairs. */
+	values?: number[];
+}
 
-	if (xmlDeclaration?.start !== 0) {
-		throw new XmlError(
-			`The first line has to be the XML declaration, ${XML_DECLARATION}`,
-			xmlDeclaration?.position ?? { line: 1, column: 0 },
-		);
-	}
-	if (first.trimEnd() !== xml.slice(0, xmlDeclaration.end)) {
-		throw new XmlError(
-			'The XML declaration has to be alone on the first line',
-			{ line: 1, column: xmlDeclaration.end },
-		);
-	}
-	if (
-		doctype?.position.line !== 2 ||
-		second?.trim() !== xml.slice(doctype.start, doctype.end)
-	) {
-		throw new XmlError(
-			`The second line has to be the doctype, ${DOCTYPE}`,
-			doctype?.position ?? { line: 2, column: 0 },
-		);
-	}
+export interface FormattedDocument {
+	xml: string;
+	/** The offset in `xml` of what is at `offset` in the document formatted. */
+	mapOffset(offset: number): number;
+}
 
-	// their contents are checked as when formatting
-	formatXmlDeclaration(xmlDeclaration);
-	formatDoctype(doctype);
+export interface Formatter {
+	/** Formats a start tag while the document is scanned, with its expressions parsed. */
+	onStartTag(
+		tag: ScannedStartTag,
+		expressions: ReadonlyMap<ScannedAttribute, ParsedExpression>,
+	): void;
+	/** The document formatted, once it is scanned. */
+	finish(declarations: readonly ScannedDeclaration[]): FormattedDocument;
 }
 
 /**
- * Validates the document and formats it as Blogger saves it:
+ * Formats a valid document as Blogger saves it, while it is scanned, fed in
+ * one piece, so only the formatted tags are kept:
  *
  * - the XML declaration on the first line and the doctype on the second, added
  *   when missing and moved there when elsewhere
  * - start tags on a single line, line breaks in attribute values collapsed to
  *   a space, the attributes sorted by name and quoted with single quotes
+ * - elements with nothing in them self-closed
  * - expressions (`b:if cond`, `expr:*`, ...) printed by `blogger-expr` on a
  *   single line, `data:a&amp;&amp;data:b` as `data:a and data:b`
+ * - the children of sections, widgets and their settings each on a line
  *
  * Everything else is left as it is.
  */
-export function formatXml(xml: string, options: XmlOptions = {}): string {
-	return atPath(options.path, () => formatDocument(xml, options));
-}
+export function createFormatter(xml: string): Formatter {
+	const edits: Edit[] = [];
+	/** The indentation of the children of indented parents, by the offset of their start tag. */
+	const moved = new Map<number, string>();
 
-function formatDocument(xml: string, options: XmlOptions): string {
-	const { tags, declarations, expressions } = scanDocument(xml, options);
-
-	// the declarations are taken out, they are written at the top
-	const edits: { start: number; end: number; text: string }[] = [
-		...tags.map((tag) => {
+	return {
+		onStartTag(tag, expressions) {
+			const { parent } = tag;
+			if (parent !== undefined && INDENTED_PARENTS.has(parent.name)) {
+				edits.push(indentChild(xml, tag.start, parent, moved));
+			}
 			const end = emptyElementEnd(xml, tag);
-			return {
+			edits.push({
 				start: tag.start,
 				end: end ?? tag.end,
-				text: formatStartTag(
-					end === undefined ? tag : { ...tag, selfClosing: true },
-					expressions,
-				),
-			};
-		}),
-		...indentChildren(xml, tags),
-		...declarations.map((item) => ({
-			...lineOf(xml, item.start, item.end),
-			text: '',
-		})),
-	].sort((a, b) => a.start - b.start || a.end - b.end);
+				...formatStartTag(tag, end !== undefined, expressions),
+			});
+		},
 
-	let body = '';
+		finish(declarations) {
+			// the declarations are taken out, they are written at the top
+			for (const item of declarations) {
+				edits.push({ ...lineOf(xml, item.start, item.end), text: '' });
+			}
+			edits.sort((a, b) => a.start - b.start || a.end - b.end);
+			return applyEdits(xml, edits, declarations);
+		},
+	};
+}
+
+/** The document with the sorted edits made, the declarations written at the top. */
+function applyEdits(
+	xml: string,
+	edits: readonly Edit[],
+	declarations: readonly ScannedDeclaration[],
+): FormattedDocument {
+	// the parts joined once, as adding each to a string makes it slower to read
+	const parts: string[] = [];
+	let length = 0;
 	let last = 0;
+	/** Where every edit is in the body. */
+	const starts: number[] = [];
 	for (const { start, end, text } of edits) {
-		body += xml.slice(last, start) + text;
+		const before = xml.slice(last, start);
+		parts.push(before, text);
+		starts.push(length + before.length);
+		length += before.length + text.length;
 		last = end;
 	}
-	body += xml.slice(last);
+	parts.push(xml.slice(last));
+	const body = parts.join('');
 
-	const xmlDeclaration = declarations.find((item) => item.kind === 'xml');
 	const doctype = declarations.find((item) => item.kind === 'doctype');
+	const identifiers = doctype && parseDoctype(doctype.content).identifiers;
+	const head = `${XML_DECLARATION}\n${identifiers ? `<!DOCTYPE html ${identifiers}>` : DOCTYPE}\n`;
+	let leading = 0;
+	while (leading < body.length && /\s/.test(body[leading])) {
+		leading++;
+	}
+	// how far what is in the body moves in the output
+	const shift = head.length - leading;
 
-	return [
-		xmlDeclaration ? formatXmlDeclaration(xmlDeclaration) : XML_DECLARATION,
-		doctype ? formatDoctype(doctype) : DOCTYPE,
-		body.replace(/^\s+/, ''),
-	].join('\n');
+	return {
+		xml: head + body.slice(leading),
+		mapOffset(offset) {
+			const index = lastEditAt(edits, offset);
+			if (index < 0) {
+				return offset + shift;
+			}
+			const { end, text, values } = edits[index];
+			return (
+				shift +
+				starts[index] +
+				(offset < end ? valueAt(values, offset) : text.length + offset - end)
+			);
+		},
+	};
+}
+
+/** Where the value of the attribute at `offset` is in the text of an edit, 0 for none. */
+function valueAt(
+	values: readonly number[] | undefined,
+	offset: number,
+): number {
+	for (let i = 0; values !== undefined && i < values.length; i += 2) {
+		if (values[i] === offset) {
+			return values[i + 1];
+		}
+	}
+	return 0;
+}
+
+/** The index of the last of the sorted edits starting at or before `offset`, -1 for none. */
+function lastEditAt(edits: readonly Edit[], offset: number): number {
+	let low = 0;
+	let high = edits.length - 1;
+	while (low <= high) {
+		const middle = (low + high) >> 1;
+		if (edits[middle].start <= offset) {
+			low = middle + 1;
+		} else {
+			high = middle - 1;
+		}
+	}
+	return high;
 }
 
 /** Elements whose children Blogger writes each on a line, indented. */
@@ -169,98 +176,30 @@ const INDENTED_PARENTS = new Set([
 ]);
 
 /**
- * Puts the start tag of each child of an indented parent on its own line,
+ * Puts the start tag of a child of an indented parent on its own line,
  * indented two spaces more than the line of the parent, by replacing the
- * whitespace before it. What is in the children is left as it is.
+ * whitespace before it. What is in the child is left as it is. `moved` has
+ * the indentation of the children before it, parents first.
  */
-function indentChildren(
+function indentChild(
 	xml: string,
-	tags: ScannedStartTag[],
-): { start: number; end: number; text: string }[] {
-	// indentation by start tag offset, of the parents moved to a line of their own
-	const moved = new Map<number, string>();
-	const edits: { start: number; end: number; text: string }[] = [];
-
-	for (const tag of tags) {
-		const { parent } = tag;
-		if (parent === undefined || !INDENTED_PARENTS.has(parent.name)) {
-			continue;
-		}
-
-		const indent = `${moved.get(parent.start) ?? indentationOf(xml, parent.start)}  `;
-		let start = tag.start;
-		while (start > 0 && /\s/.test(xml[start - 1])) {
-			start--;
-		}
-
-		moved.set(tag.start, indent);
-		edits.push({ start, end: tag.start, text: `\n${indent}` });
+	tagStart: number,
+	parent: OpenElement,
+	moved: Map<number, string>,
+): Edit {
+	const indent = `${moved.get(parent.start) ?? indentationOf(xml, parent.start)}  `;
+	let start = tagStart;
+	while (start > 0 && /\s/.test(xml[start - 1])) {
+		start--;
 	}
-
-	return edits;
+	moved.set(tagStart, indent);
+	return { start, end: tagStart, text: `\n${indent}` };
 }
 
 /** The whitespace at the start of the line `offset` is on. */
 function indentationOf(xml: string, offset: number): string {
 	const lineStart = xml.lastIndexOf('\n', offset - 1) + 1;
 	return /^[ \t]*/.exec(xml.slice(lineStart, offset))?.[0] ?? '';
-}
-
-interface Scanned {
-	tags: ScannedStartTag[];
-	declarations: ScannedDeclaration[];
-	/** The expressions of the attributes, parsed while scanning. */
-	expressions: Map<ScannedAttribute, ParsedExpression>;
-}
-
-function scanDocument(
-	xml: string,
-	{ path = '', onWarn = console.warn }: XmlOptions,
-): Scanned {
-	const locate = createLocate(xml);
-	const layout = createLayoutCheck(locate, (message, { line, column }) =>
-		onWarn(withLocation(message, { path, line, column: column + 1 })),
-	);
-	const scanned: Scanned = {
-		tags: [],
-		declarations: [],
-		expressions: new Map(),
-	};
-	const scanner = new XmlScanner({
-		document: true,
-		onStartTag: (tag) => {
-			layout.onStartTag(tag);
-			scanned.tags.push(tag);
-			for (const [attribute, expression] of parseExpressions(tag)) {
-				scanned.expressions.set(attribute, expression);
-			}
-		},
-		onEndTag: layout.onEndTag,
-		onText: layout.onText,
-		onDeclaration: (declaration) => scanned.declarations.push(declaration),
-	});
-
-	try {
-		scanner.feed(xml, locate);
-		scanner.finish(locate(xml.length));
-
-		for (const kind of ['xml', 'doctype'] as const) {
-			const found = scanned.declarations.filter((item) => item.kind === kind);
-			if (found.length > 1) {
-				throw new XmlSyntaxError(
-					`There can only be one ${kind === 'xml' ? 'XML declaration' : 'doctype'}, another one is at ${found[0].position.line}:${found[0].position.column + 1}`,
-					found[1].position,
-				);
-			}
-		}
-	} catch (error) {
-		if (error instanceof XmlSyntaxError) {
-			throw new XmlError(error.message, error.position);
-		}
-		throw error;
-	}
-
-	return scanned;
 }
 
 /**
@@ -290,63 +229,6 @@ function lineOf(
 		: { start, end };
 }
 
-/** `<?xml version="1.0" encoding="UTF-8" ?>`, it has to be XML 1.0 in UTF-8. */
-function formatXmlDeclaration({
-	content,
-	position,
-}: ScannedDeclaration): string {
-	const attributes = new Map<string, string>();
-	const rest = content
-		.slice('xml'.length)
-		.replace(
-			/\s*([\w-]+)\s*=\s*(["'])(.*?)\2/g,
-			(_, name: string, _quote, value: string) => {
-				attributes.set(name, value);
-				return '';
-			},
-		)
-		.trim();
-
-	const fail = (message: string): never => {
-		throw new XmlError(message, position);
-	};
-
-	if (rest !== '') {
-		fail(`Invalid XML declaration '<?${content}?>'`);
-	}
-	for (const name of attributes.keys()) {
-		if (!['version', 'encoding', 'standalone'].includes(name)) {
-			fail(`Unknown '${name}' in the XML declaration`);
-		}
-	}
-	if (attributes.get('version') !== '1.0') {
-		fail(
-			`The XML declaration has to have version="1.0", got: ${attributes.has('version') ? `'${attributes.get('version')}'` : 'none'}`,
-		);
-	}
-	const encoding = attributes.get('encoding');
-	if (encoding !== undefined && encoding.toUpperCase() !== 'UTF-8') {
-		fail(
-			`Blogger themes are UTF-8, the XML declaration has encoding '${encoding}'`,
-		);
-	}
-
-	return XML_DECLARATION;
-}
-
-/** `<!DOCTYPE html>`, an identifier after `html` is kept. */
-function formatDoctype({ content, position }: ScannedDeclaration): string {
-	const [, root, rest] = /^DOCTYPE\s+([^\s[>]+)([\s\S]*)$/i.exec(content) ?? [];
-	if (root?.toLowerCase() !== 'html') {
-		throw new XmlError(
-			`The doctype has to be ${DOCTYPE}, got: '<!${content}>'`,
-			position,
-		);
-	}
-	const identifiers = rest.trim().replace(/\s+/g, ' ');
-	return identifiers ? `<!DOCTYPE html ${identifiers}>` : DOCTYPE;
-}
-
 /**
  * Where the end tag right after a start tag ends, with nothing between them,
  * not a space either: Blogger writes such an element `<a/>`. The document is
@@ -359,27 +241,36 @@ function emptyElementEnd(
 	if (selfClosing || !xml.startsWith(`</${name}`, end)) {
 		return;
 	}
-	const after = end + name.length + 2;
-	const close = /^\s*>/.exec(xml.slice(after));
-	return close ? after + close[0].length : undefined;
+	END_TAG_CLOSE.lastIndex = end + name.length + 2;
+	return END_TAG_CLOSE.test(xml) ? END_TAG_CLOSE.lastIndex : undefined;
 }
 
+/** The rest of an end tag after its name, matched where `lastIndex` is. */
+const END_TAG_CLOSE = /\s*>/y;
+
+/** The start tag formatted, self-closed with `selfClose`, and where the value of each attribute is in it. */
 function formatStartTag(
 	{ name: tagName, attributes, selfClosing }: ScannedStartTag,
-	expressions: Map<ScannedAttribute, ParsedExpression>,
-): string {
-	const formatted = [...attributes]
-		.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-		.map((attribute) => {
-			const parsed = expressions.get(attribute);
-			const value =
-				(parsed && formatExpression(parsed)) ??
-				singleQuoted(attribute, collapseLineBreaks(attribute.value));
-			return ` ${attribute.name}='${value}'`;
-		})
-		.join('');
+	selfClose: boolean,
+	expressions: ReadonlyMap<ScannedAttribute, ParsedExpression>,
+): Pick<Edit, 'text' | 'values'> {
+	let text = `<${tagName}`;
+	const values: number[] = [];
 
-	return `<${tagName}${formatted}${selfClosing ? '/>' : '>'}`;
+	for (const attribute of sortedByName(attributes)) {
+		const parsed = expressions.get(attribute);
+		text += ` ${attribute.name}='`;
+		values.push(attribute.offset, text.length);
+		text += `${
+			(parsed && formatExpression(parsed)) ??
+			singleQuoted(attribute, collapseLineBreaks(attribute.value))
+		}'`;
+	}
+
+	return {
+		text: `${text}${selfClosing || selfClose ? '/>' : '>'}`,
+		values,
+	};
 }
 
 /**
@@ -394,5 +285,19 @@ function singleQuoted({ quote }: ScannedAttribute, value: string): string {
 
 /** Every line break becomes a space, the spaces around it stay as they are. */
 function collapseLineBreaks(value: string): string {
-	return value.replace(/\r?\n/g, ' ');
+	return value.includes('\n') ? value.replace(/\r?\n/g, ' ') : value;
+}
+
+/** The attributes sorted by name, as they are when they already are, as is most often. */
+function sortedByName(
+	attributes: readonly ScannedAttribute[],
+): readonly ScannedAttribute[] {
+	for (let i = 1; i < attributes.length; i++) {
+		if (attributes[i - 1].name > attributes[i].name) {
+			return [...attributes].sort((a, b) =>
+				a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+			);
+		}
+	}
+	return attributes;
 }

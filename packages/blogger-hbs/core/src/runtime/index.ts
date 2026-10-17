@@ -12,7 +12,14 @@ export {
 	type RuntimePluginHooks,
 	type RuntimePluginSetup,
 } from '../plugins';
-export { formatXml, validateXml, XmlError } from '../xml';
+export {
+	type ProcessXmlOptions,
+	processXml,
+	XmlError,
+	type XmlInfo,
+	type XmlIssue,
+	type XmlResult,
+} from '../xml';
 export type {
 	BundledPlugin,
 	MinimalChunk,
