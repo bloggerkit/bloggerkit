@@ -1,5 +1,6 @@
 import type { Location } from '../plugins';
 import type { ScannedStartTag } from './scanner';
+import type { SkinGroup, SkinVariable } from './variables';
 
 /** What a theme is made of. */
 export interface XmlInfo {
@@ -8,6 +9,10 @@ export interface XmlInfo {
 	sections: { id: string; loc: Location }[];
 	/** Every widget, with the id of the section it is in. */
 	widgets: { id: string; type: string; section: string; loc: Location }[];
+	/** The `<Group>`s of the Theme Designer, in `<b:skin>`. */
+	groups: SkinGroup[];
+	/** Its `<Variable>`s, with the description of their group. */
+	variables: SkinVariable[];
 }
 
 /**
@@ -17,7 +22,9 @@ export interface XmlInfo {
  */
 export function createInfoCollector(): {
 	onStartTag(tag: ScannedStartTag): void;
-	info(locOf: (offset: number) => Location): XmlInfo;
+	info(
+		locOf: (offset: number) => Location,
+	): Omit<XmlInfo, 'groups' | 'variables'>;
 } {
 	let root: Record<string, string> = {};
 	const sections: { id: string; offset: number }[] = [];

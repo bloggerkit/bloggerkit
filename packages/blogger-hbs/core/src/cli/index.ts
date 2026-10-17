@@ -750,6 +750,8 @@ async function processTheme(
 			...result.info,
 			sections: result.info.sections.map(at),
 			widgets: result.info.widgets.map(at),
+			groups: result.info.groups.map(at),
+			variables: result.info.variables.map(at),
 		},
 	};
 

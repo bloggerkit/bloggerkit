@@ -41,6 +41,26 @@ Its layout is checked as Blogger does when saving it, whitespace and comments as
 - `<b:widget-settings>` has only `<b:widget-setting>` in it, and a `<b:widget-setting>` is only in a `<b:widget-settings>`
 - `<b:defaultmarkups>` has only `<b:defaultmarkup>` in it, and a `<b:defaultmarkup>` is only in a `<b:defaultmarkups>`
 - `<b:defaultmarkup>` has only `<b:includable>` in it, and a `<b:includable>` is only in a `<b:defaultmarkup>` or a `<b:widget>`
+- `<b:elseif>` and `<b:else>` are only in a `<b:if>`, with at most one `<b:else>`, after every `<b:elseif>`
+- `<b:case>` and `<b:default>` are only in a `<b:switch>`, with at most one `<b:default>`, after every `<b:case>`
+- `<b:message>` has only `<b:param>` in it, and a `<b:param>` is only in a `<b:message>`
+- `<b:attr>`, `<b:class>`, `<b:eval>`, `<b:elseif>`, `<b:else>`, `<b:case>`, `<b:default>`, `<b:include>` and `<b:param>` have nothing in them, `<b:else/>`, a space or a line break in them is something
+- one `<b:skin>`, and at most one `<b:template-skin>`, with only text and CDATA sections in them, no element or comment
+
+The settings of the Theme Designer are `<Group>` and `<Variable>` tags in the text of `<b:skin>`, read as Blogger does, with the entities of the text decoded and what is in CDATA sections as it is: `&lt;Group description='Colors'&gt;` is a `<Group>` too. They are checked as Blogger does:
+
+- `<` and a name starts a tag, of any name, which is well-formed, `<x>...</x>` or `<x/>`, with quoted attributes, `<x` alone is an error, `< x` and `x>` are text, comments are text as well, the tags in them are read
+
+- a `<Group>` has a `description` that is not empty, different from those of the other groups, and can have a `selector`, it has only `<Variable>`s in it, not another `<Group>`, another tag or text, comments aside
+- a `<Variable>` has a `name` of letters, digits and dots, different from those of the other variables, a `description` that is not empty, different from those of the other variables of its group, or of those in none, a `type` and a `default`, and can have a `value` and `hideEditor`
+- `description` and the `name` of a `<Variable>` are read trimmed, `' a '` is `'a'`
+- its `type` is `automatic`, `background`, `color`, `font`, `length`, `string` or `url`, `background` can have a `color`, and `length` a `min` and a `max`
+- another attribute is a warning, `<Variable type='color'> has the attribute 'min', Blogger only reads ...`, and so is a `<Variable>` with something in it
+
+```
+✗ The rendered template is not valid XML
+  Caused by: There can only be one <Variable> named 'body.color' (dist/theme.xml:84:3)
+```
 
 ```
 ✗ The rendered template is not valid XML
@@ -92,6 +112,8 @@ With `output.format`, `true` by default, it is then written as Blogger saves it:
 - attributes sorted by name and quoted with single quotes
 - expressions printed by `blogger-expr` on a single line, `data:a&amp;&amp;data:b` as `data:a and data:b`
 - the children of `<b:section>`, `<b:widget>` and `<b:widget-settings>` each on a line, indented
+- what is in `<b:skin>` and `<b:template-skin>` in a single CDATA section, as Blogger saves it: the entities of the text decoded, what is in CDATA sections as it is, `<b:skin>a &amp; b<![CDATA[ &amp; ]]></b:skin>` as `<b:skin><![CDATA[a & b &amp; ]]></b:skin>`
+- the `<Group>` and `<Variable>` tags of `<b:skin>` as the other tags, on a single line, their attributes sorted and quoted with single quotes, self-closed with nothing in them, `description` and `name` trimmed
 
 Everything else is left as it is. `--no-format` and `--no-validate` turn them off in the CLI, and `blogger-hbs validate` and `blogger-hbs format` do the same to an XML theme, see [Configuration](./configuration.md#validating-and-formatting-a-theme).
 
@@ -126,3 +148,5 @@ const { xml, warnings, info } = processXml(await renderer.render(context), {
 | `root`     | the `b:` attributes of `<html>`, `{ 'b:layoutsVersion': '3' }`                      |
 | `sections` | `{ id, loc }` of every `<b:section>`                                                |
 | `widgets`  | `{ id, type, section, loc }` of every `<b:widget>`, `section` the id of its section |
+| `groups`   | `{ description, selector?, loc }` of every `<Group>` of `<b:skin>`                  |
+| `variables` | `{ name, type, description, group?, attributes, loc }` of every `<Variable>` of `<b:skin>`, `group` the description of its group, `attributes` all of them, their entities decoded |

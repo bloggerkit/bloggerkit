@@ -59,7 +59,7 @@ const THEME = {
   xmlns='http://www.w3.org/1999/xhtml'
   b:layoutsVersion='3'>
   <body>{{title}}</body>
-</html>
+<b:skin/></html>
 `,
 };
 
@@ -129,7 +129,7 @@ describe('cli', () => {
 		assert.match(output, /Built in \d+ms/);
 		assert.strictEqual(
 			await fs.readFile(path.join(cwd, 'dist/theme.xml'), 'utf-8'),
-			`${XML_DECLARATION}\n${DOCTYPE}\n<html b:layoutsVersion='3' xmlns='http://www.w3.org/1999/xhtml'>\n  <body>Hi</body>\n</html>\n`,
+			`${XML_DECLARATION}\n${DOCTYPE}\n<html b:layoutsVersion='3' xmlns='http://www.w3.org/1999/xhtml'>\n  <body>Hi</body>\n<b:skin/></html>\n`,
 		);
 		assert.include(
 			await fs.readFile(path.join(cwd, 'dist/compiled.js'), 'utf-8'),
@@ -169,7 +169,9 @@ describe('cli', () => {
 	});
 
 	test('takes the root, entry and output directory from the arguments', async () => {
-		const cwd = await createFixture({ 'theme/src/main.hbs': '<html/>' });
+		const cwd = await createFixture({
+			'theme/src/main.hbs': '<html><b:skin/></html>',
+		});
 		const { code, output } = await run(
 			cwd,
 			'theme',
@@ -207,7 +209,9 @@ describe('cli', () => {
 	});
 
 	test('shows the cause of an error', async () => {
-		const cwd = await createFixture({ 'index.hbs': '<html>{{#if}}</html>' });
+		const cwd = await createFixture({
+			'index.hbs': '<html>{{#if}}<b:skin/></html>',
+		});
 		const { code, output } = await run(cwd);
 		assert.strictEqual(code, 1);
 		assert.match(
@@ -218,7 +222,7 @@ describe('cli', () => {
 
 	test('shows every place the rendered template is not valid', async () => {
 		const cwd = await createFixture({
-			'index.hbs': '<html>\n  <body/>\n</html>',
+			'index.hbs': '<html>\n  <body/>\n<b:skin/></html>',
 		});
 		const { code, output } = await run(cwd, '--no-format');
 		assert.strictEqual(code, 1);
@@ -235,7 +239,7 @@ describe('cli', () => {
 
 	test('shows which helper fails and where', async () => {
 		const cwd = await createFixture({
-			'index.hbs': '<html>\n  {{eq 1}}\n</html>',
+			'index.hbs': '<html>\n  {{eq 1}}\n<b:skin/></html>',
 		});
 		const { code, output } = await run(cwd);
 		assert.strictEqual(code, 1);
@@ -247,7 +251,7 @@ describe('cli', () => {
 
 	test('shows the message of an error a helper throws, once', async () => {
 		const cwd = await createFixture({
-			'index.hbs': '<html>\n  <p>{{format 1}}</p>\n</html>',
+			'index.hbs': '<html>\n  <p>{{format 1}}</p>\n<b:skin/></html>',
 			'runtime.js':
 				"export default () => ({ helpers: { format: () => { throw new TypeError('Expected a date'); } } });",
 			'blogger-hbs.config.mjs':
@@ -264,7 +268,8 @@ describe('cli', () => {
 
 	test('warns about x and expr:x in the rendered template', async () => {
 		const cwd = await createFixture({
-			'index.hbs': "<html>\n  <a href='#' expr:href='data:blog.url'/>\n</html>",
+			'index.hbs':
+				"<html>\n  <a href='#' expr:href='data:blog.url'/>\n<b:skin/></html>",
 		});
 		const { code, output } = await run(cwd);
 		assert.strictEqual(code, 0, output);
@@ -301,7 +306,7 @@ describe('cli', () => {
 		await waitForOutput(child, /Watching for changes/);
 		await fs.writeFile(
 			path.join(cwd, 'index.hbs'),
-			'<html><body>two</body></html>',
+			'<html><body>two</body><b:skin/></html>',
 		);
 		// the file is written after the rebuild is logged
 		const rebuilt = await waitForOutput(
@@ -357,8 +362,8 @@ function waitForOutput(child: ChildProcess, pattern: RegExp): Promise<string> {
 
 describe('validate and format', () => {
 	const HEAD = `${XML_DECLARATION}\n${DOCTYPE}\n`;
-	const valid = `${HEAD}<html><b:if cond="true" rel="x"><p   class="a"></p></b:if></html>`;
-	const formatted = `${HEAD}<html><b:if cond='true' rel='x'><p class='a'/></b:if></html>`;
+	const valid = `${HEAD}<html><b:if cond="true" rel="x"><p   class="a"></p></b:if><b:skin/></html>`;
+	const formatted = `${HEAD}<html><b:if cond='true' rel='x'><p class='a'/></b:if><b:skin/></html>`;
 
 	test('validate shows the warnings and checks a valid theme', async () => {
 		const cwd = await createFixture({ 'theme.xml': valid });
@@ -373,7 +378,7 @@ describe('validate and format', () => {
 
 	test('validate shows every error of an invalid theme', async () => {
 		const cwd = await createFixture({
-			'theme.xml': `${HEAD}<html b:css='yes'><b:foo/></html>`,
+			'theme.xml': `${HEAD}<html b:css='yes'><b:foo/><b:skin/></html>`,
 		});
 		const { code, output } = await run(cwd, 'validate', 'theme.xml');
 		assert.strictEqual(code, 1);
@@ -399,11 +404,11 @@ describe('validate and format', () => {
 
 	test('format prints nothing but the theme without warnings', async () => {
 		const cwd = await createFixture({
-			'theme.xml': `${HEAD}<html><p   class="a"></p></html>`,
+			'theme.xml': `${HEAD}<html><p   class="a"></p><b:skin/></html>`,
 		});
 		const { code, stdout, stderr } = await run(cwd, 'format', 'theme.xml');
 		assert.strictEqual(code, 0);
-		assert.strictEqual(stdout, `${HEAD}<html><p class='a'/></html>`);
+		assert.strictEqual(stdout, `${HEAD}<html><p class='a'/><b:skin/></html>`);
 		assert.strictEqual(stderr, '');
 	});
 
@@ -443,7 +448,7 @@ describe('validate and format', () => {
 
 	test('format writes nothing for an invalid theme', async () => {
 		const cwd = await createFixture({
-			'theme.xml': `${HEAD}<html><b:foo/></html>`,
+			'theme.xml': `${HEAD}<html><b:foo/><b:skin/></html>`,
 		});
 		const toFile = await run(cwd, 'format', 'theme.xml', '-o', 'out.xml');
 		assert.strictEqual(toFile.code, 1);
@@ -475,13 +480,19 @@ describe('validate and format', () => {
 						loc: { path: 'theme.xml', line: 3, column: 30 },
 					},
 				],
-				info: { root: {}, sections: [], widgets: [] },
+				info: {
+					root: {},
+					sections: [],
+					widgets: [],
+					groups: [],
+					variables: [],
+				},
 			});
 		});
 
 		test('validate prints every error of an invalid theme', async () => {
 			const cwd = await createFixture({
-				'theme.xml': `${HEAD}<html><b:foo/><b:bar/></html>`,
+				'theme.xml': `${HEAD}<html><b:foo/><b:bar/><b:skin/></html>`,
 			});
 			const { code, report } = await json(cwd, 'validate', 'theme.xml');
 			assert.strictEqual(code, 1);
@@ -502,7 +513,7 @@ describe('validate and format', () => {
 
 		test('format has the theme in it, or where it is written', async () => {
 			const cwd = await createFixture({
-				'theme.xml': `${HEAD}<html><b:section id='s'><b:widget id='HTML1' type='HTML'/></b:section></html>`,
+				'theme.xml': `${HEAD}<html><b:section id='s'><b:widget id='HTML1' type='HTML'/></b:section><b:skin/></html>`,
 			});
 			const toStdout = await json(cwd, 'format', 'theme.xml');
 			assert.strictEqual(toStdout.code, 0);

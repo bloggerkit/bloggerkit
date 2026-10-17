@@ -1,5 +1,6 @@
 import { didYouMean, suggest } from '../utils/suggest';
 import type { OpenElement, ScannedAttribute, ScannedStartTag } from './scanner';
+import { SKINS } from './skin';
 
 /** The only elements Blogger accepts in these, whitespace and comments aside. */
 const CHILDREN = new Map([
@@ -8,6 +9,7 @@ const CHILDREN = new Map([
 	['b:widget-settings', ['b:widget-setting']],
 	['b:defaultmarkups', ['b:defaultmarkup']],
 	['b:defaultmarkup', ['b:includable']],
+	['b:message', ['b:param']],
 ]);
 
 /** The only elements Blogger accepts these in. */
@@ -17,6 +19,24 @@ const PARENTS = new Map([
 	['b:widget-setting', ['b:widget-settings']],
 	['b:includable', ['b:defaultmarkup', 'b:widget']],
 	['b:defaultmarkup', ['b:defaultmarkups']],
+	['b:elseif', ['b:if']],
+	['b:else', ['b:if']],
+	['b:case', ['b:switch']],
+	['b:default', ['b:switch']],
+	['b:param', ['b:message']],
+]);
+
+/** The elements Blogger has empty, `<b:else/>`, an error or a warning when they are not. */
+const EMPTY = new Map<string, 'error' | 'warn'>([
+	['b:attr', 'error'],
+	['b:class', 'error'],
+	['b:eval', 'error'],
+	['b:elseif', 'error'],
+	['b:else', 'error'],
+	['b:case', 'error'],
+	['b:default', 'error'],
+	['b:include', 'error'],
+	['b:param', 'error'],
 ]);
 
 export interface Attributes {
@@ -81,11 +101,17 @@ const ELEMENTS = new Map<string, Attributes>([
 	['b:with', { required: ['var', 'value'] }],
 ]);
 
-for (const attributes of ELEMENTS.values()) {
+/** `attributes` with `known` set, once, for `checkAttributes`. */
+export function withKnown(attributes: Attributes): Attributes {
 	attributes.known = new Set([
 		...(attributes.required ?? []),
 		...(attributes.optional ?? []),
 	]);
+	return attributes;
+}
+
+for (const attributes of ELEMENTS.values()) {
+	withKnown(attributes);
 }
 
 /** `name` without `expr:`. */
@@ -161,7 +187,10 @@ function checkWidget(
 }
 
 /** `'a'`, `'a' and 'b'`, `'a', 'b' and 'c'`, or with `or` */
-function listOf(names: readonly string[], last: 'and' | 'or' = 'and'): string {
+export function listOf(
+	names: readonly string[],
+	last: 'and' | 'or' = 'and',
+): string {
 	const quoted = names.map((name) => `'${name}'`);
 	return quoted.length > 1
 		? `${quoted.slice(0, -1).join(', ')} ${last} ${quoted.at(-1)}`
@@ -232,7 +261,7 @@ export function checkAttributes(
 		others = 'warn',
 		known = new Set(),
 	}: Attributes,
-	attributes: readonly ScannedAttribute[],
+	attributes: readonly Pick<ScannedAttribute, 'name' | 'offset'>[],
 	report: Report,
 	start: number,
 ): void {
@@ -275,8 +304,10 @@ export function checkAttributes(
 
 export interface LayoutCheck {
 	onStartTag(tag: ScannedStartTag): void;
-	onEndTag(element: OpenElement): void;
+	onEndTag(element: OpenElement, contentEnd?: number): void;
 	onText(offset: number, parent: OpenElement | undefined): void;
+	/** Once the whole document is scanned. */
+	finish(): void;
 }
 
 /**
@@ -326,8 +357,16 @@ function warnOverridden(
 export function createLayoutCheck(report: Report): LayoutCheck {
 	/** The `<b:widget-settings>` of every widget open, by the offset of its start tag. */
 	const settings = new Map<number, number>();
+	/** The `<b:if>`s open that have their `<b:else>`, by the offset of their start tag. */
+	const withElse = new Set<number>();
+	/** The `<b:switch>`es open that have their `<b:default>`, by the offset of their start tag. */
+	const withDefault = new Set<number>();
 	/** The elements text is reported in, once each, by the offset of their start tag. */
 	const withText = new Set<number>();
+	/** The skins of the theme, `<b:skin>` and `<b:template-skin>`, by name. */
+	const skinCount = new Map<string, number>();
+	/** The offset of the start tag of the root element, when it is `<html>`. */
+	let root: number | undefined;
 
 	const describe = (name: string): string | undefined =>
 		CHILDREN.get(name)
@@ -344,6 +383,7 @@ export function createLayoutCheck(report: Report): LayoutCheck {
 					);
 				}
 				checkRootAttributes(attributes, report);
+				root = name === 'html' ? start : undefined;
 			}
 
 			if (name.startsWith('b:')) {
@@ -391,6 +431,48 @@ export function createLayoutCheck(report: Report): LayoutCheck {
 				}
 			}
 
+			// `<b:else>` comes last in its `<b:if>`, once
+			if (
+				(name === 'b:else' || name === 'b:elseif') &&
+				parent?.name === 'b:if'
+			) {
+				if (withElse.has(parent.start)) {
+					report.error(
+						name === 'b:else'
+							? '<b:if> can only have one <b:else>'
+							: '<b:elseif> can not come after the <b:else> of its <b:if>',
+						start,
+					);
+				} else if (name === 'b:else') {
+					withElse.add(parent.start);
+				}
+			}
+
+			// `<b:default>` comes last in its `<b:switch>`, once
+			if (
+				(name === 'b:default' || name === 'b:case') &&
+				parent?.name === 'b:switch'
+			) {
+				if (withDefault.has(parent.start)) {
+					report.error(
+						name === 'b:default'
+							? '<b:switch> can only have one <b:default>'
+							: '<b:case> can not come after the <b:default> of its <b:switch>',
+						start,
+					);
+				} else if (name === 'b:default') {
+					withDefault.add(parent.start);
+				}
+			}
+
+			if (SKINS.has(name)) {
+				const count = (skinCount.get(name) ?? 0) + 1;
+				skinCount.set(name, count);
+				if (count > 1) {
+					report.error(`There can only be one <${name}>`, start);
+				}
+			}
+
 			warnOverridden(
 				name,
 				attributes,
@@ -399,9 +481,28 @@ export function createLayoutCheck(report: Report): LayoutCheck {
 			);
 		},
 
-		onEndTag({ name, start }) {
+		onEndTag({ name, start, contentStart }, contentEnd) {
 			if (name === 'b:widget') {
 				settings.delete(start);
+			}
+			if (name === 'b:if') {
+				withElse.delete(start);
+			}
+			if (name === 'b:switch') {
+				withDefault.delete(start);
+			}
+
+			// nothing between the tags, as the formatter self-closes it
+			const level = EMPTY.get(name);
+			if (
+				level !== undefined &&
+				contentEnd !== undefined &&
+				contentEnd !== contentStart
+			) {
+				report[level](
+					`<${name}> ${level === 'error' ? 'has to' : 'should'} be empty, as <${name}/>`,
+					start,
+				);
 			}
 		},
 
@@ -412,6 +513,13 @@ export function createLayoutCheck(report: Report): LayoutCheck {
 					`<${parent.name}> can only have ${describe(parent.name)} in it, found text`,
 					offset,
 				);
+			}
+		},
+
+		finish() {
+			// a theme, `<html>`, has a skin
+			if (root !== undefined && !skinCount.has('b:skin')) {
+				report.error('The theme has to have a <b:skin>', root);
 			}
 		},
 	};
