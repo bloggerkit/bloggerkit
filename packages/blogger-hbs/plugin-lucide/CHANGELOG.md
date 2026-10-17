@@ -1,5 +1,13 @@
 # @blogger-hbs/plugin-lucide
 
+## 0.0.3
+
+### Patch Changes
+
+- [#36](https://github.com/bloggerkit/bloggerkit/pull/36) [`c783447`](https://github.com/bloggerkit/bloggerkit/commit/c783447687096d524058c6d732e1bda135b2611b) Thanks [@kumardeo](https://github.com/kumardeo)! - Errors read as the others, `Plugin 'lucide': Unknown icon: 'mneu' (./index.hbs:2:3), did you mean 'menu'?`
+- Updated dependencies [[`87e585d`](https://github.com/bloggerkit/bloggerkit/commit/87e585d8297b53f5ac734cc72a8c659dc3ae225c), [`a5811e2`](https://github.com/bloggerkit/bloggerkit/commit/a5811e2c8fa726910758ddbbb4ef75ba9a9d3df7), [`c783447`](https://github.com/bloggerkit/bloggerkit/commit/c783447687096d524058c6d732e1bda135b2611b), [`87e585d`](https://github.com/bloggerkit/bloggerkit/commit/87e585d8297b53f5ac734cc72a8c659dc3ae225c), [`a5811e2`](https://github.com/bloggerkit/bloggerkit/commit/a5811e2c8fa726910758ddbbb4ef75ba9a9d3df7), [`a5811e2`](https://github.com/bloggerkit/bloggerkit/commit/a5811e2c8fa726910758ddbbb4ef75ba9a9d3df7), [`87e585d`](https://github.com/bloggerkit/bloggerkit/commit/87e585d8297b53f5ac734cc72a8c659dc3ae225c), [`c783447`](https://github.com/bloggerkit/bloggerkit/commit/c783447687096d524058c6d732e1bda135b2611b), [`87e585d`](https://github.com/bloggerkit/bloggerkit/commit/87e585d8297b53f5ac734cc72a8c659dc3ae225c), [`a5811e2`](https://github.com/bloggerkit/bloggerkit/commit/a5811e2c8fa726910758ddbbb4ef75ba9a9d3df7)]:
+  - blogger-hbs@0.0.5
+
 ## 0.0.2
 
 ### Patch Changes
