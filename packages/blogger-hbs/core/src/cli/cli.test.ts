@@ -15,7 +15,10 @@ const BIN = path.join(PACKAGE, 'bin/blogger-hbs.js');
 
 interface Result {
 	code: number;
+	/** stdout and stderr. */
 	output: string;
+	stdout: string;
+	stderr: string;
 }
 
 /** Runs the built CLI in `cwd`, with the colors left out of the output. */
@@ -29,6 +32,8 @@ function run(cwd: string, ...args: string[]): Promise<Result> {
 				resolve({
 					code: typeof error?.code === 'number' ? error.code : 0,
 					output: stripColors(stdout + stderr),
+					stdout: stripColors(stdout),
+					stderr: stripColors(stderr),
 				});
 			},
 		);
@@ -61,6 +66,7 @@ describe('cli', () => {
 		const help = await run(cwd, '--help');
 		assert.strictEqual(help.code, 0);
 		assert.notInclude(help.output, '───');
+		assert.match(help.output, /^blogger-hbs\/\d+\.\d+\.\d+\n/);
 		for (const flag of [
 			'--config',
 			'--entry',
@@ -74,8 +80,14 @@ describe('cli', () => {
 			assert.include(help.output, flag);
 		}
 
-		const version = await run(cwd, '--version');
-		assert.match(version.output, /^blogger-hbs\/\d+\.\d+\.\d+/);
+		for (const flag of ['--version', '-v']) {
+			const version = await run(cwd, flag);
+			assert.strictEqual(version.code, 0);
+			assert.match(
+				version.output,
+				/^\n {2}blogger-hbs v\d+\.\d+\.\d+\n─+\nCopyright \(c\) 2026-present Deo Kumar <https:\/\/github\.com\/kumardeo>\nReleased under the MIT License, provided as is, without warranty\.\nhttps:\/\/github\.com\/bloggerkit\/bloggerkit\n\nNode\.js v[\d.]+ on [\w-]+\n$/,
+			);
+		}
 	});
 
 	test('builds, formats and copies the public directory', async () => {
@@ -333,3 +345,230 @@ function waitForOutput(child: ChildProcess, pattern: RegExp): Promise<string> {
 		});
 	});
 }
+
+describe('validate and format', () => {
+	const HEAD = `${XML_DECLARATION}\n${DOCTYPE}\n`;
+	const valid = `${HEAD}<html><b:if cond="true" rel="x"><p   class="a"></p></b:if></html>`;
+	const formatted = `${HEAD}<html><b:if cond='true' rel='x'><p class='a'/></b:if></html>`;
+
+	test('validate shows the warnings and checks a valid theme', async () => {
+		const cwd = await createFixture({ 'theme.xml': valid });
+		const { code, output } = await run(cwd, 'validate', 'theme.xml');
+		assert.strictEqual(code, 0);
+		assert.include(
+			output,
+			"⚠ <b:if> has the attribute 'rel', Blogger only reads 'cond' (theme.xml:3:30)",
+		);
+		assert.match(output, /✓ Validated in \d+ms/);
+	});
+
+	test('validate shows every error of an invalid theme', async () => {
+		const cwd = await createFixture({
+			'theme.xml': `${HEAD}<html b:css='yes'><b:foo/></html>`,
+		});
+		const { code, output } = await run(cwd, 'validate', 'theme.xml');
+		assert.strictEqual(code, 1);
+		assert.include(
+			output,
+			`✗ theme.xml is not valid XML
+  Caused by: 2 errors:
+    The attribute 'b:css' of <html> has to be 'true' or 'false', got: 'yes' (theme.xml:3:14)
+    Unknown element <b:foo> (theme.xml:3:19)`,
+		);
+	});
+
+	test('format writes only the theme to stdout, and only warnings to stderr', async () => {
+		const cwd = await createFixture({ 'theme.xml': valid });
+		const { code, stdout, stderr } = await run(cwd, 'format', 'theme.xml');
+		assert.strictEqual(code, 0);
+		assert.strictEqual(stdout, formatted);
+		assert.strictEqual(
+			stderr,
+			"⚠ <b:if> has the attribute 'rel', Blogger only reads 'cond' (<stdout>:3:30)\n",
+		);
+	});
+
+	test('format prints nothing but the theme without warnings', async () => {
+		const cwd = await createFixture({
+			'theme.xml': `${HEAD}<html><p   class="a"></p></html>`,
+		});
+		const { code, stdout, stderr } = await run(cwd, 'format', 'theme.xml');
+		assert.strictEqual(code, 0);
+		assert.strictEqual(stdout, `${HEAD}<html><p class='a'/></html>`);
+		assert.strictEqual(stderr, '');
+	});
+
+	test('format -o writes the file, making its directory', async () => {
+		const cwd = await createFixture({ 'theme.xml': valid });
+		const { code, output, stdout } = await run(
+			cwd,
+			'format',
+			'theme.xml',
+			'-o',
+			'out/theme.xml',
+		);
+		assert.strictEqual(code, 0);
+		assert.strictEqual(
+			await fs.readFile(path.join(cwd, 'out/theme.xml'), 'utf-8'),
+			formatted,
+		);
+		assert.include(output, '(out/theme.xml:3:30)');
+		assert.match(stdout, /✓ Formatted in \d+ms, written to out\/theme\.xml/);
+	});
+
+	test('format -o with the file itself formats it in place', async () => {
+		const cwd = await createFixture({ 'theme.xml': valid });
+		const { code } = await run(
+			cwd,
+			'format',
+			'theme.xml',
+			'--out',
+			'theme.xml',
+		);
+		assert.strictEqual(code, 0);
+		assert.strictEqual(
+			await fs.readFile(path.join(cwd, 'theme.xml'), 'utf-8'),
+			formatted,
+		);
+	});
+
+	test('format writes nothing for an invalid theme', async () => {
+		const cwd = await createFixture({
+			'theme.xml': `${HEAD}<html><b:foo/></html>`,
+		});
+		const toFile = await run(cwd, 'format', 'theme.xml', '-o', 'out.xml');
+		assert.strictEqual(toFile.code, 1);
+		assert.isFalse(existsSync(path.join(cwd, 'out.xml')));
+		const toStdout = await run(cwd, 'format', 'theme.xml');
+		assert.strictEqual(toStdout.code, 1);
+		assert.strictEqual(toStdout.stdout, '');
+		assert.match(toStdout.stderr, /^\n {2}blogger-hbs v/);
+		assert.include(toStdout.stderr, 'Unknown element <b:foo> (theme.xml:3:7)');
+	});
+
+	describe('--json', () => {
+		const json = async (cwd: string, ...args: string[]) => {
+			const result = await run(cwd, ...args, '--json');
+			return { ...result, report: JSON.parse(result.stdout) };
+		};
+
+		test('validate prints the warnings and info of a valid theme, alone on stdout', async () => {
+			const cwd = await createFixture({ 'theme.xml': valid });
+			const { code, report, stderr } = await json(cwd, 'validate', 'theme.xml');
+			assert.strictEqual(code, 0);
+			assert.strictEqual(stderr, '');
+			assert.deepEqual(report, {
+				valid: true,
+				warnings: [
+					{
+						message:
+							"<b:if> has the attribute 'rel', Blogger only reads 'cond'",
+						loc: { path: 'theme.xml', line: 3, column: 30 },
+					},
+				],
+				info: { root: {}, sections: [], widgets: [] },
+			});
+		});
+
+		test('validate prints every error of an invalid theme', async () => {
+			const cwd = await createFixture({
+				'theme.xml': `${HEAD}<html><b:foo/><b:bar/></html>`,
+			});
+			const { code, report } = await json(cwd, 'validate', 'theme.xml');
+			assert.strictEqual(code, 1);
+			assert.deepEqual(report, {
+				valid: false,
+				errors: [
+					{
+						message: 'Unknown element <b:foo>',
+						loc: { path: 'theme.xml', line: 3, column: 7 },
+					},
+					{
+						message: 'Unknown element <b:bar>',
+						loc: { path: 'theme.xml', line: 3, column: 15 },
+					},
+				],
+			});
+		});
+
+		test('format has the theme in it, or where it is written', async () => {
+			const cwd = await createFixture({
+				'theme.xml': `${HEAD}<html><b:section id='s'><b:widget id='HTML1' type='HTML'/></b:section></html>`,
+			});
+			const toStdout = await json(cwd, 'format', 'theme.xml');
+			assert.strictEqual(toStdout.code, 0);
+			assert.include(
+				toStdout.report.xml,
+				"<b:section id='s'>\n  <b:widget id='HTML1' type='HTML'/>",
+			);
+			assert.isUndefined(toStdout.report.written);
+			assert.deepEqual(toStdout.report.info.widgets[0].loc, {
+				path: '<stdout>',
+				line: 4,
+				column: 3,
+			});
+
+			const toFile = await json(cwd, 'format', 'theme.xml', '-o', 'out.xml');
+			assert.strictEqual(toFile.code, 0);
+			assert.strictEqual(toFile.report.written, 'out.xml');
+			assert.isUndefined(toFile.report.xml);
+			assert.deepEqual(toFile.report.info.widgets[0].loc, {
+				path: 'out.xml',
+				line: 4,
+				column: 3,
+			});
+			assert.strictEqual(
+				await fs.readFile(path.join(cwd, 'out.xml'), 'utf-8'),
+				toStdout.report.xml,
+			);
+		});
+
+		test('a file that can not be read is an error too', async () => {
+			const cwd = await createFixture({});
+			const { code, report } = await json(cwd, 'format', 'missing.xml');
+			assert.strictEqual(code, 1);
+			assert.strictEqual(report.valid, false);
+			assert.match(
+				report.errors[0].message,
+				/^Can not read missing\.xml: ENOENT/,
+			);
+			assert.isUndefined(report.errors[0].loc);
+		});
+	});
+
+	test('an error of the arguments has the header, and the help of the command', async () => {
+		const cwd = await createFixture({});
+		const { code, output } = await run(cwd, 'validate');
+		assert.strictEqual(code, 1);
+		assert.match(output, /^\n {2}blogger-hbs v[\d.]+\n─+\n/);
+		assert.include(
+			output,
+			"✗ missing required args for command `validate <file>`\n  Run 'blogger-hbs validate --help' to see the available options",
+		);
+	});
+
+	test('an error of format has its header on stderr, as stdout is for the theme', async () => {
+		const cwd = await createFixture({});
+		const { code, stdout, stderr } = await run(cwd, 'format');
+		assert.strictEqual(code, 1);
+		assert.strictEqual(stdout, '');
+		assert.match(
+			stderr,
+			/^\n {2}blogger-hbs v[\d.]+\n─+\n✗ missing required args for command `format <file>`/,
+		);
+	});
+
+	test('an error with --json has no header', async () => {
+		const cwd = await createFixture({});
+		const { stdout, stderr } = await run(cwd, 'format', '--json');
+		assert.strictEqual(stdout, '');
+		assert.match(stderr, /^✗ missing required args/);
+	});
+
+	test('a missing file says it can not be read', async () => {
+		const cwd = await createFixture({});
+		const { code, output } = await run(cwd, 'validate', 'missing.xml');
+		assert.strictEqual(code, 1);
+		assert.include(output, '✗ Can not read missing.xml');
+	});
+});

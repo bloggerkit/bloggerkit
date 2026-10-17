@@ -29,9 +29,11 @@ export default defineConfig({
 ```
 
 ```sh
-blogger-hbs          # build to dist/theme.xml
-blogger-hbs --watch  # build again on changes
-blogger-hbs --help   # all the options
+blogger-hbs                              # build to dist/theme.xml
+blogger-hbs --watch                      # build again on changes
+blogger-hbs validate theme.xml           # validate a theme
+blogger-hbs format theme.xml -o out.xml  # format it
+blogger-hbs --help                       # all the options
 ```
 
 The same is available from JavaScript with `compileTemplate`, `watchTemplate` and `renderTemplate`.

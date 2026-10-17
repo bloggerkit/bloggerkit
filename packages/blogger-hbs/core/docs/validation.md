@@ -93,7 +93,7 @@ With `output.format`, `true` by default, it is then written as Blogger saves it:
 - expressions printed by `blogger-expr` on a single line, `data:a&amp;&amp;data:b` as `data:a and data:b`
 - the children of `<b:section>`, `<b:widget>` and `<b:widget-settings>` each on a line, indented
 
-Everything else is left as it is. `--no-format` and `--no-validate` turn them off in the CLI.
+Everything else is left as it is. `--no-format` and `--no-validate` turn them off in the CLI, and `blogger-hbs validate` and `blogger-hbs format` do the same to an XML theme, see [Configuration](./configuration.md#validating-and-formatting-a-theme).
 
 ```
 ✗ The rendered template is not valid XML
@@ -115,16 +115,14 @@ const { xml, warnings, info } = processXml(await renderer.render(context), {
 });
 ```
 
-| Result     | Is                                                                   |
-| ---------- | -------------------------------------------------------------------- |
-| `xml`      | the theme, formatted with `format`                                   |
-| `warnings` | `{ message, loc }`, in `xml`, so the places are in the theme written |
-| `info`     | what `xml` is made of, the CLI shows it after a build                |
+| Result     | Is                                                                                                  |
+| ---------- | --------------------------------------------------------------------------------------------------- |
+| `xml`      | the theme, formatted with `format`                                                                  |
+| `warnings` | `{ message, loc }`, in `xml`, so the places are in the theme written                                |
+| `info`     | what `xml` is made of, the CLI shows its sections and widgets after a build, and `--json` prints it |
 
 | `info`     | Is                                                                                  |
 | ---------- | ----------------------------------------------------------------------------------- |
 | `root`     | the `b:` attributes of `<html>`, `{ 'b:layoutsVersion': '3' }`                      |
 | `sections` | `{ id, loc }` of every `<b:section>`                                                |
 | `widgets`  | `{ id, type, section, loc }` of every `<b:widget>`, `section` the id of its section |
-| `scripts`  | `{ count, size }` of the `<script>` elements, `size` the bytes in them              |
-| `styles`   | `{ count, size }` of the `<style>`, `<b:skin>` and `<b:template-skin>` elements     |
