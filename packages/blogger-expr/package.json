@@ -1,6 +1,6 @@
 {
   "name": "blogger-expr",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Parser and evaluator for Blogger theme XML expressions.",
   "keywords": [
     "blogger-theme"

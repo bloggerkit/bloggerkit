@@ -1,5 +1,11 @@
 # blogger-expr
 
+## 0.0.3
+
+### Patch Changes
+
+- [#47](https://github.com/bloggerkit/bloggerkit/pull/47) [`58bc939`](https://github.com/bloggerkit/bloggerkit/commit/58bc939cd08324b401b64f58b5e2814fbd41a1e3) Thanks [@kumardeo](https://github.com/kumardeo)! - A new parser, checker, evaluator and formatter, following what Blogger accepts and prints. `parse(source, { context })` never throws: it returns the tree, its cost, and the `errors` and `warnings`, each with a code, a message, its cause, a fix and where it is. The tree is descriptive (`PlusChain`, `Membership`, `LambdaOperation`, `TakeOrSkip`, literals with `raw` and `value`, operators with their spelling and place, `loc` on every node), and a range of `b:loop values` is only its root. `evaluate` returns values (`Decimal`, `TextBoolean`, `RichValue`, dates, lists, maps) and throws an `ExpressionError` with a diagnostic, `toText` prints them as Blogger does, and `print` formats like Prettier, to a `printWidth`, keeping how the expression is spelled. `LexError`, `ParseError`, `PrintError`, `EvaluateError`, `Evaluator`, `evaluateNode`, `valuesEqual`, `tokenize`, `imageValue`, `urlValue`, `plain` and `RichProperty` are removed, `EvaluatorOptions` is `EvaluateOptions`, it no longer depends on `blogger-images`, and the docs are only the grammar for now
+
 ## 0.0.2
 
 ### Patch Changes
