@@ -93,14 +93,6 @@ export function check(root: Root, source: string): Finding[] {
 				break;
 			case 'Membership':
 				checkMembership(node.item, node.collection, node.operator.spelling);
-				if (
-					unwrap(node.item).type === 'StringLiteral' &&
-					isPath(node.collection)
-				) {
-					report('warning', 'text-search-on-data', node.collection.span, {
-						text: text(node.collection),
-					});
-				}
 				break;
 			case 'LambdaOperation': {
 				const list = unwrap(node.list);
@@ -149,6 +141,12 @@ export function check(root: Root, source: string): Finding[] {
 						text: written,
 						path: `data:${[node.root, ...node.properties].join('.')}`,
 					});
+				} else if (written.includes('..') || written.endsWith('.')) {
+					// `data:blog..title`, `data:blog.title.`: what is read is `data:blog.title`
+					report('warning', 'member-access', node.span, {
+						text: written,
+						path: `data:${[node.root, ...node.properties].join('.')}`,
+					});
 				}
 				break;
 			}
@@ -161,6 +159,13 @@ export function check(root: Root, source: string): Finding[] {
 				) {
 					report('warning', 'member-applies-to-all', node.span, {
 						name: nameOf(node.property),
+					});
+				} else if (node.appliesTo === 'everythingBefore') {
+					// `data:blog .title`: a space before the dot, of one value
+					const { start, end } = node.property.span;
+					report('warning', 'member-access', node.span, {
+						text: text(node),
+						path: `${text(node.object)}.${source.slice(start, end)}`,
 					});
 				}
 				break;

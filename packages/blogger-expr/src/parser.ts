@@ -97,6 +97,15 @@ const TAKE_OR_SKIP = table<'take' | 'skip'>({
 	offset: 'skip',
 });
 
+/** Whether a word goes on after a value, an operator, a lambda, `take` or `to`, rather than being one. */
+function continuesAfterValue(word: string): boolean {
+	return (
+		/^(and|or|in|contains|not|eq|neq|lt|gt|lte|gte|to)$/.test(word) ||
+		LAMBDAS[word] !== undefined ||
+		TAKE_OR_SKIP[word] !== undefined
+	);
+}
+
 const FUNCTIONS = table<FunctionName>({
 	path: 'path',
 	params: 'params',
@@ -396,6 +405,17 @@ class Parser {
 	/** The name after `.`: a word, digits, or a quoted name. */
 	private propertyName(): Name {
 		const token = this.peek();
+		// `data:blog . title`: Blogger refuses a space after the dot
+		if (
+			token.spaceBefore &&
+			['word', 'number', 'string'].includes(token.kind)
+		) {
+			throw new SyntaxFailure(
+				'member-space-after-dot',
+				join(this.previous()?.span ?? token.span, token.span),
+				{ name: token.text },
+			);
+		}
 		if (
 			token.kind === 'word' ||
 			(token.kind === 'number' && /^\d+$/.test(token.text))
@@ -860,6 +880,20 @@ class Parser {
 				);
 			case 'data': {
 				this.next();
+				const after = this.peek();
+				// `data:blog. title`: the dot ends the path, a space after it is refused
+				if (
+					token.text.endsWith('.') &&
+					after.spaceBefore &&
+					(after.kind === 'string' ||
+						(after.kind === 'word' && !continuesAfterValue(after.text)))
+				) {
+					throw new SyntaxFailure(
+						'member-space-after-dot',
+						join(token.span, after.span),
+						{ name: after.text },
+					);
+				}
 				const [root, ...properties] = token.text
 					.slice('data:'.length)
 					.split('.')
@@ -1046,13 +1080,32 @@ class Parser {
 		return this.unexpected(`\`,\` or \`${close}\``);
 	}
 
+	/**
+	 * How many tokens from here make a key of a map: a string, or a name of
+	 * words, numbers and dashes with no space between them, `-a`, `a-`,
+	 * `a--b`, as Blogger reads them; 0 when they make none.
+	 */
+	private keyLength(): number {
+		const first = this.peek();
+		if (first.kind === 'string') {
+			return 1;
+		}
+		let length = 0;
+		for (
+			let token = first;
+			['word', 'number', '-'].includes(token.kind) &&
+			(length === 0 || !token.spaceBefore);
+			token = this.peek(++length)
+		) {}
+		const parts = Array.from({ length }, (_, i) => this.peek(i));
+		return parts.some((part) => part.kind !== '-') ? length : 0;
+	}
+
 	/** `{1, 2}` is a list, `{}` an empty one; `{ a: 1 }` is a map. */
 	private braces(): Node {
 		const open = this.next();
-		const first = this.peek();
-		const isMap =
-			['word', 'string', 'number'].includes(first.kind) &&
-			this.peek(1).kind === ':';
+		const length = this.keyLength();
+		const isMap = length > 0 && this.peek(length).kind === ':';
 		if (!isMap) {
 			const items = this.values('}');
 			const end = this.next();
@@ -1066,13 +1119,20 @@ class Parser {
 			if (this.at(',')) {
 				throw new SyntaxFailure('empty-item', this.peek().span);
 			}
-			const keyToken = this.next();
-			if (!['word', 'string', 'number'].includes(keyToken.kind)) {
-				throw new SyntaxFailure('expected', keyToken.span, {
+			const length = this.keyLength();
+			if (length === 0) {
+				const found = this.peek();
+				throw new SyntaxFailure('expected', found.span, {
 					expected: 'a key of the map',
-					found: `\`${keyToken.text}\``,
+					found: `\`${found.text}\``,
 				});
 			}
+			const parts = Array.from({ length }, () => this.next());
+			const keyToken = {
+				...parts[0],
+				text: parts.map((part) => part.text).join(''),
+				span: join(parts[0].span, (parts.at(-1) as Token).span),
+			};
 			const key: Name =
 				keyToken.kind === 'string'
 					? { text: stringValue(keyToken), quoted: true, span: keyToken.span }

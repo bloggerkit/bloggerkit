@@ -232,6 +232,18 @@ const CATALOG = {
 			'The dot is skipped in some paths and not in others: `data:.blog.title` reads `data:blog.title`, but `data:.blog` reads nothing.',
 		fix: `write ${path}`,
 	}),
+	'member-space-after-dot': ({ name }) => ({
+		message: `A member name comes right after its dot: \`. ${name}\`.`,
+		cause:
+			'A space before the dot of a member read is accepted, `data:blog .title`, but not after it: `data:blog. title` and `data:blog . title` are not valid.',
+		fix: `remove the space: .${name}`,
+	}),
+	'member-access': ({ text, path }) => ({
+		message: `\`${text}\` reads \`${path}\`.`,
+		cause:
+			'Empty segments and a dot at the end of a path are skipped, and a member after a space is read on what is before it; written plainly, it reads the same.',
+		fix: `write it as it reads: ${path}`,
+	}),
 	'member-dots': ({ text }) => ({
 		message: `\`${text}\` is a member read, not a range.`,
 		cause:
@@ -255,12 +267,6 @@ const CATALOG = {
 		cause:
 			'`a + b ?: c` is `a + (b ?: c)`, and `a * b ?: c` is `a * (b ?: c)`: `?:` applies to the value right before it.',
 		fix: 'add parentheses to say what is meant: (a + b) ?: c',
-	}),
-	'text-search-on-data': ({ text }) => ({
-		message: `\`${text}\` may not be text.`,
-		cause:
-			'A string read from data that is written like a number (`"2024"`, `"007"`) is a number, and "true", "false", "yes", "no" are booleans; `contains` and `in` refuse them.',
-		fix: `turn it into text where it is used: (${text} + "")`,
 	}),
 	'number-text-equality': ({ text }) => ({
 		message: `\`${text}\` compares numbers by their text.`,
