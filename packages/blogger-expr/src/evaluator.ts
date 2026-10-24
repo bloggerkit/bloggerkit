@@ -1,564 +1,851 @@
-import type { Node } from './ast';
-import { FIXED_BUILTINS } from './builtins';
-import { parse } from './parser';
-import { plain, RichValue, type Value } from './values';
+import {
+	type ArithmeticName,
+	type ComparisonName,
+	type FunctionCall,
+	type LambdaOperation,
+	type LoopRange,
+	type Node,
+	nameOf,
+	type OperatorFunctionCall,
+	type Root,
+	type TakeOrSkip,
+} from './ast';
+import { formatDate, PatternError, weekdayOf } from './dates';
+import {
+	type DiagnosticCode,
+	diagnostic,
+	ExpressionError,
+} from './diagnostics';
+import {
+	ArgumentProblem,
+	appendParams,
+	fragment,
+	params,
+	path,
+	resizeImage,
+	snippet,
+	sourceSet,
+} from './functions';
+import type { Span } from './source';
+import { table } from './table';
+import { DEFAULT_TEXT_OPTIONS, type TextOptions, toText } from './text';
+import {
+	add,
+	compare,
+	Decimal,
+	divide,
+	isBooleanWord,
+	isList,
+	isMap,
+	isTruthy,
+	kindOf,
+	looseEquals,
+	multiply,
+	plain,
+	RichValue,
+	read,
+	remainder,
+	subtract,
+	textOf,
+	toNumber,
+	type Value,
+	type ValueMap,
+} from './values';
 
-export class EvaluateError extends Error {
-	constructor(
-		message: string,
-		public readonly node: Node,
-	) {
-		super(message);
-		this.name = 'EvaluateError';
-	}
-}
-
-export interface EvaluatorOptions {
-	/** Root object reachable via `data:...`. */
+export interface EvaluateOptions extends TextOptions {
+	/** The names `data:` reads: `data:blog.title` reads `data.blog.title`. */
 	data?: Record<string, unknown>;
-	/**
-	 * When true, accessing a missing property/index throws `EvaluateError` instead of
-	 * yielding `null`. Blogger's own renderer is lenient (missing data just emits
-	 * nothing), so this defaults to `false`.
-	 */
-	strict?: boolean;
-}
-
-export class Evaluator {
-	private readonly data: Record<string, unknown>;
-	private readonly strict: boolean;
-	/** Lambda-bound variables for `filter`/`map`/`any`/`all`/`none`, innermost last. */
-	private readonly scopes: Record<string, Value>[] = [];
-
-	constructor(options: EvaluatorOptions = {}) {
-		this.data = options.data ?? {};
-		this.strict = options.strict ?? false;
-	}
-
-	/** Looks up a lambda-bound name in the innermost-first scope chain. */
-	private lookupScope(
-		name: string,
-	): { found: true; value: Value } | { found: false } {
-		for (let i = this.scopes.length - 1; i >= 0; i--) {
-			const scope = this.scopes[i] as Record<string, Value>;
-			if (Object.hasOwn(scope, name)) {
-				return { found: true, value: scope[name] as Value };
-			}
-		}
-		return { found: false };
-	}
-
-	evaluate(node: Node): Value {
-		switch (node.type) {
-			case 'StringLiteral':
-				return node.value;
-			case 'NumberLiteral':
-				return node.value;
-			case 'BooleanLiteral':
-				return node.value;
-
-			case 'ListLiteral':
-			case 'SetLiteral':
-				return node.elements.map((el) => this.evaluate(el));
-
-			case 'MapLiteral': {
-				const obj: Record<string, Value> = {};
-				for (const entry of node.entries) {
-					obj[entry.key] = this.evaluate(entry.value);
-				}
-				return obj;
-			}
-
-			case 'EmptyDataReference':
-				return null;
-			case 'DataReference': {
-				// Templates observed in the wild reference the current lambda
-				// variable both bare (`l.name`) and as `data:l.name` interchangeably,
-				// so lambda scope takes priority over the root data object.
-				const scoped = this.lookupScope(node.name);
-				if (scoped.found) {
-					return scoped.value;
-				}
-				return this.orNull(this.data[node.name], node);
-			}
-
-			case 'Identifier': {
-				// The parser only ever produces an `Identifier` node for a
-				// currently-in-scope lambda parameter (everything else is a parse
-				// error), so this should always resolve. The throw below is a
-				// defensive fallback, not an expected runtime path.
-				const scoped = this.lookupScope(node.name);
-				if (scoped.found) {
-					return scoped.value;
-				}
-				throw new EvaluateError(`'${node.name}' is not in scope`, node);
-			}
-
-			case 'MemberExpression': {
-				const obj = this.evaluate(node.object);
-				return this.getProperty(obj, node.property, node);
-			}
-
-			case 'IndexExpression': {
-				const obj = plain(this.evaluate(node.object));
-				const index = plain(this.evaluate(node.index));
-				return this.evaluateIndex(obj, index, node);
-			}
-
-			case 'CallExpression':
-				return this.evaluateCall(node);
-
-			case 'UnaryExpression': {
-				// `!` is the only one, a tree made by hand can have another
-				const { operator } = node as { operator: unknown };
-				if (operator !== '!') {
-					throw new EvaluateError(
-						`Unknown unary operator '${String(operator)}'`,
-						node,
-					);
-				}
-				return !isTruthy(this.evaluate(node.argument));
-			}
-
-			case 'BinaryExpression':
-				return this.evaluateBinary(node);
-
-			case 'LogicalExpression': {
-				const left = this.evaluate(node.left);
-				if (node.operator === 'and') {
-					return isTruthy(left) ? this.evaluate(node.right) : left;
-				}
-				return isTruthy(left) ? left : this.evaluate(node.right);
-			}
-
-			case 'MembershipExpression': {
-				const result = this.evaluateMembership(node);
-				return node.negated ? !result : result;
-			}
-
-			case 'ConditionalExpression':
-				return isTruthy(this.evaluate(node.test))
-					? this.evaluate(node.consequent)
-					: this.evaluate(node.alternate);
-
-			case 'ElvisExpression': {
-				const left = this.evaluate(node.left);
-				return left === null || left === undefined
-					? this.evaluate(node.right)
-					: left;
-			}
-
-			case 'LambdaExpression':
-				return this.evaluateLambda(node);
-
-			case 'NamedOperatorExpression': {
-				const fn = FIXED_BUILTINS[node.operator];
-				return fn(this.evaluate(node.left), this.evaluate(node.right));
-			}
-
-			default: {
-				const exhaustive: never = node;
-				throw new EvaluateError(
-					`Unknown node type ${(exhaustive as Node).type}`,
-					node,
-				);
-			}
-		}
-	}
-
-	private evaluateCall(node: Extract<Node, { type: 'CallExpression' }>): Value {
-		const args = node.args.map((a) => this.evaluate(a));
-		const fn = FIXED_BUILTINS[node.callee];
-		return fn(...args);
-	}
-
-	private evaluateBinary(
-		node: Extract<Node, { type: 'BinaryExpression' }>,
-	): Value {
-		const { operator } = node;
-		const left = plain(this.evaluate(node.left));
-		const right = plain(this.evaluate(node.right));
-
-		switch (operator) {
-			case '+':
-				// strings are joined, anything else is added as numbers
-				if (typeof left === 'string' || typeof right === 'string') {
-					return this.stringify(left) + this.stringify(right);
-				}
-				return (
-					this.toNumber(left, node.left) + this.toNumber(right, node.right)
-				);
-			case '-':
-			case '*':
-			case '/':
-			case '%':
-				return arithmetic(
-					operator,
-					this.toNumber(left, node.left),
-					this.toNumber(right, node.right),
-				);
-			case '==':
-				return valuesEqual(left, right);
-			case '!=':
-				return !valuesEqual(left, right);
-			case '<':
-			case '>':
-			case '<=':
-			case '>=':
-				return this.compare(operator, left, right, node);
-			default: {
-				const exhaustive: never = operator;
-				throw new EvaluateError(
-					`Unknown binary operator ${exhaustive as string}`,
-					node,
-				);
-			}
-		}
-	}
-
-	private compare(
-		op: '<' | '>' | '<=' | '>=',
-		left: Value,
-		right: Value,
-		node: Node,
-	): boolean {
-		let l: number | string;
-		let r: number | string;
-		if (typeof left === 'number' && typeof right === 'number') {
-			l = left;
-			r = right;
-		} else if (typeof left === 'string' && typeof right === 'string') {
-			l = left;
-			r = right;
-		} else {
-			l = this.toNumber(left, node);
-			r = this.toNumber(right, node);
-		}
-		switch (op) {
-			case '<':
-				return l < r;
-			case '>':
-				return l > r;
-			case '<=':
-				return l <= r;
-			case '>=':
-				return l >= r;
-		}
-	}
-
-	private evaluateMembership(
-		node: Extract<Node, { type: 'MembershipExpression' }>,
-	): boolean {
-		// `left in right` and `right contains left` share the same underlying test:
-		// is `item` a member of `collection`? The item is evaluated first.
-		const [item, collection] = (
-			node.operator === 'in'
-				? [this.evaluate(node.left), this.evaluate(node.right)]
-				: [this.evaluate(node.right), this.evaluate(node.left)]
-		).map(plain);
-
-		if (typeof collection === 'string') {
-			return typeof item === 'string' && collection.includes(item);
-		}
-		if (Array.isArray(collection)) {
-			return collection.some((el) => valuesEqual(el, item));
-		}
-		if (collection && typeof collection === 'object') {
-			return typeof item === 'string' && Object.hasOwn(collection, item);
-		}
-		if (this.strict) {
-			throw new EvaluateError(
-				"'in'/'contains' requires a string, list, or map",
-				node,
-			);
-		}
-		return false;
-	}
-
-	private evaluateLambda(
-		node: Extract<Node, { type: 'LambdaExpression' }>,
-	): Value {
-		const source = plain(this.evaluate(node.source));
-		const list = Array.isArray(source)
-			? source
-			: this.coerceToList(source, node);
-
-		const runBody = (item: Value): Value => {
-			this.scopes.push({ [node.param]: item });
-			try {
-				return this.evaluate(node.body);
-			} finally {
-				this.scopes.pop();
-			}
-		};
-
-		switch (node.operator) {
-			case 'filter':
-				return list.filter((item) => isTruthy(runBody(item)));
-			case 'map':
-				return list.map((item) => runBody(item));
-			case 'any':
-				return list.some((item) => isTruthy(runBody(item)));
-			case 'all':
-				return list.every((item) => isTruthy(runBody(item)));
-			case 'none':
-				return !list.some((item) => isTruthy(runBody(item)));
-			default: {
-				const exhaustive: never = node.operator;
-				throw new EvaluateError(
-					`Unknown lambda operator ${exhaustive as string}`,
-					node,
-				);
-			}
-		}
-	}
-
-	private coerceToList(source: Value, node: Node): Value[] {
-		if (source === null || source === undefined) {
-			if (this.strict) {
-				throw new EvaluateError(
-					'Lambda operator requires a list, got null',
-					node,
-				);
-			}
-			return [];
-		}
-		throw new EvaluateError('Lambda operator requires a list', node);
-	}
-
-	/**
-	 * Index access (`data:x[i]`) only works on arrays — `data:blog["title"]` is a
-	 * type error even though `blog` is data-rooted, because `blog` is a map, and
-	 * maps only support dot notation. A numeric-looking string index (`x["0"]`)
-	 * is accepted, same as a bare number.
-	 */
-	private evaluateIndex(obj: Value, index: Value, node: Node): Value {
-		if (obj === null || obj === undefined) {
-			if (this.strict) {
-				throw new EvaluateError('Cannot index null/undefined', node);
-			}
-			return null;
-		}
-		if (!Array.isArray(obj)) {
-			throw new EvaluateError(
-				"Index access '[...]' is only supported on arrays; use '.' for map properties",
-				node,
-			);
-		}
-		let idx: number;
-		if (typeof index === 'number') {
-			idx = index;
-		} else if (typeof index === 'string' && /^-?\d+$/.test(index)) {
-			idx = Number(index);
-		} else {
-			throw new EvaluateError(
-				'Array index must be a number (or numeric string)',
-				node,
-			);
-		}
-		if (!Number.isInteger(idx)) {
-			throw new EvaluateError('Array index must be an integer', node);
-		}
-		return this.orNull(obj[idx], node);
-	}
-
-	/**
-	 * The built-in properties first, `.length`, `.first`, `.last` and the
-	 * items of a list, then those of a `RichValue`.
-	 */
-	private getProperty(rich: Value, property: string, node: Node): Value {
-		const obj = plain(rich);
-		const own = () =>
-			rich instanceof RichValue ? rich.property(property) : undefined;
-
-		if (obj === null || obj === undefined) {
-			if (this.strict) {
-				throw new EvaluateError(
-					`Cannot read property '${property}' of null`,
-					node,
-				);
-			}
-			return null;
-		}
-		if (Array.isArray(obj)) {
-			if (property === 'length') {
-				return obj.length;
-			}
-			if (property === 'first') {
-				return obj.length > 0 ? (obj[0] as Value) : null;
-			}
-			if (property === 'last') {
-				return obj.length > 0 ? (obj[obj.length - 1] as Value) : null;
-			}
-			const idx = Number(property);
-			if (Number.isInteger(idx)) {
-				return this.orNull(obj[idx], node);
-			}
-			return own() ?? null;
-		}
-		if (typeof obj === 'object') {
-			return this.orNull((obj as Record<string, Value>)[property], node);
-		}
-		if (typeof obj === 'string' && property === 'length') {
-			return obj.length;
-		}
-		const value = own();
-		if (value !== undefined) {
-			return value;
-		}
-		if (this.strict) {
-			throw new EvaluateError(
-				`Cannot read property '${property}' of ${typeof obj}`,
-				node,
-			);
-		}
-		return null;
-	}
-
-	/** `null` for a missing value, an error with `strict`. */
-	private orNull(v: unknown, node: Node): Value {
-		if (v === undefined) {
-			if (this.strict) {
-				throw new EvaluateError('Value is undefined', node);
-			}
-			return null;
-		}
-		return v as Value;
-	}
-
-	private toNumber(v: Value, node: Node): number {
-		if (typeof v === 'number') {
-			return v;
-		}
-		if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) {
-			return Number(v);
-		}
-		if (typeof v === 'boolean') {
-			return v ? 1 : 0;
-		}
-		if (this.strict) {
-			throw new EvaluateError(
-				`Cannot coerce ${JSON.stringify(v)} to a number`,
-				node,
-			);
-		}
-		return Number.NaN;
-	}
-
-	private stringify(v: Value): string {
-		if (v === null) {
-			return '';
-		}
-		if (typeof v === 'string') {
-			return v;
-		}
-		if (typeof v === 'number' || typeof v === 'boolean') {
-			return String(v);
-		}
-		return JSON.stringify(v);
-	}
-}
-
-export function isTruthy(value: Value): boolean {
-	const v = plain(value);
-	if (v === null || v === undefined) {
-		return false;
-	}
-	if (typeof v === 'boolean') {
-		return v;
-	}
-	if (typeof v === 'number') {
-		return v !== 0 && !Number.isNaN(v);
-	}
-	if (typeof v === 'string') {
-		return v.length > 0;
-	}
-	// a list or a map, even empty
-	return true;
-}
-
-function arithmetic(
-	operator: '-' | '*' | '/' | '%',
-	left: number,
-	right: number,
-): number {
-	switch (operator) {
-		case '-':
-			return left - right;
-		case '*':
-			return left * right;
-		case '/':
-			return left / right;
-		case '%':
-			return left % right;
-	}
-}
-
-export function valuesEqual(left: Value, right: Value): boolean {
-	const a = plain(left);
-	const b = plain(right);
-	if (a === b) {
-		return true;
-	}
-	if (a === null || b === null) {
-		return a === b;
-	}
-	if (Array.isArray(a) && Array.isArray(b)) {
-		return (
-			a.length === b.length && a.every((v, i) => valuesEqual(v, b[i] as Value))
-		);
-	}
-	if (
-		typeof a === 'object' &&
-		typeof b === 'object' &&
-		!Array.isArray(a) &&
-		!Array.isArray(b)
-	) {
-		const aKeys = Object.keys(a);
-		const bKeys = Object.keys(b);
-		if (aKeys.length !== bKeys.length) {
-			return false;
-		}
-		return aKeys.every((k) =>
-			valuesEqual(
-				(a as Record<string, Value>)[k] as Value,
-				(b as Record<string, Value>)[k] as Value,
-			),
-		);
-	}
-	// Loose numeric/string equality
-	if (typeof a === 'number' && typeof b === 'string') {
-		return String(a) === b;
-	}
-	if (typeof a === 'string' && typeof b === 'number') {
-		return a === String(b);
-	}
-	return false;
-}
-
-/** Evaluates a parsed Blogger expression AST. */
-export function evaluateNode(node: Node, options?: EvaluatorOptions): Value {
-	return new Evaluator(options).evaluate(node);
 }
 
 /**
- * Parses and evaluates a Blogger expression in a single step.
- *
- * Example:
- *
- * ```ts
- * evaluate('data:skin.vars.feature_status == "2px" and !data:view.isError', {
- *   data: {
- *     skin: { vars: { feature_status: "2px" } },
- *     view: { isError: false }
- *   },
- * }); // => true
- * ```
+ * A value and where it comes from. A value read from data uses truthiness
+ * where a condition is expected; a value made in the expression must be a
+ * boolean, or a string that reads as one.
  */
-export function evaluate(
-	source: string | Node,
-	options: EvaluatorOptions = {},
-): Value {
-	const ast: Node = typeof source === 'string' ? parse(source) : source;
-	return new Evaluator(options).evaluate(ast);
+interface Result {
+	value: Value;
+	fromData: boolean;
 }
+
+const made = (value: Value): Result => ({ value, fromData: false });
+const fromData = (value: Value): Result => ({ value, fromData: true });
+
+const MAX_RANGE = 1_000_000;
+
+/** The operators that take two numbers. */
+type NumberOperator = ArithmeticName | ComparisonName;
+
+/** The value of a parsed expression for the data. Throws `ExpressionError`. */
+export function evaluateNode(
+	source: string,
+	node: Root,
+	options: EvaluateOptions = {},
+): Value {
+	return new Evaluator(source, options).run(node);
+}
+
+class Evaluator {
+	private readonly scope: { name: string; value: Value }[] = [];
+	private readonly text: Required<TextOptions>;
+
+	constructor(
+		private readonly source: string,
+		private readonly options: EvaluateOptions,
+	) {
+		this.text = {
+			language: options.language ?? DEFAULT_TEXT_OPTIONS.language,
+			timeZone: options.timeZone ?? DEFAULT_TEXT_OPTIONS.timeZone,
+			timestampFormat:
+				options.timestampFormat ?? DEFAULT_TEXT_OPTIONS.timestampFormat,
+		};
+	}
+
+	run(node: Root): Value {
+		try {
+			return node.type === 'LoopRange'
+				? this.range(node)
+				: this.eval(node).value;
+		} catch (error) {
+			// an invalid date in the data, or an invalid time zone or language option
+			if (error instanceof RangeError) {
+				return this.fail('evaluate-invalid', node.span, {
+					problem: error.message,
+				});
+			}
+			throw error;
+		}
+	}
+
+	private fail(
+		code: DiagnosticCode,
+		at: Span,
+		detail: Record<string, string> = {},
+	): never {
+		throw new ExpressionError(
+			diagnostic(this.source, 'error', code, at, detail),
+		);
+	}
+
+	private sourceOf(node: { span: Span }): string {
+		return this.source.slice(node.span.start, node.span.end);
+	}
+
+	private toText = (value: Value): string => toText(value, this.text);
+
+	private eval(node: Node): Result {
+		switch (node.type) {
+			case 'NumberLiteral':
+				return made(Decimal.parse(node.raw));
+			case 'StringLiteral':
+				return made(node.value);
+			case 'BooleanLiteral':
+				return made(node.value);
+			case 'ListLiteral':
+				return made(node.items.map((item) => this.eval(item).value));
+			case 'MapLiteral': {
+				// own keys, `__proto__` and `constructor` too, the last of a key written twice
+				const map = Object.fromEntries(
+					node.entries.map((entry) => {
+						const value = this.eval(entry.value).value;
+						// a map keeps computed values: `{ a: 007 }.a` is `7`
+						return [
+							nameOf(entry.key),
+							value instanceof Decimal ? value.computed() : value,
+						];
+					}),
+				);
+				return made(map);
+			}
+			case 'DataPath':
+				return fromData(this.dataPath(node.root, node.properties));
+			case 'Parameter':
+				return fromData(this.lookup(node.name));
+			case 'PropertyAccess':
+				return fromData(
+					this.member(this.eval(node.object).value, nameOf(node.property)),
+				);
+			case 'IndexAccess':
+				return fromData(
+					this.index(this.eval(node.object).value, this.eval(node.index).value),
+				);
+			case 'Parenthesized':
+				return this.eval(node.expression);
+			case 'LogicalNot':
+				return made(!this.condition(node.operand));
+			case 'Logical':
+				return made(
+					node.operator.name === 'and'
+						? this.condition(node.left) && this.condition(node.right)
+						: this.condition(node.left) || this.condition(node.right),
+				);
+			case 'Equality': {
+				const equal = looseEquals(
+					this.eval(node.left).value,
+					this.eval(node.right).value,
+					this.toText,
+				);
+				return made(node.operator.name === 'equal' ? equal : !equal);
+			}
+			case 'Arithmetic':
+			case 'Comparison': {
+				const operator = node.operator.name;
+				const left = this.number(node.left, operator);
+				const right = this.number(node.right, operator);
+				return made(this.arithmetic(operator, left, right, node));
+			}
+			case 'PlusChain':
+				return made(
+					this.addition(
+						node.operands.map((operand) => this.eval(operand).value),
+						node,
+					),
+				);
+			case 'Membership': {
+				const found = this.contains(
+					this.eval(node.collection).value,
+					this.eval(node.item).value,
+					node,
+				);
+				return made(found !== node.negated);
+			}
+			case 'Conditional':
+				return this.condition(node.condition)
+					? this.eval(node.whenTrue)
+					: this.eval(node.whenFalse);
+			case 'Fallback': {
+				const value = this.eval(node.value);
+				return plain(value.value) === undefined
+					? this.eval(node.fallback)
+					: value;
+			}
+			case 'LambdaOperation':
+				return this.lambda(node);
+			case 'TakeOrSkip':
+				return fromData(
+					this.slice(
+						this.eval(node.list).value,
+						this.eval(node.count).value,
+						node.operator.name,
+						node,
+					),
+				);
+			case 'FunctionCall':
+				return this.call(node);
+			case 'OperatorFunctionCall':
+				return made(this.operatorCall(node));
+		}
+	}
+
+	// ----- data -----
+
+	private lookup(name: string): Value {
+		for (let i = this.scope.length - 1; i >= 0; i--) {
+			const entry = this.scope[i] as { name: string; value: Value };
+			if (entry.name === name) {
+				return entry.value;
+			}
+		}
+		return undefined;
+	}
+
+	/** `data:a.b.c`: the root is a lambda parameter or a name of the data. */
+	private dataPath(root: string | undefined, properties: string[]): Value {
+		if (root === undefined) {
+			return undefined;
+		}
+		const fromScope = this.scope.some((entry) => entry.name === root);
+		const data = this.options.data ?? {};
+		let value = fromScope
+			? this.lookup(root)
+			: Object.hasOwn(data, root)
+				? read(data[root])
+				: undefined;
+		for (const property of properties) {
+			value = this.member(value, property);
+		}
+		return value;
+	}
+
+	/**
+	 * `.name`: a property given with the value, a key of a map, or one Blogger
+	 * has, whose name is in any case: `.length`, `.LENGTH`.
+	 */
+	private member(value: Value, name: string): Value {
+		const property = name.toLowerCase();
+		if (value instanceof RichValue) {
+			const key =
+				value.kind === 'image'
+					? Object.keys(value.properties).find(
+							(k) => k.toLowerCase() === property,
+						)
+					: Object.hasOwn(value.properties, name) && name;
+			if (key) {
+				return read(value.properties[key]);
+			}
+			if (value.kind === 'url' && property === 'raw') {
+				return plain(value);
+			}
+		}
+		const v = plain(value);
+		if (isMap(v)) {
+			return Object.hasOwn(v, name) ? read((v as ValueMap)[name]) : undefined;
+		}
+		if (Array.isArray(v)) {
+			return listProperty(v, property);
+		}
+		if (v instanceof Date && property in DATE_PROPERTIES) {
+			return this.dateProperty(v, property);
+		}
+		const text = textOf(value, this.toText);
+		if (text === undefined) {
+			return undefined;
+		}
+		if (property === 'length' || property === 'size') {
+			return Decimal.integer([...text].length);
+		}
+		// the escaped text is read again: `"9999".escaped` is a number
+		const escapeText = ESCAPES[property];
+		return escapeText ? read(escapeText(text)) : undefined;
+	}
+
+	private dateProperty(date: Date, property: string): Value {
+		if (property === 'dayofweek') {
+			return Decimal.integer(weekdayOf(date, this.text.timeZone));
+		}
+		if (property === 'iso8601') {
+			return formatDate(date, "yyyy-MM-dd'T'HH:mm:ssxxx", this.text);
+		}
+		return Decimal.parse(
+			formatDate(date, DATE_PROPERTIES[property] as string, this.text),
+		);
+	}
+
+	/** `[index]`: an integer, or a string of digits; anything else reads nothing. */
+	private index(value: Value, index: Value): Value {
+		const list = plain(value);
+		if (!Array.isArray(list)) {
+			return undefined;
+		}
+		const i = plain(index);
+		let position: bigint | undefined;
+		if (i instanceof Decimal && i.scale === 0) {
+			position = i.mantissa;
+		} else if (typeof i === 'string' && /^\d+$/.test(i)) {
+			position = BigInt(i);
+		}
+		if (
+			position === undefined ||
+			position < 0n ||
+			position >= BigInt(list.length)
+		) {
+			return undefined;
+		}
+		return read(list[Number(position)]);
+	}
+
+	// ----- conditions -----
+
+	/**
+	 * A condition: data uses truthiness; a value made in the expression must be
+	 * a boolean, or a string `true`, `false`, `yes`, `no` or `""`.
+	 */
+	private condition(node: Node): boolean {
+		const { value, fromData: isData } = this.eval(node);
+		const v = plain(value);
+		if (isData || typeof v === 'boolean') {
+			return isTruthy(v);
+		}
+		if (typeof v === 'string' && (v === '' || isBooleanWord(v))) {
+			return isTruthy(v);
+		}
+		// a map is true
+		if (isMap(v)) {
+			return true;
+		}
+		return this.fail('evaluate-condition', node.span, {
+			text: this.sourceOf(node),
+			found: kindOf(v),
+		});
+	}
+
+	// ----- operators -----
+
+	private number(node: Node, operator: string): Decimal {
+		const value = this.eval(node).value;
+		const n = toNumber(value);
+		if (!n) {
+			this.fail('evaluate-type', node.span, {
+				operation: OPERATION_NAMES[operator] ?? `\`${operator}\``,
+				text: this.sourceOf(node),
+				found: kindOf(value),
+			});
+		}
+		return n;
+	}
+
+	private arithmetic(
+		operator: NumberOperator,
+		left: Decimal,
+		right: Decimal,
+		at: Node,
+	): Value {
+		switch (operator) {
+			case 'subtract':
+				return subtract(left, right);
+			case 'multiply':
+				return multiply(left, right);
+			case 'divide':
+				return divide(left, right) ?? this.fail('division-by-zero', at.span);
+			case 'remainder':
+				return (
+					remainder(left, right) ?? this.fail('remainder-by-zero', at.span)
+				);
+			case 'less':
+				return compare(left, right) < 0;
+			case 'greater':
+				return compare(left, right) > 0;
+			case 'lessOrEqual':
+				return compare(left, right) <= 0;
+			default:
+				return compare(left, right) >= 0;
+		}
+	}
+
+	/** A `+` chain: text when any value is a string, a date or missing data; a sum of numbers otherwise. */
+	private addition(values: Value[], at: Node): Value {
+		const joins = values.some((v) => {
+			const p = plain(v);
+			return p === undefined || typeof p === 'string' || p instanceof Date;
+		});
+		if (joins) {
+			return values.map(this.toText).join('');
+		}
+		let total: Decimal | undefined;
+		for (const [i, v] of values.entries()) {
+			const p = plain(v);
+			if (!(p instanceof Decimal)) {
+				const operand = at.type === 'PlusChain' ? at.operands[i] : at;
+				return this.fail('evaluate-type', (operand ?? at).span, {
+					operation: '`+`',
+					text: this.sourceOf(operand ?? at),
+					found: kindOf(p),
+				});
+			}
+			total = total ? add(total, p) : p.computed();
+		}
+		return total ?? Decimal.integer(0);
+	}
+
+	/**
+	 * `item in collection`: a substring of text, an item of a list equal with
+	 * `==`. Missing data is searched like `""`, and is never found in text; a
+	 * map is never in a list; a list is never searched for.
+	 */
+	private contains(collection: Value, item: Value, at: Node): boolean {
+		const c = plain(collection);
+		const i = plain(item);
+		if (Array.isArray(c) && !isList(i)) {
+			return (
+				i !== undefined && c.some((x) => looseEquals(read(x), i, this.toText))
+			);
+		}
+		const text = c === undefined ? '' : c;
+		if (
+			typeof text === 'string' &&
+			i !== undefined &&
+			!isList(i) &&
+			!isMap(i)
+		) {
+			return text.includes(this.toText(i));
+		}
+		return this.fail('evaluate-type', at.span, {
+			operation: '`in` and `contains`',
+			text: this.sourceOf(at),
+			found: `${kindOf(i)} in ${kindOf(c)}`,
+		});
+	}
+
+	// ----- lambdas, take, skip -----
+
+	private lambda(node: LambdaOperation): Result {
+		const list = plain(this.eval(node.list).value);
+		if (list === undefined) {
+			const defaults: Record<string, Value> = {
+				filter: [],
+				map: [],
+				any: false,
+				all: false,
+				none: true,
+				count: Decimal.integer(0),
+				first: undefined,
+			};
+			return made(defaults[node.operator.name]);
+		}
+		if (!Array.isArray(list)) {
+			return this.fail('evaluate-type', node.list.span, {
+				operation: `\`${node.operator.spelling}\``,
+				text: this.sourceOf(node.list),
+				found: kindOf(list),
+			});
+		}
+		const kept: unknown[] = [];
+		const mapped: Value[] = [];
+		let count = 0;
+		this.scope.push({ name: node.parameter.name, value: undefined });
+		try {
+			for (const item of list) {
+				(this.scope.at(-1) as { value: Value }).value = read(item);
+				if (node.operator.name === 'map') {
+					mapped.push(this.eval(node.body).value);
+					continue;
+				}
+				const passed = this.condition(node.body);
+				if (passed) {
+					if (node.operator.name === 'any') {
+						return made(true);
+					}
+					if (node.operator.name === 'none') {
+						return made(false);
+					}
+					if (node.operator.name === 'first') {
+						return fromData(read(item));
+					}
+					count++;
+					kept.push(item);
+				} else if (node.operator.name === 'all') {
+					return made(false);
+				}
+			}
+		} finally {
+			this.scope.pop();
+		}
+		switch (node.operator.name) {
+			case 'map':
+				return made(mapped);
+			case 'filter':
+				return made(kept);
+			case 'count':
+				return made(Decimal.integer(count));
+			case 'any':
+				return made(false);
+			case 'first':
+				return made(undefined);
+			default:
+				return made(true);
+		}
+	}
+
+	/** `take` and `skip`: the count is a number, rounded half up; `take` needs 1 or more, `skip` 0 or more. */
+	private slice(
+		list: Value,
+		count: Value,
+		operator: 'take' | 'skip',
+		at: TakeOrSkip | FunctionCall,
+	): Value {
+		const items = plain(list);
+		const listNode =
+			at.type === 'TakeOrSkip' ? at.list : (at.arguments[0] as Node);
+		const countNode =
+			at.type === 'TakeOrSkip' ? at.count : (at.arguments[1] as Node);
+		if (!Array.isArray(items)) {
+			return this.fail('evaluate-type', listNode.span, {
+				operation: `\`${operator}\``,
+				text: this.sourceOf(listNode),
+				found: kindOf(items),
+			});
+		}
+		const n = plain(count);
+		if (!(n instanceof Decimal)) {
+			return this.fail('slice-count', countNode.span, {
+				operator,
+				text: this.sourceOf(countNode),
+			});
+		}
+		const rounded = n.roundHalfUp();
+		if (rounded < 0n || (operator === 'take' && rounded < 1n)) {
+			return this.fail('slice-count-range', countNode.span, {
+				operator,
+				text: this.sourceOf(countNode),
+			});
+		}
+		const k = Number(rounded > BigInt(items.length) ? items.length : rounded);
+		return operator === 'take' ? items.slice(0, k) : items.slice(k);
+	}
+
+	// ----- calls -----
+
+	private call(node: FunctionCall): Result {
+		const args = node.arguments.map((a) => this.eval(a).value);
+		try {
+			switch (node.function.name) {
+				case 'path':
+					return made(path(args[0], args[1]));
+				case 'fragment':
+					return made(fragment(args[0], args[1]));
+				case 'params':
+					return made(params(args[0], args[1]));
+				case 'appendParams':
+					return made(appendParams(args[0], args[1]));
+				case 'snippet':
+					return fromData(snippet(args[0], args[1], args.length > 1));
+				case 'format':
+					return made(this.format(args[0], args[1]));
+				case 'resizeImage':
+					return made(resizeImage(args[0], args[1], args[2]));
+				case 'sourceSet':
+					return made(sourceSet(args[0], args[1], args[2]));
+				default:
+					return fromData(
+						this.slice(args[0], args[1], node.function.name, node),
+					);
+			}
+		} catch (error) {
+			if (error instanceof ArgumentProblem) {
+				const argument = node.arguments[error.argument] ?? node;
+				return this.fail('evaluate-argument', argument.span, {
+					name: node.function.spelling,
+					problem: error.problem,
+					text: this.sourceOf(argument),
+				});
+			}
+			throw error;
+		}
+	}
+
+	/** `format(date, pattern)`: in UTC, with the blog's language. */
+	private format(date: Value, pattern: Value): Value {
+		const d = plain(date);
+		if (!(d instanceof Date)) {
+			throw new ArgumentProblem(
+				`the date must be a date of the data, not ${kindOf(d)}`,
+				0,
+			);
+		}
+		const p = plain(pattern);
+		if (p === undefined) {
+			return undefined;
+		}
+		if (typeof p !== 'string') {
+			throw new ArgumentProblem(
+				`the pattern must be a string, not ${kindOf(p)}`,
+				1,
+			);
+		}
+		try {
+			return formatDate(d, p, {
+				language: this.text.language,
+				timeZone: 'UTC',
+			});
+		} catch (error) {
+			if (error instanceof PatternError) {
+				throw new ArgumentProblem(`${error.message}; quote text: 'at'`, 1);
+			}
+			throw error;
+		}
+	}
+
+	/** `+(a, b)`, `and(a, b)`, `-(x)`: the operator applied from the left. */
+	private operatorCall(node: OperatorFunctionCall): Value {
+		const args = node.arguments;
+		const value = (i: number) => this.eval(args[i] as Node).value;
+		switch (node.operator.name) {
+			case '+': {
+				if (args.length === 0) {
+					return Decimal.integer(0);
+				}
+				const values = args.map((_, i) => value(i));
+				if (values.length === 1) {
+					const n = plain(values[0]);
+					return n instanceof Decimal ? n.computed() : values[0];
+				}
+				return this.addition(values, node);
+			}
+			case 'and':
+				return args.every((a) => this.condition(a));
+			case 'or':
+				return args.some((a) => this.condition(a));
+			case '?:': {
+				for (const [i] of args.entries()) {
+					const v = value(i);
+					if (plain(v) !== undefined || i === args.length - 1) {
+						return v;
+					}
+				}
+				return undefined;
+			}
+			case 'in':
+			case 'contains': {
+				const [first, second] = [value(0), value(1)];
+				return node.operator.name === 'in'
+					? this.contains(second, first, node)
+					: this.contains(first, second, node);
+			}
+			case '==':
+			case '!=': {
+				let result: Value = value(0);
+				for (let i = 1; i < args.length; i++) {
+					const equal = looseEquals(result, value(i), this.toText);
+					result = node.operator.name === '==' ? equal : !equal;
+				}
+				return result;
+			}
+			default: {
+				const operator = OPERATOR_FUNCTION_BINARY[
+					node.operator.name
+				] as NumberOperator;
+				let result: Value = this.number(args[0] as Node, operator).computed();
+				for (let i = 1; i < args.length; i++) {
+					const left = toNumber(result);
+					if (!left) {
+						return this.fail('evaluate-type', node.span, {
+							operation: `\`${node.operator.spelling}\``,
+							text: this.sourceOf(node),
+							found: kindOf(result),
+						});
+					}
+					result = this.arithmetic(
+						operator,
+						left,
+						this.number(args[i] as Node, operator),
+						node,
+					);
+				}
+				return result;
+			}
+		}
+	}
+
+	/** `start to end`, `n1..n2`: the integers from the start to the end, both included, up or down. */
+	private range(at: LoopRange): Value {
+		const { start: from, end: to } = at;
+		const end = (node: Node) => {
+			const n = toNumber(this.eval(node).value);
+			if (!n?.isInteger()) {
+				return this.fail('range-end', node.span, { text: this.sourceOf(node) });
+			}
+			return n.roundHalfUp();
+		};
+		const a = end(from);
+		const b = end(to);
+		const length = (a > b ? a - b : b - a) + 1n;
+		if (length > BigInt(MAX_RANGE)) {
+			return this.fail('range-end', at.span, { text: this.sourceOf(at) });
+		}
+		const step = a <= b ? 1n : -1n;
+		const numbers: Decimal[] = [];
+		for (let i = a; step > 0n ? i <= b : i >= b; i += step) {
+			numbers.push(Decimal.integer(i));
+		}
+		return numbers;
+	}
+}
+
+const OPERATION_NAMES = table<string>({
+	subtract: '`-`',
+	multiply: '`*`',
+	divide: '`/`',
+	remainder: '`%`',
+	less: '`<`',
+	greater: '`>`',
+	lessOrEqual: '`<=`',
+	greaterOrEqual: '`>=`',
+});
+
+const OPERATOR_FUNCTION_BINARY = table<NumberOperator>({
+	'-': 'subtract',
+	'*': 'multiply',
+	'/': 'divide',
+	'%': 'remainder',
+	'<': 'less',
+	'>': 'greater',
+	'<=': 'lessOrEqual',
+	'>=': 'greaterOrEqual',
+});
+
+function listProperty(list: readonly unknown[], property: string): Value {
+	switch (property) {
+		case 'length':
+		case 'size':
+			return Decimal.integer(list.length);
+		case 'first':
+			return read(list[0]);
+		case 'last':
+			return read(list.at(-1));
+		case 'empty':
+		case 'isempty':
+			return list.length === 0;
+		// not empty, whatever the items: `[false].any` is true
+		case 'notempty':
+		case 'any':
+			return list.length > 0;
+		default:
+			return undefined;
+	}
+}
+
+/** The properties of a date, in lower case, with the pattern of the numbers. */
+const DATE_PROPERTIES = table<string | undefined>({
+	year: 'y',
+	month: 'M',
+	day: 'd',
+	dayofmonth: 'd',
+	dayofweek: undefined,
+	dayofyear: 'D',
+	iso8601: undefined,
+});
+
+const HTML_ESCAPES = table<string>({
+	'&': '&amp;',
+	'<': '&lt;',
+	'>': '&gt;',
+	'"': '&quot;',
+	"'": '&#39;',
+});
+
+const JS_ESCAPES = table<string>({
+	'\\': '\\\\',
+	'"': '\\x22',
+	"'": '\\x27',
+	'<': '\\x3c',
+	'>': '\\x3e',
+	'&': '\\x26',
+	'=': '\\x3d',
+	'\n': '\\n',
+	'\r': '\\r',
+	'\u0085': '\\x85',
+	'\u2028': '\\u2028',
+	'\u2029': '\\u2029',
+	'\ufeff': '\\ufeff',
+});
+
+const JSON_ESCAPES = table<string>({
+	'\\': '\\\\',
+	'"': '\\"',
+	'<': '\\u003c',
+	'>': '\\u003e',
+	'&': '\\u0026',
+	'=': '\\u003d',
+	'\n': '\\n',
+	'\r': '\\r',
+	'\t': '\\t',
+	'\u0085': '\\u0085',
+	'\u2028': '\\u2028',
+	'\u2029': '\\u2029',
+	'\ufeff': '\\ufeff',
+});
+
+/** The escapes, by their names in lower case. A tab is kept by `jsEscaped`, a backslash by `cssEscaped`. */
+const ESCAPES = table<(text: string) => string>({
+	escaped: (text) => text.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c] as string),
+	jsescaped: (text) =>
+		text.replace(
+			/[\\"'<>&=\n\r\u0085\u2028\u2029\ufeff]/g,
+			(c) => JS_ESCAPES[c] as string,
+		),
+	jsonescaped: (text) =>
+		text.replace(
+			/[\\"<>&=\n\r\t\u0085\u2028\u2029\ufeff]/g,
+			(c) => JSON_ESCAPES[c] as string,
+		),
+	cssescaped: (text) => text.replace(/["'()/:]/g, (c) => `\\${c}`),
+});

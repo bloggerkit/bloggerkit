@@ -1,340 +1,317 @@
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { assert, describe, test } from 'vitest';
-import type { Node } from './ast';
-import { parse } from './parser';
-import { PrintError, type PrintOptions, print } from './printer';
+import { readFileSync } from 'node:fs';
+import { describe, expect, test } from 'vitest';
+import {
+	type ExpressionContext,
+	type PrintOptions,
+	parse,
+	print,
+	type Root,
+} from './index';
 
-/** Removes the spans, which `print` does not keep. */
-function withoutSpans(node: unknown): unknown {
-	return JSON.parse(
-		JSON.stringify(node, (key, value) => (key === 'span' ? undefined : value)),
+function format(
+	source: string,
+	options: PrintOptions = {},
+	context?: ExpressionContext,
+): string {
+	const { ast, errors } = parse(source, { context });
+	expect(errors).toEqual([]);
+	return print(ast as Root, options);
+}
+
+/** A tree without positions, to compare trees printed differently. */
+function shape(node: Root | undefined): string {
+	return JSON.stringify(node, (key, value) =>
+		key === 'span' || key === 'loc' ? undefined : value,
 	);
 }
 
-/** Prints `node`, checks that parsing the text gives `node` back. */
-function roundTrip(node: Node, options?: PrintOptions): string {
-	const text = print(node, options);
-	assert.deepEqual(withoutSpans(parse(text)), withoutSpans(node), text);
-	return text;
-}
-
-/** Parses and prints `source`. */
-function reprint(source: string, options?: PrintOptions): string {
-	return roundTrip(parse(source), options);
-}
-
-// Builders for nodes the parser would never produce.
-const span = { start: 0, end: 0 };
-const data = (name: string): Node => ({ type: 'DataReference', name, span });
-const string = (value: string): Node => ({
-	type: 'StringLiteral',
-	value,
-	span,
-});
-const number = (value: number): Node => ({
-	type: 'NumberLiteral',
-	value,
-	span,
-});
-const identifier = (name: string): Node => ({ type: 'Identifier', name, span });
-const member = (object: Node, property: string): Node => ({
-	type: 'MemberExpression',
-	object,
-	property,
-	span,
-});
-const index = (object: Node, value: Node): Node => ({
-	type: 'IndexExpression',
-	object,
-	index: value,
-	span,
-});
-const call = (callee: string, ...args: Node[]): Node =>
-	({ type: 'CallExpression', callee, args, span }) as Node;
-const infix = (left: Node, right: Node): Node => ({
-	type: 'NamedOperatorExpression',
-	operator: 'path',
-	left,
-	right,
-	span,
-});
-const lambda = (source: Node, param: string, body: Node): Node => ({
-	type: 'LambdaExpression',
-	operator: 'map',
-	source,
-	param,
-	body,
-	span,
-});
-const map = (entries: Record<string, Node>): Node => ({
-	type: 'MapLiteral',
-	entries: Object.entries(entries).map(([key, value]) => ({ key, value })),
-	span,
-});
-
-test('prints parsed expressions back', () => {
-	assert.strictEqual(reprint('data:view.isHomepage'), 'data:view.isHomepage');
-	assert.strictEqual(
-		reprint('data:links filter (l => l.name)'),
-		'data:links filter (l => l.name)',
-	);
-	assert.strictEqual(
-		reprint(`
-data:links filter (l =>
-  l.name in {"https://", "#"}
-)
-`),
-		'data:links filter (l => l.name in {"https://", "#"})',
-	);
-});
-
-test('prints every expression of the corpus back', async () => {
-	const here = dirname(fileURLToPath(import.meta.url));
-	const corpus: string[] = JSON.parse(
-		await readFile(join(here, 'corpus.expr.json'), 'utf8'),
-	);
-
-	for (const source of corpus) {
-		reprint(source);
-		reprint(source, { indent: 2, printWidth: 40 });
-	}
-});
-
-describe('literals', () => {
+describe('print on one line', () => {
 	test.each([
-		['"hello"', '"hello"'],
-		['"say \\"hi\\""', '"say \\"hi\\""'],
-		['.5', '0.5'],
-		['yes', 'true'],
-		['no', 'false'],
-		['data:', 'data:.'],
-		['[1,2 , 3]', '[1, 2, 3]'],
-		['{}', '{}'],
-		['{"a","b"}', '{"a", "b"}'],
-		['{ a: 1, "b c": 2, "data": 3 }', '{ a: 1, "b c": 2, "data": 3 }'],
+		['data:a  +  "x"', 'data:a + "x"'],
+		['[1,2,]', '[1, 2]'],
+		['{a:  1}', '{ a: 1 }'],
+		['data:l map x=>x', 'data:l map x => x'],
+		['"x" + "ab" .length', '"x" + "ab" .length'],
+		['data:a eq 1 && not data:b', 'data:a eq 1 && not data:b'],
 	])('%s', (source, expected) => {
-		assert.strictEqual(reprint(source), expected);
-	});
-
-	test('numbers without an exponent', () => {
-		assert.strictEqual(roundTrip(number(1e21)), '1000000000000000000000');
-		assert.strictEqual(roundTrip(number(1e-7)), '0.0000001');
-	});
-
-	test('a "data" map key is quoted, data: starts a path', () => {
-		assert.strictEqual(roundTrip(map({ data: number(1) })), '{ "data": 1 }');
-	});
-});
-
-describe('paths', () => {
-	test.each([
-		['data:blog.author-name', 'data:blog.author-name'],
-		['data:posts.0.title', 'data:posts.0.title'],
-		['data:a..b', 'data:a.b'],
-		['data:a[0].b["c"]', 'data:a[0].b["c"]'],
-	])('%s', (source, expected) => {
-		assert.strictEqual(reprint(source), expected);
-	});
-
-	test('a member of an empty path is wrapped', () => {
-		const empty: Node = { type: 'EmptyDataReference', span };
-		assert.strictEqual(roundTrip(member(empty, 'x')), '(data:.).x');
-	});
-});
-
-describe('operators', () => {
-	test.each([
-		// the spelling is normalized
-		['data:a eq 1 && not data:b', 'data:a == 1 and !data:b'],
-		['data:a lt 1 || data:b gte 2', 'data:a < 1 or data:b >= 2'],
-		// parentheses are only kept where they are needed
-		['1 + 2 * 3', '1 + 2 * 3'],
-		['(1 + 2) * 3', '(1 + 2) * 3'],
-		['(1 - 2) - 3', '1 - 2 - 3'],
-		['1 - (2 - 3)', '1 - (2 - 3)'],
-		// Blogger reads `-(...)` without its `-`
-		['-(1 + 2)', '1 + 2'],
-		['(data:a or data:b) and data:c', '(data:a or data:b) and data:c'],
-		['data:a in [1] not in [2]', 'data:a in [1] not in [2]'],
-		['data:a in ([1] contains 1)', 'data:a in ([1] contains 1)'],
-		['data:a ? 1 : data:b ? 2 : 3', 'data:a ? 1 : data:b ? 2 : 3'],
-		['(data:a ? 1 : 2) ? 3 : 4', '(data:a ? 1 : 2) ? 3 : 4'],
-		['data:a ?: data:b ?: 1', 'data:a ?: data:b ?: 1'],
-		['(data:a ?: data:b) ?: 1', '(data:a ?: data:b) ?: 1'],
-	])('%s', (source, expected) => {
-		assert.strictEqual(reprint(source), expected);
-	});
-});
-
-describe('functions and lambdas', () => {
-	test.each([
-		['path(data:url, (data:a + "x"))', 'path(data:url, (data:a + "x"))'],
-		['data:url path "a"', 'data:url path "a"'],
-		['[(data:url path "a")]', '[(data:url path "a")]'],
-		[
-			'data:l filter (i => i.ok) map (i => i.name)',
-			'data:l filter (i => i.ok) map (i => i.name)',
-		],
-		[
-			'(data:l filter (i => i.ok)).length',
-			'(data:l filter (i => i.ok)).length',
-		],
-	])('%s', (source, expected) => {
-		assert.strictEqual(reprint(source), expected);
-	});
-
-	test('what follows an infix function is wrapped, it would be its operand', () => {
-		const url = infix(data('a'), string('x'));
-		assert.strictEqual(roundTrip(member(url, 'b')), '(data:a path "x").b');
-		assert.strictEqual(
-			roundTrip(infix(url, string('y'))),
-			'(data:a path "x") path "y"',
-		);
-		assert.strictEqual(
-			roundTrip(lambda(url, 'v', identifier('v'))),
-			'(data:a path "x") map (v => v)',
+		expect(format(source, { printWidth: Number.POSITIVE_INFINITY })).toBe(
+			expected,
 		);
 	});
 });
 
-describe('errors', () => {
-	test.each([
-		['a string ending with a backslash', string('a\\'), /end with a backslash/],
-		['a string with a line break', string('a\nb'), /line break/],
-		['an empty map', map({}), /empty map/],
-		['NaN', number(Number.NaN), /has to be finite/],
-		['an identifier out of a lambda', identifier('x'), /out of scope/],
-		[
-			'a keyword as identifier',
-			lambda(data('a'), 'true', identifier('true')),
-			/read as a keyword/,
-		],
-		[
-			'a dashed property out of a data path',
-			lambda(data('a'), 'l', member(identifier('l'), 'author-name')),
-			/has to be an identifier/,
-		],
-		[
-			'indexing something else than a data path',
-			lambda(data('a'), 'l', index(identifier('l'), number(0))),
-			/Only a 'data:' path can be indexed/,
-		],
-		['a wrong number of arguments', call('path', string('a')), /expects 2/],
-		[
-			'a wrong argument',
-			call('path', number(1), string('a')),
-			/must be a string literal/,
-		],
-		['an unknown function', call('len'), /Unknown function 'len'/],
-		['a malformed node', { type: 'ListLiteral', span } as Node, /array/],
-	])('%s', (_, node, message) => {
-		assert.throws(() => print(node), PrintError, message);
+describe('print to a width', () => {
+	const chain =
+		'data:posts filter (p => p.title != "" and p.labels.any) map (p => p.title) take 3';
+
+	test('a chain that fits stays on one line', () => {
+		expect(format(chain, { printWidth: 100 })).toBe(chain);
 	});
 
-	test('tells where the node is', () => {
-		const node = call('path', data('url'), string('a\\'));
-		try {
-			print(node);
-			assert.fail('expected an error');
-		} catch (error) {
-			assert.instanceOf(error, PrintError);
-			assert.strictEqual(error.path, 'root.args[1]');
-			assert.match(error.message, /\(at root\.args\[1\]\)$/);
+	test('a chain of steps breaks before each step', () => {
+		expect(format(chain, { printWidth: 80 })).toBe(
+			[
+				'data:posts',
+				'  filter (p => p.title != "" and p.labels.any)',
+				'  map (p => p.title)',
+				'  take 3',
+			].join('\n'),
+		);
+	});
+
+	test('a lambda body breaks inside its parentheses', () => {
+		expect(format(chain, { printWidth: 40 })).toBe(
+			[
+				'data:posts',
+				'  filter (p =>',
+				'    p.title != "" and p.labels.any',
+				'  )',
+				'  map (p => p.title)',
+				'  take 3',
+			].join('\n'),
+		);
+	});
+
+	test('one step stays beside its list', () => {
+		expect(
+			format(
+				'data:links filter (l => l.name == data:c.name and l.target not in ["https://", "#"])',
+				{ printWidth: 50 },
+			),
+		).toBe(
+			[
+				'data:links filter (l =>',
+				'  l.name == data:c.name and',
+				'  l.target not in ["https://", "#"]',
+				')',
+			].join('\n'),
+		);
+	});
+
+	const conditions =
+		'!data:blog.isPrivateBlog and !data:view.isPreview and (data:view.isHomepage or data:view.isPost)';
+
+	test('operators break after each operator', () => {
+		expect(format(conditions, { printWidth: 80 })).toBe(
+			[
+				'!data:blog.isPrivateBlog and',
+				'  !data:view.isPreview and',
+				'  (data:view.isHomepage or data:view.isPost)',
+			].join('\n'),
+		);
+	});
+
+	test('operators in parentheses line up under the first', () => {
+		expect(format(conditions, { printWidth: 40 })).toBe(
+			[
+				'!data:blog.isPrivateBlog and',
+				'  !data:view.isPreview and',
+				'  (',
+				'    data:view.isHomepage or',
+				'    data:view.isPost',
+				'  )',
+			].join('\n'),
+		);
+	});
+
+	const ternary =
+		'data:size == "1px" ? 1 : data:size == "2px" ? 2 : data:size == "3px" ? 3 : 7';
+
+	test('ternaries after `:` break together, one level further in', () => {
+		expect(format(ternary, { printWidth: 40 })).toBe(
+			[
+				'data:size == "1px"',
+				'  ? 1',
+				'  : data:size == "2px"',
+				'    ? 2',
+				'    : data:size == "3px"',
+				'      ? 3',
+				'      : 7',
+			].join('\n'),
+		);
+	});
+
+	test('tabWidth', () => {
+		expect(format(ternary, { printWidth: 40, tabWidth: 4 })).toBe(
+			[
+				'data:size == "1px"',
+				'    ? 1',
+				'    : data:size == "2px"',
+				'        ? 2',
+				'        : data:size == "3px"',
+				'            ? 3',
+				'            : 7',
+			].join('\n'),
+		);
+	});
+
+	const call =
+		'snippet(data:post.body, { length: 100, links: false, linebreaks: false })';
+
+	test('a call that fits stays on one line', () => {
+		expect(format(call, { printWidth: 80 })).toBe(call);
+	});
+
+	test('a last map is kept beside the other arguments', () => {
+		expect(format(call, { printWidth: 60 })).toBe(
+			[
+				'snippet(data:post.body, {',
+				'  length: 100,',
+				'  links: false,',
+				'  linebreaks: false',
+				'})',
+			].join('\n'),
+		);
+	});
+
+	test('trailingComma: all ends a broken map with a comma', () => {
+		expect(format(call, { printWidth: 60, trailingComma: 'all' })).toBe(
+			[
+				'snippet(data:post.body, {',
+				'  length: 100,',
+				'  links: false,',
+				'  linebreaks: false,',
+				'})',
+			].join('\n'),
+		);
+	});
+
+	test('bracketSpacing: false', () => {
+		expect(format(call, { bracketSpacing: false })).toBe(
+			'snippet(data:post.body, {length: 100, links: false, linebreaks: false})',
+		);
+	});
+
+	test('arguments that do not fit beside the call go one a line', () => {
+		expect(
+			format(
+				'resizeImage(data:post.featuredImage, (data:wide ? 720 : 540), (data:wide ? "16:9" : "1:1"))',
+				{
+					printWidth: 50,
+					tabWidth: 4,
+				},
+			),
+		).toBe(
+			[
+				'resizeImage(',
+				'    data:post.featuredImage,',
+				'    (data:wide ? 720 : 540),',
+				'    (data:wide ? "16:9" : "1:1")',
+				')',
+			].join('\n'),
+		);
+	});
+
+	test('useTabs, and a trailing comma in a list', () => {
+		expect(
+			format('["https://", "http://", "//", "#", "mailto:", "tel:"]', {
+				printWidth: 30,
+				useTabs: true,
+				trailingComma: 'all',
+			}),
+		).toBe(
+			[
+				'[',
+				'\t"https://",',
+				'\t"http://",',
+				'\t"//",',
+				'\t"#",',
+				'\t"mailto:",',
+				'\t"tel:",',
+				']',
+			].join('\n'),
+		);
+	});
+
+	test('a tab counts as tabWidth columns', () => {
+		const source = '[data:a, data:b, data:c]';
+		expect(
+			format(`[${source}]`, { printWidth: 20, useTabs: true, tabWidth: 8 }),
+		).toBe(
+			['[', '\t[', '\t\tdata:a,', '\t\tdata:b,', '\t\tdata:c', '\t]', ']'].join(
+				'\n',
+			),
+		);
+	});
+});
+
+describe('printing keeps the tree', () => {
+	const samples: [string, ExpressionContext?][] = [
+		['"Page " + data:n + " of " + data:total'],
+		['data:a - 1 - (2 * 3) / 4 % 5'],
+		['data:a ?: data:b ?: "default"'],
+		['data:a eq 1 && data:b neq 2 || not data:c'],
+		['"x" in data:list and data:list not contains "y"'],
+		['data:a ? (data:b ? 1 : 2) : data:c ? 3 : 4'],
+		[
+			'data:posts filter (p => p.labels any (l => l.name == "news")) map (p => { title: p.title, url: p.url }) skip 1 take 2',
+		],
+		['data:l map x => x + 1'],
+		['data:l count (x => x > 1) + data:l.length'],
+		['data:blog.homepageUrl path "search" params { q: "x", max: 10 }'],
+		['(data:l filter (x => x)).first.title.escaped'],
+		['"x" + "ab" .length + data:n .size'],
+		['data:l[data:i + 1].name'],
+		['data:a.b."c-d"[0]'],
+		['{ "a-b": 1, c: [1, 2, { d: (data:x + 1) }], e: {} }'],
+		['{1, 2, 3}'],
+		[
+			'format(data:post.date, "EEEE d MMMM yyyy") + " " + snippet(data:post.body, { length: 100 })',
+		],
+		['+(data:a, data:b, data:c) + -(data:d)'],
+		['and(data:a, or(data:b, data:c), !data:d)'],
+		['resizeImage(data:img, 640, "16:9") sourceSet [320, 640, 960]'],
+		['data:missing ?: [] take 1'],
+		['1 ..3'],
+		['1 to data:n', 'loop-values'],
+		['1..5', 'loop-values'],
+		['(1)..3', 'loop-values'],
+		['true ? 1 : data:n to data:missing ?: 4', 'loop-values'],
+	];
+	const fixture = JSON.parse(
+		readFileSync(new URL('./operators.fixture.json', import.meta.url), 'utf8'),
+	) as {
+		kinds: string[];
+		operators: string[];
+	};
+	const sources = [
+		...samples,
+		...fixture.operators.flatMap((operator) =>
+			fixture.kinds.flatMap((a) =>
+				fixture.kinds.map((b): [string] => [`${a} ${operator} ${b}`]),
+			),
+		),
+	].filter(
+		([source, context]) => parse(source, { context }).errors.length === 0,
+	);
+
+	const variants: PrintOptions[] = [
+		1,
+		20,
+		40,
+		80,
+		Number.POSITIVE_INFINITY,
+	].flatMap((printWidth) => [
+		{ printWidth },
+		{
+			printWidth,
+			useTabs: true,
+			trailingComma: 'all' as const,
+			bracketSpacing: false,
+		},
+	]);
+
+	test.each(sources)('%s', (source, context) => {
+		const tree = shape(parse(source, { context }).ast);
+		for (const options of variants) {
+			const printed = format(source, options, context);
+			expect(
+				shape(parse(printed, { context }).ast),
+				`${JSON.stringify(options)}\n${printed}`,
+			).toBe(tree);
+			if (options.printWidth === Number.POSITIVE_INFINITY) {
+				expect(printed).not.toContain('\n');
+			}
 		}
-	});
-
-	test('a cycle', () => {
-		const node = { type: 'UnaryExpression', operator: '!', span } as Record<
-			string,
-			unknown
-		>;
-		node.argument = node;
-		assert.throws(() => print(node as unknown as Node), PrintError, /cycle/);
-	});
-});
-
-describe('large expressions', () => {
-	test('long chains do not overflow the stack', () => {
-		const or = Array.from({ length: 20_000 }, (_, i) => `data:a${i}`).join(
-			' or ',
-		);
-		assert.strictEqual(print(parse(or)), or);
-	});
-
-	test('too deep nesting is a PrintError', () => {
-		let node = number(1);
-		for (let i = 0; i < 1_000_000; i++) {
-			node = { type: 'UnaryExpression', operator: '!', argument: node, span };
-		}
-		assert.throws(() => print(node), PrintError, /nested too deeply/);
-	});
-});
-
-describe('pretty printing', () => {
-	const pretty = (source: string, printWidth: number) =>
-		reprint(source, { indent: 2, printWidth });
-
-	test('what fits stays on a line', () => {
-		assert.strictEqual(pretty('data:a and data:b', 80), 'data:a and data:b');
-	});
-
-	test('breaks before operators', () => {
-		assert.strictEqual(
-			pretty(
-				'data:view.isHomepage or data:view.isSingleItem or data:view.isError',
-				30,
-			),
-			`data:view.isHomepage
-  or data:view.isSingleItem
-  or data:view.isError`,
-		);
-	});
-
-	test('breaks conditionals before ? and :', () => {
-		assert.strictEqual(
-			pretty('data:view.isHomepage ? data:blog.title : data:view.title', 30),
-			`data:view.isHomepage
-  ? data:blog.title
-  : data:view.title`,
-		);
-	});
-
-	test('breaks collections one item per line', () => {
-		assert.strictEqual(
-			pretty('data:blog.view not in ["x-content-blog", "x-content-lazy"]', 30),
-			`data:blog.view not in [
-  "x-content-blog",
-  "x-content-lazy"
-]`,
-		);
-	});
-
-	test('breaks lambda chains and bodies', () => {
-		assert.strictEqual(
-			pretty(
-				'data:links filter (l => l.name == "icon") map (l => l.target)',
-				40,
-			),
-			`data:links
-  filter (l => l.name == "icon")
-  map (l => l.target)`,
-		);
-		assert.strictEqual(
-			pretty(
-				'data:links filter (l => l.name contains "https://" or l.name contains "#")',
-				40,
-			),
-			`data:links filter (l =>
-  l.name contains "https://"
-    or l.name contains "#"
-)`,
-		);
-	});
-
-	test('rejects invalid options', () => {
-		assert.throws(() => print(number(1), { indent: -1 }), RangeError);
-		assert.throws(() => print(number(1), { printWidth: 0 }), RangeError);
 	});
 });

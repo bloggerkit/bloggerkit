@@ -4,7 +4,7 @@ export default defineConfig({
 	entry: ['src/**/*.{js,ts}', '!src/**/*.{test,spec}.{js,ts}'],
 	format: 'esm',
 	platform: 'neutral',
-	target: 'es2018',
+	target: 'es2022',
 	sourcemap: true,
 	unbundle: true,
 	deps: {

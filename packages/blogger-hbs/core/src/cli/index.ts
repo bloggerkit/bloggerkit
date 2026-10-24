@@ -22,13 +22,25 @@ import { type LoadedConfig, loadConfig } from '../config';
 import { type Location, withLocation } from '../plugins';
 import { createRenderer } from '../runtime';
 import { didYouMean } from '../utils/suggest';
-import { processXml, XmlError, type XmlInfo, type XmlResult } from '../xml';
+import {
+	checkXml,
+	type ExpressionCache,
+	formatXml,
+	inspectXml,
+	parseXml,
+	type XmlDiagnostic,
+	XmlError,
+	type XmlInfo,
+} from '../xml';
 import {
 	type BuildStats,
 	collectStats,
 	formatStats,
 	type WrittenFile,
 } from './stats';
+
+/** The expressions of the themes written, parsed once while the CLI runs, as a theme is rebuilt when watched. */
+const expressions: ExpressionCache = new Map();
 
 const { version, license, repository } = JSON.parse(
 	await fs.readFile(new URL('../../package.json', import.meta.url), 'utf-8'),
@@ -617,6 +629,41 @@ function formatDivider(files: readonly string[]): string {
 	return `\n${styleText('dim', text + '─'.repeat(Math.max(3, 50 - text.length)))}`;
 }
 
+/** A theme to write, its warnings and info placed in it. */
+interface WrittenXml {
+	xml: string;
+	warnings: readonly XmlDiagnostic[];
+	info: XmlInfo;
+}
+
+/**
+ * The theme to write: with `format`, formatted; without, as it is, which then
+ * also has to have its declarations where formatting writes them. Throws an
+ * `XmlError` with every error of the theme written.
+ */
+function writtenXml(
+	xml: string,
+	{ path, format }: { path: string; format: boolean },
+): WrittenXml {
+	const document = parseXml(xml, { path, cache: expressions });
+	if (format) {
+		const result = formatXml(document);
+		if (!result.ok) {
+			throw new XmlError(result.errors);
+		}
+		return {
+			xml: result.xml,
+			warnings: result.warnings,
+			info: inspectXml(document, result),
+		};
+	}
+	const { errors, warnings } = checkXml(document);
+	if (errors.length > 0) {
+		throw new XmlError(errors);
+	}
+	return { xml, warnings, info: inspectXml(document) };
+}
+
 interface WrittenTheme {
 	file: WrittenFile;
 	/** What it is made of, when it is validated. */
@@ -645,9 +692,9 @@ async function writeTheme(
 	}
 
 	start = performance.now();
-	let result: XmlResult;
+	let result: WrittenXml;
 	try {
-		result = processXml(rendered, { path: shown, format: current.format });
+		result = writtenXml(rendered, { path: shown, format: current.format });
 	} catch (error) {
 		// written anyway, to look at where it is invalid
 		await fs.writeFile(file, rendered);
@@ -723,25 +770,25 @@ async function processFile(
 async function processTheme(
 	file: string,
 	{ format, out }: ProcessFileOptions,
-): Promise<{ result: XmlResult; written: string }> {
+): Promise<{ result: WrittenXml; written: string }> {
 	const shown = path.relative(process.cwd(), path.resolve(file));
 	const xml = await readTheme(file, shown);
 
-	let result: XmlResult;
+	let result: WrittenXml;
 	try {
-		result = processXml(xml, { path: shown, format });
+		result = writtenXml(xml, { path: shown, format });
 	} catch (error) {
 		throw new Error(`${shown} is not valid XML`, { cause: error });
 	}
 
-	const written = !format
+	const writtenTo = !format
 		? shown
 		: out === undefined
 			? '<stdout>'
 			: path.relative(process.cwd(), path.resolve(out));
 	const at = <T extends { loc: Location }>(item: T): T => ({
 		...item,
-		loc: { ...item.loc, path: written },
+		loc: { ...item.loc, path: writtenTo },
 	});
 	result = {
 		...result,
@@ -759,15 +806,15 @@ async function processTheme(
 		await fs.mkdir(path.dirname(path.resolve(out)), { recursive: true });
 		await fs.writeFile(out, result.xml);
 	}
-	return { result, written };
+	return { result, written: writtenTo };
 }
 
 /** What `--json` prints: the result of a valid theme, or every error. */
 type Report =
 	| {
 			valid: true;
-			warnings: XmlResult['warnings'];
-			info: XmlResult['info'];
+			warnings: WrittenXml['warnings'];
+			info: WrittenXml['info'];
 			/** The formatted theme, without `--out`. */
 			xml?: string;
 			/** Where the formatted theme is written, with `--out`. */

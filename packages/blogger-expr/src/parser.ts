@@ -1,778 +1,1155 @@
 import type {
-	BinaryOperator,
+	ArithmeticName,
+	ComparisonName,
 	FunctionName,
-	InfixFunctionName,
-	LambdaOperator,
-	LogicalOperator,
+	LambdaName,
+	LambdaOperation,
+	Location,
 	MapEntry,
+	Name,
 	Node,
-	Span,
+	Operator,
+	OperatorFunctionName,
+	PropertyAccess,
+	Root,
 } from './ast';
+import { isPath } from './ast';
+import type { DiagnosticCode } from './diagnostics';
 import {
-	checkCall,
-	FUNCTION_NAMES,
-	INFIX_FUNCTION_NAMES,
-	LAMBDA_OPERATORS,
-	REQUIRES_WRAPPING,
-} from './grammar';
-import { type Token, tokenize } from './lexer';
+	LexError,
+	stringValue,
+	type Token,
+	type TokenKind,
+	tokenize,
+} from './lexer';
+import { join, type Span } from './source';
+import { table } from './table';
 
-export class ParseError extends Error {
+/** Where the expression is written: most attributes, or the `values` of a loop, where ranges are allowed. */
+export type ExpressionContext = 'expression' | 'loop-values';
+
+/** Thrown by the parser; `parse` turns it into an error diagnostic. */
+export class SyntaxFailure extends Error {
 	constructor(
-		message: string,
-		public readonly position: number,
+		readonly code: DiagnosticCode,
+		readonly span: Span,
+		readonly detail: Record<string, string> = {},
 	) {
-		super(`${message} (at position ${position})`);
-		this.name = 'ParseError';
+		super(code);
 	}
 }
 
-const KEYWORD_BINARY_OPS: Record<string, BinaryOperator> = {
+/**
+ * How tightly each operator binds, loosest first. Operators of a level take
+ * operands of the levels after it.
+ */
+enum Level {
+	Conditional = 1, // a ? b : c, from the right
+	Or = 2, // or, ||
+	And = 3, // and, &&
+	Equality = 4, // ==, !=, eq, neq
+	Membership = 5, // in, contains, not in, not contains
+	Comparison = 6, // <, >, <=, >=, lt, gt, lte, gte
+	Additive = 7, // +, -
+	Multiplicative = 8, // *, /, %
+	Fallback = 9, // ?:, from the right
+	Chain = 10, // lambdas, take, skip, on the value before them
+}
+
+const EQUALITY = table<'equal' | 'notEqual'>({
+	'==': 'equal',
+	eq: 'equal',
+	'!=': 'notEqual',
+	neq: 'notEqual',
+});
+const COMPARISON = table<ComparisonName>({
+	'<': 'less',
+	lt: 'less',
+	'>': 'greater',
+	gt: 'greater',
+	'<=': 'lessOrEqual',
+	lte: 'lessOrEqual',
+	'>=': 'greaterOrEqual',
+	gte: 'greaterOrEqual',
+});
+const MULTIPLICATIVE = table<ArithmeticName>({
+	'*': 'multiply',
+	'/': 'divide',
+	'%': 'remainder',
+});
+
+const LAMBDAS = table<LambdaName>({
+	filter: 'filter',
+	where: 'filter',
+	map: 'map',
+	select: 'map',
+	any: 'any',
+	all: 'all',
+	none: 'none',
+	count: 'count',
+	first: 'first',
+});
+
+const TAKE_OR_SKIP = table<'take' | 'skip'>({
+	take: 'take',
+	limit: 'take',
+	skip: 'skip',
+	offset: 'skip',
+});
+
+const FUNCTIONS = table<FunctionName>({
+	path: 'path',
+	params: 'params',
+	appendParams: 'appendParams',
+	fragment: 'fragment',
+	snippet: 'snippet',
+	format: 'format',
+	resizeImage: 'resizeImage',
+	sourceSet: 'sourceSet',
+	take: 'take',
+	limit: 'take',
+	skip: 'skip',
+	offset: 'skip',
+});
+
+/** Functions that can be written between their two arguments. */
+const INFIX = new Set<FunctionName>([
+	'path',
+	'params',
+	'appendParams',
+	'fragment',
+	'snippet',
+	'format',
+	'resizeImage',
+	'sourceSet',
+]);
+
+/** Operators that have a function form, written as a token or a word: `+(1, 2)`, `and(a, b)`. */
+const OPERATOR_FUNCTIONS = table<OperatorFunctionName>({
+	'+': '+',
+	'-': '-',
+	'*': '*',
+	'/': '/',
+	'%': '%',
+	'==': '==',
 	eq: '==',
-	ne: '!=',
+	'!=': '!=',
+	neq: '!=',
+	'<': '<',
 	lt: '<',
+	'>': '>',
 	gt: '>',
+	'<=': '<=',
 	lte: '<=',
+	'>=': '>=',
 	gte: '>=',
-};
+	and: 'and',
+	'&&': 'and',
+	or: 'or',
+	'||': 'or',
+	'?:': '?:',
+	in: 'in',
+	contains: 'contains',
+});
 
-const MINUS_SPACING =
-	"A '-' between two values needs a space before and after it, 'a - b', or parentheses next to it, '(a)- b' or 'a -(b)'";
+const OPERATOR_TOKENS = new Set<TokenKind>([
+	'?',
+	'?:',
+	'+',
+	'-',
+	'*',
+	'/',
+	'%',
+	'==',
+	'!=',
+	'<',
+	'>',
+	'<=',
+	'>=',
+	'&&',
+	'||',
+]);
 
-const isSpace = (char: string | undefined): boolean =>
-	char === ' ' || char === '\t' || char === '\n' || char === '\r';
+const isBooleanWord = (word: string) => /^(true|false|yes|no)$/i.test(word);
 
-/** The operators of each binary level, as symbols and as keywords. */
-const EQUALITY = { symbols: ['==', '!='], keywords: ['eq', 'ne'] };
-const RELATIONAL = {
-	symbols: ['<=', '>=', '<', '>'],
-	keywords: ['lte', 'gte', 'lt', 'gt'],
-};
-const ADDITIVE = { symbols: ['+', '-'], keywords: [] };
-type MembershipOperator = 'in' | 'contains';
-const MEMBERSHIP_OPERATORS: readonly MembershipOperator[] = ['in', 'contains'];
-const MULTIPLICATIVE = { symbols: ['*', '/', '%'], keywords: [] };
+const MAX_DEPTH = 256;
 
-/** What `node` is, with its article, for messages: `An operator expression`. */
-function describeNode(node: Node): string {
-	switch (node.type) {
-		case 'BinaryExpression':
-			return 'An operator expression';
-		case 'LogicalExpression':
-			return "An 'and'/'or' expression";
-		case 'MembershipExpression':
-			return "An 'in'/'contains' expression";
-		case 'ConditionalExpression':
-			return "A conditional ('?:') expression";
-		case 'ElvisExpression':
-			return "An elvis ('?:') expression";
-		case 'NamedOperatorExpression':
-			return 'An infix function call';
-		case 'LambdaExpression':
-			return "A 'filter'/'map'/'any'/'all'/'none' chain";
-		default:
-			return 'An expression';
+const SINGLE_VALUE_PLACES = 'arguments, list items and map values';
+
+/** Reads tokens into a tree. Throws `SyntaxFailure` at the first error. */
+export function parseTokens(source: string, context: ExpressionContext): Root {
+	let tokens: Token[];
+	try {
+		tokens = tokenize(source);
+	} catch (error) {
+		if (error instanceof LexError) {
+			throw new SyntaxFailure(error.code, error.span, error.detail);
+		}
+		throw error;
 	}
+	return new Parser(source, tokens, context).parse();
 }
 
-/** Parses a single Blogger expression string into an AST. */
-export function parse(source: string): Node {
-	const tokens = tokenize(source);
-	const parser = new Parser(tokens, source);
-	const node = parser.parseExpression();
-	parser.expectEOF();
-	return node;
-}
+/** The fields of a node, without its place. */
+type Fields<T extends Root> = T extends Root ? Omit<T, 'span' | 'loc'> : never;
 
 class Parser {
 	private pos = 0;
-	private activeParam: string | null = null;
-
-	/**
-	 * Tracks exactly which node objects were returned *directly and
-	 * unchanged* from a `(...)` primary group (see the `(` branch of
-	 * `parsePrimary`). Parens are otherwise "invisible" in the AST — the `(`
-	 * branch just returns the inner node as-is — so without this we'd have no
-	 * way to tell a properly-wrapped `(data:x path "y")` apart from a bare
-	 * `data:x path "y"`, since both produce an identical `NamedOperatorExpression`
-	 * node. `parseRestrictedValue` and the postfix-continuation guards below
-	 * consult this to allow the wrapped form while rejecting the bare one.
-	 */
-	private readonly parenWrapped = new WeakSet<object>();
+	/** The parameters of the lambdas being read, the innermost last. */
+	private readonly parameters: string[] = [];
+	private depth = 0;
+	/** The offset where each line starts. */
+	private readonly lineStarts: number[] = [0];
 
 	constructor(
+		source: string,
 		private readonly tokens: Token[],
-		private readonly source: string,
-	) {}
-
-	private peek(offset = 0): Token {
-		const token = this.tokens[this.pos + offset];
-		if (!token) {
-			throw new ParseError('Unexpected end of input', this.source.length);
+		private readonly context: ExpressionContext,
+	) {
+		for (let i = 0; i < source.length; i++) {
+			if (source[i] === '\n') {
+				this.lineStarts.push(i + 1);
+			}
 		}
-		return token;
 	}
 
-	private advance(): Token {
+	parse(): Root {
+		const root =
+			this.context === 'loop-values' ? this.loopValues() : this.group();
+		this.expect('end', 'an operator or the end of the expression');
+		return root;
+	}
+
+	// ----- nodes -----
+
+	/** A node with its span and location. */
+	/** A node of `fields`, an object of its own, which it becomes. */
+	private node<T extends Root = Node>(fields: Fields<T>, at: Span): T {
+		const node = fields as unknown as T;
+		node.span = at;
+		node.loc = this.locate(at);
+		return node;
+	}
+
+	private locate(at: Span): Location {
+		return { start: this.position(at.start), end: this.position(at.end) };
+	}
+
+	private position(offset: number) {
+		let line = 0;
+		while (
+			line + 1 < this.lineStarts.length &&
+			(this.lineStarts[line + 1] as number) <= offset
+		) {
+			line++;
+		}
+		return {
+			line: line + 1,
+			column: offset - (this.lineStarts[line] as number) + 1,
+			offset,
+		};
+	}
+
+	private operator<N extends string>(token: Token, name: N): Operator<N> {
+		return { name, spelling: token.text, span: token.span };
+	}
+
+	// ----- tokens -----
+
+	private peek(offset = 0): Token {
+		return this.tokens[
+			Math.min(this.pos + offset, this.tokens.length - 1)
+		] as Token;
+	}
+
+	private previous(): Token | undefined {
+		return this.tokens[this.pos - 1];
+	}
+
+	private next(): Token {
 		const token = this.peek();
-		if (token.type !== 'EOF') {
+		if (token.kind !== 'end') {
 			this.pos++;
 		}
 		return token;
 	}
 
-	private span(start: number): Span {
-		return { start, end: this.tokens[this.pos]?.start ?? this.source.length };
+	private at(kind: TokenKind): boolean {
+		return this.peek().kind === kind;
 	}
 
-	// whether the token `offset` tokens ahead is this one
-
-	private isKeyword(name: string, offset = 0): boolean {
-		const t = this.peek(offset);
-		return t.type === 'IDENT' && t.value === name;
+	private atWord(...words: string[]): boolean {
+		const token = this.peek();
+		return token.kind === 'word' && words.includes(token.text);
 	}
 
-	private isOp(value: string, offset = 0): boolean {
-		const t = this.peek(offset);
-		return t.type === 'OP' && t.value === value;
-	}
-
-	private isPunct(value: string, offset = 0): boolean {
-		const t = this.peek(offset);
-		return t.type === 'PUNCT' && t.value === value;
-	}
-
-	/** Items separated by commas, `parseItem` reading each, with its index. */
-	private parseSeparated<T>(parseItem: (index: number) => T): T[] {
-		const items = [parseItem(0)];
-		while (this.isPunct(',')) {
-			this.advance();
-			items.push(parseItem(items.length));
+	private expect(kind: TokenKind, expected: string): Token {
+		if (this.at(kind)) {
+			return this.next();
 		}
-		return items;
+		throw this.unexpected(expected);
 	}
 
-	private expectPunct(value: string): Token {
-		if (!this.isPunct(value)) {
-			throw new ParseError(`Expected '${value}'`, this.peek().start);
+	private unexpected(expected: string): SyntaxFailure {
+		const token = this.peek();
+		if (token.kind === 'word' && token.text === 'ne') {
+			return new SyntaxFailure('unknown-operator-word', token.span, {
+				text: 'ne',
+				suggestion: 'neq',
+			});
 		}
-		return this.advance();
-	}
-
-	expectEOF(): void {
-		if (this.peek().type !== 'EOF') {
-			throw new ParseError(
-				`Unexpected token '${this.peek().value}'`,
-				this.peek().start,
-			);
+		if ((token.kind === 'word' && token.text === 'to') || token.kind === '..') {
+			return new SyntaxFailure('range-outside-loop', token.span);
 		}
+		// `5-3`, `5 -3`: a negative number right after a value
+		const before = this.previous();
+		if (token.kind === 'number' && token.text.startsWith('-') && before) {
+			return new SyntaxFailure('minus-spacing', join(before.span, token.span), {
+				text: `${before.text}${token.spaceBefore ? ' ' : ''}${token.text}`,
+			});
+		}
+		const found =
+			token.kind === 'end' ? 'the end of the expression' : `\`${token.text}\``;
+		return new SyntaxFailure('expected', token.span, { expected, found });
 	}
 
-	private validateArgs(name: FunctionName, args: Node[], span: Span): void {
-		const problem = checkCall(name, args);
-		if (problem) {
-			throw new ParseError(
-				problem.message,
-				problem.node?.span.start ?? span.start,
-			);
+	private enter(): void {
+		this.depth++;
+		if (this.depth > MAX_DEPTH) {
+			throw new SyntaxFailure('nested-too-deep', this.peek().span);
 		}
 	}
 
-	parseExpression(): Node {
-		return this.parseConditional();
-	}
+	// ----- groups -----
 
 	/**
-	 * Parses an expression in a "restricted" position: a function-call
-	 * argument, a list/set-literal element, a map-literal value, or an infix
-	 * function operand. Operators — `+`, `and`, `?:`, `in`/`contains`, infix
-	 * function calls (`x path "y"`), and `filter`/`map`/`any`/`all`/`none`
-	 * chains — are not allowed to appear bare here; the whole subexpression
-	 * must be parenthesized instead, e.g. `path(data:url, (data:num + 1))` or
-	 * `[(data:x path "y")]`. Literals, list/map/set literals, `data:` chains
-	 * (including `.prop`/`[i]`), function calls, unary expressions (`!x`,
-	 * `-x`), and parenthesized expressions of any shape are all fine bare.
+	 * A whole expression: the top level, the inside of parentheses or an index,
+	 * a lambda body. A property that applies to everything before it wraps what
+	 * was read so far, then the expression goes on.
 	 */
-	private parseRestrictedValue(context: string): Node {
-		const node = this.parseUnary();
-		if (!this.parenWrapped.has(node) && REQUIRES_WRAPPING.has(node.type)) {
-			throw new ParseError(
-				`${describeNode(node)} must be wrapped in parentheses to be used as ${context}, e.g. '(${this.source.slice(node.span.start, node.span.end)})'`,
-				node.span.start,
-			);
+	private group(): Node {
+		this.enter();
+		let node = this.expression(0);
+		for (;;) {
+			const access = this.propertyOfEverythingBefore(node);
+			if (!access) {
+				break;
+			}
+			node = this.expression(0, this.postfix(access, false));
 		}
+		this.depth--;
 		return node;
 	}
 
-	// test ? consequent : alternate   (right-associative)
-	// test ?: fallback                (right-associative "elvis"/null-coalescing)
-	private parseConditional(): Node {
-		const start = this.peek().start;
-		const test = this.parseLogicalOr();
-		if (this.isOp('?:')) {
-			this.advance();
-			const right = this.parseConditional();
-			return {
-				type: 'ElvisExpression',
-				left: test,
-				right,
-				span: this.span(start),
+	/**
+	 * A `.name` that applies to everything before it: right after a string,
+	 * or after a number, data path or parameter with a space before the dot.
+	 * `1 ..3` is read as the property `.3`.
+	 */
+	private propertyOfEverythingBefore(object: Node): PropertyAccess | undefined {
+		const dot = this.peek();
+		const before = this.previous();
+		if (!before) {
+			return undefined;
+		}
+		const spaced =
+			dot.spaceBefore && ['number', 'data', 'word'].includes(before.kind);
+		if (dot.kind === '.' && (before.kind === 'string' || spaced)) {
+			this.next();
+			const property = this.propertyName();
+			return this.node<PropertyAccess>(
+				{
+					type: 'PropertyAccess',
+					object,
+					property,
+					appliesTo: 'everythingBefore',
+				},
+				join(object.span, property.span),
+			);
+		}
+		if (
+			dot.kind === '..' &&
+			spaced &&
+			this.peek(1).kind === 'number' &&
+			!this.peek(1).spaceBefore
+		) {
+			this.next();
+			const number = this.next();
+			const property: Name = {
+				text: `.${number.text}`,
+				quoted: false,
+				span: join(dot.span, number.span),
 			};
+			return this.node<PropertyAccess>(
+				{
+					type: 'PropertyAccess',
+					object,
+					property,
+					appliesTo: 'everythingBefore',
+				},
+				join(object.span, number.span),
+			);
 		}
-		if (this.isOp('?')) {
-			this.advance();
-			const consequent = this.parseExpression();
-			this.expectPunct(':');
-			const alternate = this.parseConditional();
-			return {
-				type: 'ConditionalExpression',
-				test,
-				consequent,
-				alternate,
-				span: this.span(start),
-			};
-		}
-		return test;
+		return undefined;
 	}
 
-	private parseLogicalOr(): Node {
-		const start = this.peek().start;
-		let left = this.parseLogicalAnd();
-		while (this.isKeyword('or') || this.isOp('||')) {
-			this.advance();
-			const right = this.parseLogicalAnd();
-			left = this.makeLogical('or', left, right, start);
+	/** The name after `.`: a word, digits, or a quoted name. */
+	private propertyName(): Name {
+		const token = this.peek();
+		if (
+			token.kind === 'word' ||
+			(token.kind === 'number' && /^\d+$/.test(token.text))
+		) {
+			this.next();
+			return { text: token.text, quoted: false, span: token.span };
 		}
-		return left;
-	}
-
-	private parseLogicalAnd(): Node {
-		const start = this.peek().start;
-		let left = this.parseMembership();
-		while (this.isKeyword('and') || this.isOp('&&')) {
-			this.advance();
-			const right = this.parseMembership();
-			left = this.makeLogical('and', left, right, start);
+		if (token.kind === 'string') {
+			this.next();
+			return { text: stringValue(token), quoted: true, span: token.span };
 		}
-		return left;
+		throw this.unexpected('a name after `.`');
 	}
 
-	private makeLogical(
-		operator: LogicalOperator,
-		left: Node,
-		right: Node,
-		start: number,
-	): Node {
-		return {
-			type: 'LogicalExpression',
-			operator,
-			left,
-			right,
-			span: this.span(start),
-		};
-	}
+	// ----- operators -----
 
-	private parseMembership(): Node {
-		const start = this.peek().start;
-		let left = this.parseEquality();
+	/** Operators binding at least as tightly as `minLevel`, from `left` or a new operand. */
+	private expression(minLevel: number, left?: Node): Node {
+		let node = left ?? this.unary(false);
 		for (;;) {
-			const membership = this.membershipOperator();
-			if (!membership) {
-				break;
+			const next = this.binaryOperator(node, minLevel);
+			if (!next) {
+				return node;
 			}
-			this.advance();
-			if (membership.negated) {
-				this.advance();
-			}
-			const right = this.parseEquality();
-			left = {
-				type: 'MembershipExpression',
-				operator: membership.operator,
-				negated: membership.negated,
-				left,
-				right,
-				span: this.span(start),
-			};
+			node = next;
 		}
-		return left;
 	}
 
-	/** `in`, `contains`, `not in` or `not contains`, if it is next. */
-	private membershipOperator():
-		| { operator: MembershipOperator; negated: boolean }
-		| undefined {
-		for (const operator of MEMBERSHIP_OPERATORS) {
-			if (this.isKeyword(operator)) {
-				return { operator, negated: false };
+	/** Reads the operator after `left`, if it binds at least as tightly as `minLevel`. */
+	private binaryOperator(left: Node, minLevel: number): Node | undefined {
+		const token = this.peek();
+		const text = token.text;
+
+		if (token.kind === '?' && minLevel <= Level.Conditional) {
+			this.next();
+			const whenTrue = this.expression(0);
+			this.expect(':', '`:` of the ternary');
+			const whenFalse = this.expression(Level.Conditional);
+			return this.node(
+				{ type: 'Conditional', condition: left, whenTrue, whenFalse },
+				join(left.span, whenFalse.span),
+			);
+		}
+		if (
+			(token.kind === '||' || (token.kind === 'word' && text === 'or')) &&
+			minLevel <= Level.Or
+		) {
+			this.next();
+			const right = this.expression(Level.Or + 1);
+			return this.node(
+				{ type: 'Logical', operator: this.operator(token, 'or'), left, right },
+				join(left.span, right.span),
+			);
+		}
+		if (
+			(token.kind === '&&' || (token.kind === 'word' && text === 'and')) &&
+			minLevel <= Level.And
+		) {
+			this.next();
+			const right = this.expression(Level.And + 1);
+			return this.node(
+				{ type: 'Logical', operator: this.operator(token, 'and'), left, right },
+				join(left.span, right.span),
+			);
+		}
+		const equality = EQUALITY[text];
+		if (equality && minLevel <= Level.Equality) {
+			this.next();
+			const right = this.expression(Level.Equality + 1);
+			return this.node(
+				{
+					type: 'Equality',
+					operator: this.operator(token, equality),
+					left,
+					right,
+				},
+				join(left.span, right.span),
+			);
+		}
+		if (minLevel <= Level.Membership && this.atMembership()) {
+			return this.membership(left);
+		}
+		const comparison = COMPARISON[text];
+		if (comparison && minLevel <= Level.Comparison) {
+			this.next();
+			const right = this.expression(Level.Comparison + 1);
+			return this.node(
+				{
+					type: 'Comparison',
+					operator: this.operator(token, comparison),
+					left,
+					right,
+				},
+				join(left.span, right.span),
+			);
+		}
+		if (token.kind === '+' && minLevel <= Level.Additive) {
+			this.next();
+			const right = this.expression(Level.Additive + 1);
+			const plus = this.operator(token, 'plus');
+			// a + b + c is one chain; parentheses start a new one
+			const chain = left.type === 'PlusChain' ? left : undefined;
+			return this.node(
+				{
+					type: 'PlusChain',
+					operands: chain ? [...chain.operands, right] : [left, right],
+					operators: chain ? [...chain.operators, plus] : [plus],
+				},
+				join(left.span, right.span),
+			);
+		}
+		if (token.kind === '-' && minLevel <= Level.Additive) {
+			this.checkMinusSpacing();
+			this.next();
+			const right = this.expression(Level.Additive + 1);
+			return this.node(
+				{
+					type: 'Arithmetic',
+					operator: this.operator(token, 'subtract'),
+					left,
+					right,
+				},
+				join(left.span, right.span),
+			);
+		}
+		const multiplicative = MULTIPLICATIVE[text];
+		if (multiplicative && minLevel <= Level.Multiplicative) {
+			this.next();
+			const right = this.expression(Level.Multiplicative + 1);
+			return this.node(
+				{
+					type: 'Arithmetic',
+					operator: this.operator(token, multiplicative),
+					left,
+					right,
+				},
+				join(left.span, right.span),
+			);
+		}
+		if (token.kind === '?:' && minLevel <= Level.Fallback) {
+			this.next();
+			const fallback = this.expression(Level.Fallback);
+			return this.node(
+				{
+					type: 'Fallback',
+					operator: this.operator(token, 'fallback'),
+					value: left,
+					fallback,
+				},
+				join(left.span, fallback.span),
+			);
+		}
+		if (token.kind === 'word' && minLevel <= Level.Chain) {
+			if (LAMBDAS[text]) {
+				return this.lambda(left);
 			}
-			if (this.isKeyword('not') && this.isKeyword(operator, 1)) {
-				return { operator, negated: true };
+			if (TAKE_OR_SKIP[text]) {
+				return this.takeOrSkip(left);
+			}
+			// an infix call can follow a lambda or take/skip
+			const fn = FUNCTIONS[text];
+			if (
+				fn &&
+				INFIX.has(fn) &&
+				(left.type === 'LambdaOperation' || left.type === 'TakeOrSkip')
+			) {
+				return this.infixCall(left);
 			}
 		}
 		return undefined;
 	}
 
-	private parseEquality(): Node {
-		const start = this.peek().start;
-		let left = this.parseRelational();
-		for (;;) {
-			const op = this.matchBinaryOp(EQUALITY);
-			if (!op) {
-				break;
-			}
-			const right = this.parseRelational();
-			left = {
-				type: 'BinaryExpression',
-				operator: op,
-				left,
-				right,
-				span: this.span(start),
-			};
+	/** A minus between values has a space or `)` before it, and a space or `(` after it. */
+	private checkMinusSpacing(): void {
+		const minus = this.peek();
+		const before = this.previous() as Token;
+		const after = this.peek(1);
+		const beforeOk = minus.spaceBefore || before.kind === ')';
+		const afterOk = after.spaceBefore || after.kind === '(';
+		if (!beforeOk || !afterOk) {
+			throw new SyntaxFailure('minus-spacing', join(before.span, after.span), {
+				text: `${before.text}${minus.spaceBefore ? ' ' : ''}-${after.spaceBefore ? ' ' : ''}${after.text}`,
+			});
 		}
-		return left;
 	}
 
-	private parseRelational(): Node {
-		const start = this.peek().start;
-		let left = this.parseAdditive();
-		for (;;) {
-			const op = this.matchBinaryOp(RELATIONAL);
-			if (!op) {
-				break;
-			}
-			const right = this.parseAdditive();
-			left = {
-				type: 'BinaryExpression',
-				operator: op,
-				left,
-				right,
-				span: this.span(start),
-			};
+	private atMembership(): boolean {
+		if (this.atWord('in', 'contains')) {
+			return true;
 		}
-		return left;
+		const next = this.peek(1);
+		return (
+			this.atWord('not') &&
+			next.kind === 'word' &&
+			(next.text === 'in' || next.text === 'contains')
+		);
 	}
 
-	private parseAdditive(): Node {
-		const start = this.peek().start;
-		let left = this.parseMultiplicative();
-		for (;;) {
-			const token = this.peek();
-			// `a -3` and `a-3`: a negative number right after a value
-			if (token.type === 'NUMBER' && token.value.startsWith('-')) {
-				throw new ParseError(MINUS_SPACING, token.start);
-			}
-			const op = this.matchBinaryOp(ADDITIVE);
-			if (!op) {
-				break;
-			}
-			if (op === '-') {
-				this.checkMinusSpacing(token);
-			}
-			const right = this.parseMultiplicative();
-			left = {
-				type: 'BinaryExpression',
-				operator: op,
-				left,
-				right,
-				span: this.span(start),
-			};
-		}
-		return left;
+	private membership(left: Node): Node {
+		const not = this.atWord('not') ? this.next() : undefined;
+		const word = this.next();
+		const name = word.text === 'contains' ? 'contains' : 'in';
+		const right = this.expression(Level.Membership + 1);
+		const [item, collection] =
+			name === 'contains' ? [right, left] : [left, right];
+		const operator: Operator<'in' | 'contains'> = {
+			name,
+			spelling: not ? `${not.text} ${word.text}` : word.text,
+			span: not ? join(not.span, word.span) : word.span,
+		};
+		return this.node(
+			{
+				type: 'Membership',
+				operator,
+				negated: not !== undefined,
+				item,
+				collection,
+			},
+			join(left.span, right.span),
+		);
 	}
 
-	private parseMultiplicative(): Node {
-		const start = this.peek().start;
-		let left = this.parseUnary();
-		for (;;) {
-			const op = this.matchBinaryOp(MULTIPLICATIVE);
-			if (!op) {
-				break;
-			}
-			const right = this.parseUnary();
-			left = {
-				type: 'BinaryExpression',
-				operator: op,
-				left,
-				right,
-				span: this.span(start),
-			};
+	// ----- lambdas, take, skip -----
+
+	private lambda(list: Node): Node {
+		const word = this.next();
+		const operator = this.operator(word, LAMBDAS[word.text] as LambdaName);
+		const parenthesized = this.at('(');
+		if (parenthesized) {
+			this.next();
 		}
-		return left;
+		const name = this.peek();
+		if (name.kind !== 'word') {
+			throw this.unexpected("the name of the lambda's parameter");
+		}
+		if (name.text === 'not') {
+			throw new SyntaxFailure('not-parameter-name', name.span);
+		}
+		this.next();
+		this.expect('=>', '`=>` after the parameter');
+		this.parameters.push(name.text);
+		const body = this.group();
+		this.parameters.pop();
+		let end = body.span;
+		if (parenthesized) {
+			end = this.expect(')', '`)` closing the lambda').span;
+		} else if (!this.at('end') && !this.at(')')) {
+			throw new SyntaxFailure('bare-lambda-not-last', this.peek().span);
+		}
+		return this.node<LambdaOperation>(
+			{
+				type: 'LambdaOperation',
+				operator,
+				list,
+				parameter: { name: name.text, span: name.span },
+				body,
+				notation: parenthesized ? 'parenthesized' : 'bare',
+			},
+			join(list.span, end),
+		);
 	}
 
-	private matchBinaryOp({
-		symbols,
-		keywords,
-	}: {
-		symbols: readonly string[];
-		keywords: readonly string[];
-	}): BinaryOperator | null {
-		const t = this.peek();
-		if (t.type === 'OP' && symbols.includes(t.value)) {
-			this.advance();
-			return t.value as BinaryOperator;
+	private takeOrSkip(list: Node): Node {
+		const word = this.next();
+		const name = TAKE_OR_SKIP[word.text] as 'take' | 'skip';
+		if (list.type === 'TakeOrSkip' && list.operator.name === name) {
+			throw new SyntaxFailure('slice-after-slice', word.span, {
+				operator: word.text,
+				previous: list.operator.spelling,
+			});
 		}
-		if (t.type === 'IDENT' && keywords.includes(t.value)) {
-			this.advance();
-			return KEYWORD_BINARY_OPS[t.value] as BinaryOperator;
+		const count = this.count(word.text);
+		return this.node(
+			{ type: 'TakeOrSkip', operator: this.operator(word, name), list, count },
+			join(list.span, count.span),
+		);
+	}
+
+	/** The count of `take` or `skip`: a number literal, data, a parameter or parentheses. */
+	private count(operator: string): Node {
+		const token = this.peek();
+		const isParameter =
+			token.kind === 'word' && token.text === this.parameters.at(-1);
+		if (
+			token.kind === 'number' ||
+			token.kind === 'data' ||
+			token.kind === '(' ||
+			isParameter
+		) {
+			return this.unary(true);
 		}
-		return null;
+		const text = token.kind === 'end' ? 'nothing' : token.text;
+		throw new SyntaxFailure('slice-count', token.span, { operator, text });
+	}
+
+	// ----- unary, postfix -----
+
+	/** `!x`, `not x`, or a value with its properties, indexes and infix calls. */
+	private unary(valueOnly: boolean): Node {
+		this.enter();
+		const token = this.peek();
+		let node: Node;
+		if (token.kind === '!' || (token.kind === 'word' && token.text === 'not')) {
+			this.next();
+			const operand = this.unary(valueOnly);
+			node = this.node(
+				{ type: 'LogicalNot', operator: this.operator(token, 'not'), operand },
+				join(token.span, operand.span),
+			);
+		} else {
+			node = this.postfix(this.primary(), valueOnly);
+		}
+		this.depth--;
+		return node;
 	}
 
 	/**
-	 * A `-` between two values has a space or `)` before it, and a space or
-	 * `(` after it: `-` is in names too, `data:n-3`, and starts negative
-	 * numbers, `-3`.
+	 * Properties, indexes and infix calls after a value. `valueOnly` is set
+	 * where a single value is expected, in arguments, items and map values,
+	 * where only data paths take properties.
 	 */
-	private checkMinusSpacing({ start }: Token): void {
-		const before = this.source[start - 1];
-		const after = this.source[start + 1];
-		if (
-			!(isSpace(before) || before === ')') ||
-			!(isSpace(after) || after === '(')
-		) {
-			throw new ParseError(MINUS_SPACING, start);
+	private postfix(start: Node, valueOnly: boolean): Node {
+		let node = start;
+		let infixUsed = false;
+		for (;;) {
+			const token = this.peek();
+			const before = this.previous() as Token;
+			// `(1)..3`, `[1]..2`: the property `.3` of the value, which reads nothing
+			if (
+				token.kind === '..' &&
+				!token.spaceBefore &&
+				[')', ']', '}'].includes(before.kind) &&
+				this.peek(1).kind === 'number' &&
+				!this.peek(1).spaceBefore
+			) {
+				this.next();
+				const number = this.next();
+				const property: Name = {
+					text: `.${number.text}`,
+					quoted: false,
+					span: join(token.span, number.span),
+				};
+				node = this.node<PropertyAccess>(
+					{
+						type: 'PropertyAccess',
+						object: node,
+						property,
+						appliesTo: 'value',
+					},
+					join(node.span, number.span),
+				);
+				continue;
+			}
+			if (token.kind === '.') {
+				// a property of everything before it: left to `group`
+				if (
+					before.kind === 'string' ||
+					(token.spaceBefore &&
+						['number', 'data', 'word'].includes(before.kind))
+				) {
+					return node;
+				}
+				if (before.kind === 'number') {
+					throw new SyntaxFailure(
+						'number-member',
+						join(before.span, this.peek(1).span),
+						{
+							text: `${before.text}.${this.peek(1).text}`,
+						},
+					);
+				}
+				if (valueOnly && !isPath(node)) {
+					throw new SyntaxFailure(
+						'needs-parentheses',
+						join(node.span, this.peek(1).span),
+						{
+							what: 'A property',
+							where: SINGLE_VALUE_PLACES,
+						},
+					);
+				}
+				this.next();
+				const property = this.propertyName();
+				node = this.node<PropertyAccess>(
+					{
+						type: 'PropertyAccess',
+						object: node,
+						property,
+						appliesTo: 'value',
+					},
+					join(node.span, property.span),
+				);
+			} else if (token.kind === '[') {
+				if (!isPath(node)) {
+					throw new SyntaxFailure('index-on-value', token.span);
+				}
+				this.next();
+				const index = this.group();
+				const end = this.expect(']', '`]`');
+				node = this.node(
+					{ type: 'IndexAccess', object: node, index },
+					join(node.span, end.span),
+				);
+			} else if (
+				token.kind === 'word' &&
+				INFIX.has(FUNCTIONS[token.text] as FunctionName)
+			) {
+				if (valueOnly) {
+					throw new SyntaxFailure(
+						'needs-parentheses',
+						join(node.span, token.span),
+						{
+							what: 'An infix call',
+							where: SINGLE_VALUE_PLACES,
+						},
+					);
+				}
+				if (infixUsed) {
+					throw new SyntaxFailure('infix-after-infix', token.span, {
+						name: token.text,
+					});
+				}
+				node = this.infixCall(node);
+				infixUsed = true;
+			} else {
+				return node;
+			}
 		}
 	}
 
-	private parseUnary(): Node {
-		const start = this.peek().start;
-		if (this.isOp('!') || this.isKeyword('not')) {
-			this.advance();
-			const argument = this.parseUnary();
-			return {
-				type: 'UnaryExpression',
-				operator: '!',
-				argument,
-				span: this.span(start),
-			};
-		}
-		// with no value before it, a `-` is only in a negative number, `-5`,
-		// or before parentheses, which Blogger reads without it: `-(5)` is `5`
-		if (this.isOp('-')) {
-			const minus = this.advance();
-			if (this.source[minus.end] !== '(') {
-				throw new ParseError(
-					"A '-' with no value before it is only in a negative number, '-5', or before parentheses, '-(...)', which Blogger reads without the '-'",
-					minus.start,
+	/** `left name right`: the right side is one value; properties after it apply to the call. */
+	private infixCall(left: Node): Node {
+		const word = this.next();
+		const right = this.primary();
+		return this.node(
+			{
+				type: 'FunctionCall',
+				function: this.operator(word, FUNCTIONS[word.text] as FunctionName),
+				arguments: [left, right],
+				notation: 'infix',
+			},
+			join(left.span, right.span),
+		);
+	}
+
+	// ----- values -----
+
+	private primary(): Node {
+		const token = this.peek();
+		switch (token.kind) {
+			case 'number':
+				this.next();
+				return this.node(
+					{ type: 'NumberLiteral', raw: token.text, value: Number(token.text) },
+					token.span,
+				);
+			case 'string':
+				this.next();
+				return this.node(
+					{ type: 'StringLiteral', raw: token.text, value: stringValue(token) },
+					token.span,
+				);
+			case 'data': {
+				this.next();
+				const [root, ...properties] = token.text
+					.slice('data:'.length)
+					.split('.')
+					.filter(Boolean);
+				return this.node({ type: 'DataPath', root, properties }, token.span);
+			}
+			case 'word':
+				return this.word(token);
+			case '(': {
+				this.next();
+				const expression = this.group();
+				const end = this.expect(')', '`)`');
+				return this.node(
+					{ type: 'Parenthesized', expression },
+					join(token.span, end.span),
 				);
 			}
-			return this.parseUnary();
-		}
-		return this.parsePostfix();
-	}
-
-	private parsePostfix(): Node {
-		const start = this.peek().start;
-		let node = this.parsePrimary();
-		for (;;) {
-			if (this.isPunct('.')) {
-				if (node.type === 'LambdaExpression' && !this.parenWrapped.has(node)) {
-					throw new ParseError(
-						"Member access '.' cannot directly follow a 'filter'/'map'/'any'/'all'/'none' " +
-							"chain — wrap the chain in parentheses first, e.g. '(...).prop'",
-						this.peek().start,
-					);
-				}
-				this.advance();
-				const name = this.expectIdentLike();
-				node = {
-					type: 'MemberExpression',
-					object: node,
-					property: name,
-					span: this.span(start),
-				};
-				continue;
+			case '[': {
+				this.next();
+				const items = this.values(']');
+				const end = this.next();
+				return this.node(
+					{ type: 'ListLiteral', notation: 'brackets', items },
+					join(token.span, end.span),
+				);
 			}
-			if (this.isPunct('[')) {
-				if (
-					node.type !== 'DataReference' &&
-					node.type !== 'MemberExpression' &&
-					node.type !== 'IndexExpression'
-				) {
-					throw new ParseError(
-						"Index access '[...]' is only valid directly on a 'data:' reference " +
-							'(e.g. data:links[0]), not on list/map literals, calls, or other expressions',
-						this.peek().start,
-					);
+			case '{':
+				return this.braces();
+			case '-':
+				// `-(x)`, also with a space: the operator function `-`
+				if (this.peek(1).kind === '(') {
+					return this.operatorFunctionCall(token, '-');
 				}
-				this.advance();
-				const index = this.parseExpression();
-				this.expectPunct(']');
-				node = {
-					type: 'IndexExpression',
-					object: node,
-					index,
-					span: this.span(start),
-				};
-				continue;
-			}
-			if (this.isPunct('(')) {
-				if (node.type !== 'Identifier') {
-					throw new ParseError(
-						'Only a function name can be called',
-						this.peek().start,
-					);
-				}
-				if (!FUNCTION_NAMES.has(node.name as FunctionName)) {
-					throw new ParseError(
-						`Unknown function '${node.name}'`,
-						node.span.start,
-					);
-				}
-				const callee = node.name as FunctionName;
-				this.advance();
-				const args = this.parseArgList();
-				this.expectPunct(')');
-				this.validateArgs(callee, args, this.span(start));
-				node = { type: 'CallExpression', callee, args, span: this.span(start) };
-				continue;
-			}
-			if (
-				this.peek().type === 'IDENT' &&
-				LAMBDA_OPERATORS.has(this.peek().value as LambdaOperator) &&
-				this.isPunct('(', 1)
-			) {
-				const operator = this.advance().value as LambdaOperator;
-				this.advance(); // '('
-				const param = this.expectIdentLike();
-				if (!this.isOp('=>')) {
-					throw new ParseError(
-						`Expected '=>' after lambda parameter '${param}'`,
-						this.peek().start,
-					);
-				}
-				this.advance();
-				const prevActive = this.activeParam;
-				this.activeParam = param;
-				const body = this.parseExpression();
-				this.activeParam = prevActive;
-				this.expectPunct(')');
-				node = {
-					type: 'LambdaExpression',
-					operator,
-					source: node,
-					param,
-					body,
-					span: this.span(start),
-				};
-				continue;
-			}
-			if (
-				this.peek().type === 'IDENT' &&
-				INFIX_FUNCTION_NAMES.has(this.peek().value as InfixFunctionName)
-			) {
-				if (node.type === 'LambdaExpression' && !this.parenWrapped.has(node)) {
-					throw new ParseError(
-						`Infix function '${this.peek().value}' cannot directly follow a ` +
-							"'filter'/'map'/'any'/'all'/'none' chain — wrap the chain in parentheses " +
-							`first, e.g. '(...) ${this.peek().value} ...'`,
-						this.peek().start,
-					);
-				}
-				const operator = this.advance().value as InfixFunctionName;
-				const right = this.parseRestrictedValue('an infix function operand');
-				this.validateArgs(operator, [node, right], this.span(start));
-				node = {
-					type: 'NamedOperatorExpression',
-					operator,
-					left: node,
-					right,
-					span: this.span(start),
-				};
-				continue;
-			}
-			break;
+				throw new SyntaxFailure('unary-minus', token.span);
+			default:
+				break;
 		}
-		return node;
+		const operator = OPERATOR_FUNCTIONS[token.text];
+		if (operator && this.peek(1).kind === '(' && !this.peek(1).spaceBefore) {
+			return this.operatorFunctionCall(token, operator);
+		}
+		throw this.unexpected('a value');
 	}
 
-	private expectIdentLike(): string {
-		const t = this.peek();
-		if (t.type !== 'IDENT') {
-			throw new ParseError('Expected a property name', t.start);
-		}
-		this.advance();
-		return t.value;
-	}
-
-	private parseArgList(): Node[] {
-		if (this.isPunct(')')) {
-			return [];
-		}
-		return this.parseSeparated(() =>
-			this.parseRestrictedValue('a function argument'),
-		);
-	}
-
-	private parsePrimary(): Node {
-		const t = this.peek();
-		switch (t.type) {
-			case 'NUMBER':
-				this.advance();
-				return {
-					type: 'NumberLiteral',
-					value: Number(t.value),
-					span: this.span(t.start),
-				};
-			case 'STRING':
-				this.advance();
-				return {
-					type: 'StringLiteral',
-					value: t.value,
-					span: this.span(t.start),
-				};
-			case 'DATA':
-				return this.parseDataPath(t);
-			case 'IDENT':
-				return this.parseWord(t);
-			case 'PUNCT':
-				if (t.value === '(') {
-					return this.parseParenthesized();
-				}
-				if (t.value === '[') {
-					return this.parseList(t);
-				}
-				if (t.value === '{') {
-					return this.parseBraces(t);
-				}
-		}
-		throw new ParseError(`Unexpected token '${t.value || t.type}'`, t.start);
-	}
-
-	/** `data:a.b.c`, a reference with a member for each segment after the first. */
-	private parseDataPath(t: Token): Node {
-		this.advance();
-		const segments = t.value.split('.').filter((s) => s.length > 0);
-		if (segments.length === 0) {
-			return { type: 'EmptyDataReference', span: this.span(t.start) };
-		}
-		let node: Node = {
-			type: 'DataReference',
-			name: segments[0],
-			span: this.span(t.start),
-		};
-		for (let k = 1; k < segments.length; k++) {
-			node = {
-				type: 'MemberExpression',
-				object: node,
-				property: segments[k] as string,
-				span: this.span(t.start),
-			};
-		}
-		return node;
-	}
-
-	/** A boolean, a function name, or the parameter of the lambda it is in. */
-	private parseWord(t: Token): Node {
-		if (
-			t.value === 'true' ||
-			t.value === 'false' ||
-			t.value === 'yes' ||
-			t.value === 'no'
-		) {
-			this.advance();
-			return {
-				type: 'BooleanLiteral',
-				value: t.value === 'true' || t.value === 'yes',
-				span: this.span(t.start),
-			};
-		}
-		if (t.value === 'null' || t.value === 'nil') {
-			throw new ParseError(
-				`Blogger does not support a '${t.value}' literal — there is no way to write a literal null value`,
-				t.start,
-			);
-		}
-		if (!this.isPunct('(', 1) && t.value !== this.activeParam) {
-			throw new ParseError(
-				`Unknown identifier '${t.value}' — values must be accessed as 'data:${t.value}'` +
-					(this.activeParam
-						? `, or by referencing the in-scope lambda parameter '${this.activeParam}'`
-						: ' (no lambda parameter is in scope here)'),
-				t.start,
-			);
-		}
-		this.advance();
-		return { type: 'Identifier', name: t.value, span: this.span(t.start) };
-	}
-
-	private parseParenthesized(): Node {
-		this.advance();
-		const expr = this.parseExpression();
-		this.expectPunct(')');
-		// Mark this exact node object as having come straight out of a
-		// paren group, so `parseRestrictedValue` and the postfix guards
-		// above can tell a wrapped expression apart from a bare one even
-		// though the node shape is otherwise identical.
-		this.parenWrapped.add(expr);
-		return expr;
-	}
-
-	/** `[a, b]` */
-	private parseList(t: Token): Node {
-		this.advance();
-		const elements = this.isPunct(']')
-			? []
-			: this.parseSeparated(() => this.parseRestrictedValue('a list element'));
-		this.expectPunct(']');
-		return { type: 'ListLiteral', elements, span: this.span(t.start) };
-	}
-
-	/** `{}` and `{a, b}`, a set, or `{a: 1, b: 2}`, a map. */
-	private parseBraces(t: Token): Node {
-		this.advance();
-		let node: Node;
-		if (this.isPunct('}')) {
-			node = { type: 'SetLiteral', elements: [], span: this.span(t.start) };
-		} else if (this.peekIsMapKey()) {
-			const entries = this.parseSeparated(() => this.parseMapEntry());
-			node = { type: 'MapLiteral', entries, span: this.span(t.start) };
-		} else {
-			const elements = this.parseSeparated((index) => {
-				if (index > 0 && this.peekIsMapKey()) {
-					throw new ParseError(
-						"Cannot mix a keyed map entry into a set literal ('{a, b}' vs '{a: 1, b: 2}')",
-						this.peek().start,
-					);
-				}
-				return this.parseRestrictedValue('a set element');
-			});
-			node = { type: 'SetLiteral', elements, span: this.span(t.start) };
-		}
-		this.expectPunct('}');
-		return node;
-	}
-
-	private peekIsMapKey(): boolean {
-		const key = this.peek();
+	private word(token: Token): Node {
+		const text = token.text;
+		// `data:` alone, before a space: the lexer leaves `data` a word, for a map key `{ data: 1 }`
 		const colon = this.peek(1);
-		return (
-			(key.type === 'IDENT' || key.type === 'STRING') &&
-			colon.type === 'PUNCT' &&
-			colon.value === ':'
+		if (text === 'data' && colon.kind === ':' && !colon.spaceBefore) {
+			this.next();
+			this.next();
+			return this.node(
+				{ type: 'DataPath', root: undefined, properties: [] },
+				join(token.span, colon.span),
+			);
+		}
+		if (isBooleanWord(text)) {
+			this.next();
+			return this.node(
+				{
+					type: 'BooleanLiteral',
+					raw: text,
+					value: /^(true|yes)$/i.test(text),
+				},
+				token.span,
+			);
+		}
+		const followedByParenthesis =
+			this.peek(1).kind === '(' && !this.peek(1).spaceBefore;
+		const fn = FUNCTIONS[text];
+		if (fn && followedByParenthesis) {
+			return this.functionCall(token, fn);
+		}
+		const operator = OPERATOR_FUNCTIONS[text];
+		if (operator && followedByParenthesis) {
+			return this.operatorFunctionCall(token, operator);
+		}
+		if (text === this.parameters.at(-1)) {
+			this.next();
+			return this.node({ type: 'Parameter', name: text }, token.span);
+		}
+		if (this.parameters.includes(text)) {
+			throw new SyntaxFailure('outer-parameter', token.span, { text });
+		}
+		if (text === 'null' || text === 'nil') {
+			throw new SyntaxFailure('null-literal', token.span, { text });
+		}
+		if (text === 'to') {
+			throw new SyntaxFailure('range-outside-loop', token.span);
+		}
+		if (fn) {
+			throw new SyntaxFailure('expected', token.span, {
+				expected: `\`(\` after the function ${text}`,
+				found: `\`${text}\``,
+			});
+		}
+		throw new SyntaxFailure('bare-word', token.span, { text });
+	}
+
+	private functionCall(name: Token, fn: FunctionName): Node {
+		this.next();
+		this.next();
+		const args = this.values(')');
+		const end = this.next();
+		return this.node(
+			{
+				type: 'FunctionCall',
+				function: this.operator(name, fn),
+				arguments: args,
+				notation: 'prefix',
+			},
+			join(name.span, end.span),
 		);
 	}
 
-	private parseMapEntry(): MapEntry {
-		const keyToken = this.peek();
-		if (keyToken.type !== 'IDENT' && keyToken.type !== 'STRING') {
-			throw new ParseError(
-				'Expected a map key (identifier or string)',
-				keyToken.start,
+	private operatorFunctionCall(
+		name: Token,
+		operator: OperatorFunctionName,
+	): Node {
+		this.next();
+		this.next();
+		const args = this.values(')');
+		const end = this.next();
+		return this.node(
+			{
+				type: 'OperatorFunctionCall',
+				operator: this.operator(name, operator),
+				arguments: args,
+			},
+			join(name.span, end.span),
+		);
+	}
+
+	/**
+	 * Values separated by commas up to `close`, which is left to read. One
+	 * trailing comma is allowed. Each value is single: see `postfix`.
+	 */
+	private values(close: ')' | ']' | '}'): Node[] {
+		const values: Node[] = [];
+		while (!this.at(close)) {
+			if (this.at(',')) {
+				throw new SyntaxFailure('empty-item', this.peek().span);
+			}
+			values.push(this.unary(true));
+			if (this.at(',')) {
+				this.next();
+				continue;
+			}
+			if (!this.at(close)) {
+				throw this.notSingleValue(values.at(-1) as Node, close);
+			}
+		}
+		return values;
+	}
+
+	/** The error for something after a value in an argument, an item or a map value. */
+	private notSingleValue(value: Node, close: string): SyntaxFailure {
+		const token = this.peek();
+		const at = join(value.span, token.span);
+		if (token.kind === '.' || token.kind === '..') {
+			return new SyntaxFailure('needs-parentheses', at, {
+				what: 'A property',
+				where: SINGLE_VALUE_PLACES,
+			});
+		}
+		if (
+			token.kind === 'word' &&
+			(LAMBDAS[token.text] || TAKE_OR_SKIP[token.text])
+		) {
+			return new SyntaxFailure('needs-parentheses', at, {
+				what: `\`${token.text}\``,
+				where: SINGLE_VALUE_PLACES,
+			});
+		}
+		const operatorWord =
+			token.kind === 'word' &&
+			/^(and|or|in|contains|not|eq|neq|lt|gt|lte|gte)$/.test(token.text);
+		if (OPERATOR_TOKENS.has(token.kind) || operatorWord) {
+			return new SyntaxFailure('needs-parentheses', at, {
+				what: `An operator (\`${token.text}\`)`,
+				where: SINGLE_VALUE_PLACES,
+			});
+		}
+		return this.unexpected(`\`,\` or \`${close}\``);
+	}
+
+	/** `{1, 2}` is a list, `{}` an empty one; `{ a: 1 }` is a map. */
+	private braces(): Node {
+		const open = this.next();
+		const first = this.peek();
+		const isMap =
+			['word', 'string', 'number'].includes(first.kind) &&
+			this.peek(1).kind === ':';
+		if (!isMap) {
+			const items = this.values('}');
+			const end = this.next();
+			return this.node(
+				{ type: 'ListLiteral', notation: 'braces', items },
+				join(open.span, end.span),
 			);
 		}
-		const key = keyToken.value;
-		this.advance();
-		const colon = this.expectPunct(':');
-		const afterColon = this.source[colon.end] ?? '';
-		if (!/[ \t\r\n]/.test(afterColon)) {
-			throw new ParseError(
-				`Expected a space after ':' in map entry '${key}'`,
-				colon.end,
+		const entries: MapEntry[] = [];
+		while (!this.at('}')) {
+			if (this.at(',')) {
+				throw new SyntaxFailure('empty-item', this.peek().span);
+			}
+			const keyToken = this.next();
+			if (!['word', 'string', 'number'].includes(keyToken.kind)) {
+				throw new SyntaxFailure('expected', keyToken.span, {
+					expected: 'a key of the map',
+					found: `\`${keyToken.text}\``,
+				});
+			}
+			const key: Name =
+				keyToken.kind === 'string'
+					? { text: stringValue(keyToken), quoted: true, span: keyToken.span }
+					: { text: keyToken.text, quoted: false, span: keyToken.span };
+			this.expect(':', '`:` after the key');
+			if (!this.peek().spaceBefore) {
+				throw new SyntaxFailure(
+					'map-colon-space',
+					join(keyToken.span, this.peek().span),
+					{ key: keyToken.text },
+				);
+			}
+			const value = this.unary(true);
+			entries.push({ key, value, span: join(keyToken.span, value.span) });
+			if (this.at(',')) {
+				this.next();
+				continue;
+			}
+			if (!this.at('}')) {
+				throw this.notSingleValue(value, '}');
+			}
+		}
+		const end = this.next();
+		return this.node(
+			{ type: 'MapLiteral', entries },
+			join(open.span, end.span),
+		);
+	}
+
+	// ----- loop values -----
+
+	/** `values` of a loop: an expression, `a to b`, or `1..5`. */
+	private loopValues(): Root {
+		const [from, dots, to, end] = [
+			this.peek(0),
+			this.peek(1),
+			this.peek(2),
+			this.peek(3),
+		];
+		if (from.kind === 'number' && dots.kind === '..' && !dots.spaceBefore) {
+			if (to.kind !== 'number' || to.spaceBefore || end.kind !== 'end') {
+				throw new SyntaxFailure('dots-range', dots.span);
+			}
+			for (const t of [from, to]) {
+				if (!/^-?\d+$/.test(t.text)) {
+					throw new SyntaxFailure('range-end', t.span, { text: t.text });
+				}
+			}
+			this.pos += 3;
+			return this.node(
+				{
+					type: 'LoopRange',
+					start: this.node(
+						{ type: 'NumberLiteral', raw: from.text, value: Number(from.text) },
+						from.span,
+					),
+					end: this.node(
+						{ type: 'NumberLiteral', raw: to.text, value: Number(to.text) },
+						to.span,
+					),
+					notation: 'dots',
+				},
+				join(from.span, to.span),
 			);
 		}
-		const value = this.parseRestrictedValue('a map value');
-		return { key, value };
+		if (from.kind === 'number' && dots.kind === '..' && to.spaceBefore) {
+			throw new SyntaxFailure('dots-range', dots.span);
+		}
+		const start = this.group();
+		if (!this.atWord('to')) {
+			return start;
+		}
+		this.next();
+		const stop = this.group();
+		return this.node(
+			{ type: 'LoopRange', start, end: stop, notation: 'to' },
+			join(start.span, stop.span),
+		);
 	}
 }
