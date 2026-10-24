@@ -45,7 +45,7 @@ function inlineSize(
 /**
  * The sizes of the files written, and what the theme is made of when it is
  * validated: its scripts and styles from the chunks, its sections and
- * widgets from `processXml`.
+ * widgets from `inspectXml`.
  */
 export async function collectStats(
 	compiled: CompiledTemplate,

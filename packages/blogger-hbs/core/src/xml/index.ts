@@ -1,11 +1,21 @@
+export {
+	type ExpressionCache,
+	type ParseXmlOptions,
+	parseXml,
+	type XmlDocument,
+} from './document';
+export { XmlError } from './error';
 export { parseExpressions } from './expressions';
+export { DOCTYPE, XML_DECLARATION } from './format';
 export type { XmlInfo } from './info';
 export {
-	type ProcessXmlOptions,
-	processXml,
-	XmlError,
-	type XmlIssue,
-	type XmlResult,
+	type CheckResult,
+	type CheckXmlOptions,
+	checkXml,
+	type FormatResult,
+	formatXml,
+	inspectXml,
+	type XmlDiagnostic,
 } from './process';
 export {
 	createLocate,
@@ -14,4 +24,14 @@ export {
 	XmlScanner,
 	XmlSyntaxError,
 } from './scanner';
-export type { SkinGroup, SkinVariable } from './variables';
+export type {
+	AutomaticVariable,
+	BackgroundVariable,
+	ColorVariable,
+	FontVariable,
+	LengthVariable,
+	SkinGroup,
+	SkinVariable,
+	StringVariable,
+	UrlVariable,
+} from './variables';

@@ -37,14 +37,3 @@ blogger-hbs --help                       # all the options
 ```
 
 The same is available from JavaScript with `compileTemplate`, `watchTemplate` and `renderTemplate`.
-
-## Documentation
-
-- [Configuration](./docs/configuration.md): the options of the config and of the CLI.
-- [Templates](./docs/templates.md): importing templates, data, scripts and styles.
-- [Helpers](./docs/helpers.md): the built-in helpers and those of a theme.
-- [Plugins](./docs/plugins.md): partials, data, hooks and runtimes of plugins.
-- [Validation and formatting](./docs/validation.md): what is checked, and how the theme is written.
-- [Rendering anywhere](./docs/rendering.md): `blogger-hbs/runtime` and `createRenderer`.
-- [JavaScript API](./docs/api.md): `compileTemplate`, `watchTemplate` and the others.
-- [Errors](./docs/errors.md): what errors say and how to throw them.

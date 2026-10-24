@@ -1,7 +1,4 @@
-import { entityAt } from './expressions';
-
-/** The elements Blogger reads as CSS, with only text and CDATA sections in them. */
-export const SKINS = new Set(['b:skin', 'b:template-skin']);
+import { entityAt } from './characters';
 
 const CDATA_START = '<![CDATA[';
 const CDATA_END = ']]>';

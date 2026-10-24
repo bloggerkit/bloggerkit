@@ -20,11 +20,14 @@ export type Locate = (index: number) => Position;
 
 export class XmlSyntaxError extends Error {
 	readonly position: Position;
+	/** What the error is, `'syntax'` when the document is not well-formed. */
+	readonly code: string;
 
-	constructor(message: string, position: Position) {
+	constructor(message: string, position: Position, code = 'syntax') {
 		super(message);
 		this.name = 'XmlSyntaxError';
 		this.position = position;
+		this.code = code;
 	}
 }
 
@@ -89,6 +92,16 @@ export interface ScannerOptions {
 	onText?(offset: number, parent: OpenElement | undefined): void;
 	/** Called with the XML declaration and the doctype, like `onStartTag`. */
 	onDeclaration?(declaration: ScannedDeclaration): void;
+	/**
+	 * Called with every comment and processing instruction but the XML
+	 * declaration, from its `<` to right after its `>`, offsets as in `onStartTag`.
+	 */
+	onMarkup?(
+		kind: 'comment' | 'pi',
+		start: number,
+		end: number,
+		parent: OpenElement | undefined,
+	): void;
 }
 
 export interface ScannedDeclaration {
@@ -724,6 +737,12 @@ export class XmlScanner {
 							this.fail("'--' is not allowed inside a comment");
 						}
 						this.mode = 'text';
+						this.options.onMarkup?.(
+							'comment',
+							this.tagStart,
+							base + i + 1,
+							this.stack.at(-1),
+						);
 					}
 					this.count = 0;
 				}
@@ -766,6 +785,13 @@ export class XmlScanner {
 							);
 						}
 						this.declare('xml', content, base + i + 1);
+					} else {
+						this.options.onMarkup?.(
+							'pi',
+							this.tagStart,
+							base + i + 1,
+							this.stack.at(-1),
+						);
 					}
 					return next;
 				}

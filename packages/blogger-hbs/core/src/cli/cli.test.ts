@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assert, beforeAll, describe, onTestFinished, test } from 'vitest';
 import { createFixture } from '../../test/fixture';
-import { DOCTYPE, XML_DECLARATION } from '../xml/format';
+import { DOCTYPE, XML_DECLARATION } from '../xml';
 
 const PACKAGE = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
@@ -129,7 +129,7 @@ describe('cli', () => {
 		assert.match(output, /Built in \d+ms/);
 		assert.strictEqual(
 			await fs.readFile(path.join(cwd, 'dist/theme.xml'), 'utf-8'),
-			`${XML_DECLARATION}\n${DOCTYPE}\n<html b:layoutsVersion='3' xmlns='http://www.w3.org/1999/xhtml'>\n  <body>Hi</body>\n<b:skin/></html>\n`,
+			`${XML_DECLARATION}\n<html b:layoutsVersion='3' xmlns='http://www.w3.org/1999/xhtml'>\n  <body>Hi</body>\n<b:skin><![CDATA[]]></b:skin></html>\n`,
 		);
 		assert.include(
 			await fs.readFile(path.join(cwd, 'dist/compiled.js'), 'utf-8'),
@@ -143,7 +143,8 @@ describe('cli', () => {
 
 	test('validates without formatting, or skips both', async () => {
 		const cwd = await createFixture({
-			...THEME,
+			// a space before the XML declaration, which formatting removes
+			'index.hbs': ` ${XML_DECLARATION}${THEME['index.hbs']}`,
 			'context.json': '{ "title": "Hi" }',
 		});
 
@@ -156,7 +157,7 @@ describe('cli', () => {
 		assert.strictEqual(unformatted.code, 1, unformatted.output);
 		assert.match(
 			unformatted.output,
-			/The first line has to be the XML declaration/,
+			/The XML declaration has to be the first thing in the theme/,
 		);
 
 		const raw = await run(cwd, '--no-validate', '--context', 'context.json');
@@ -164,7 +165,7 @@ describe('cli', () => {
 		assert.notMatch(raw.output, /Validated|Formatted/);
 		assert.match(
 			await fs.readFile(path.join(cwd, 'dist/theme.xml'), 'utf-8'),
-			/^<html\n {2}xmlns=/,
+			/^ <\?xml[^>]*><html\n {2}xmlns=/,
 		);
 	});
 
@@ -222,7 +223,8 @@ describe('cli', () => {
 
 	test('shows every place the rendered template is not valid', async () => {
 		const cwd = await createFixture({
-			'index.hbs': '<html>\n  <body/>\n<b:skin/></html>',
+			'index.hbs':
+				"<html>\n  <b:loop var='x'/>\n  <b:section id=' s'/>\n<b:skin/></html>",
 		});
 		const { code, output } = await run(cwd, '--no-format');
 		assert.strictEqual(code, 1);
@@ -230,8 +232,8 @@ describe('cli', () => {
 			output,
 			`The rendered template is not valid XML
   Caused by: 2 errors:
-    The first line has to be the XML declaration, ${XML_DECLARATION} (dist/theme.xml:1:1)
-    The second line has to be the doctype, ${DOCTYPE} (dist/theme.xml:2:1)`,
+    <b:loop> has to have the attribute 'values' (dist/theme.xml:2:3)
+    The attribute 'id' of <b:section> can not start or end with spaces, Blogger fails to save it, got: ' s' (dist/theme.xml:3:18)`,
 		);
 		// written anyway, to look at where it is invalid
 		assert.isTrue(existsSync(path.join(cwd, 'dist/theme.xml')));
@@ -275,7 +277,7 @@ describe('cli', () => {
 		assert.strictEqual(code, 0, output);
 		assert.match(
 			output,
-			/⚠ <a> has both 'href' and 'expr:href', Blogger uses 'expr:href' \(dist\/theme\.xml:4:38\)/,
+			/⚠ <a> has both 'href' and 'expr:href', Blogger uses 'expr:href' \(dist\/theme\.xml:3:38\)/,
 		);
 		// the place is in the file written, formatted
 		const written = await fs.readFile(
@@ -283,7 +285,7 @@ describe('cli', () => {
 			'utf-8',
 		);
 		assert.strictEqual(
-			written.split('\n')[3],
+			written.split('\n')[2],
 			"  <a expr:href='data:blog.url' href='#'/>",
 		);
 	});
@@ -363,7 +365,7 @@ function waitForOutput(child: ChildProcess, pattern: RegExp): Promise<string> {
 describe('validate and format', () => {
 	const HEAD = `${XML_DECLARATION}\n${DOCTYPE}\n`;
 	const valid = `${HEAD}<html><b:if cond="true" rel="x"><p   class="a"></p></b:if><b:skin/></html>`;
-	const formatted = `${HEAD}<html><b:if cond='true' rel='x'><p class='a'/></b:if><b:skin/></html>`;
+	const formatted = `${HEAD}<html><b:if cond='true' rel='x'><p class='a'/></b:if><b:skin><![CDATA[]]></b:skin></html>`;
 
 	test('validate shows the warnings and checks a valid theme', async () => {
 		const cwd = await createFixture({ 'theme.xml': valid });
@@ -378,7 +380,7 @@ describe('validate and format', () => {
 
 	test('validate shows every error of an invalid theme', async () => {
 		const cwd = await createFixture({
-			'theme.xml': `${HEAD}<html b:css='yes'><b:foo/><b:skin/></html>`,
+			'theme.xml': `${HEAD}<html><b:loop var='x'/><b:with var='y'/><b:skin/></html>`,
 		});
 		const { code, output } = await run(cwd, 'validate', 'theme.xml');
 		assert.strictEqual(code, 1);
@@ -386,8 +388,8 @@ describe('validate and format', () => {
 			output,
 			`✗ theme.xml is not valid XML
   Caused by: 2 errors:
-    The attribute 'b:css' of <html> has to be 'true' or 'false', got: 'yes' (theme.xml:3:14)
-    Unknown element <b:foo> (theme.xml:3:19)`,
+    <b:loop> has to have the attribute 'values' (theme.xml:3:7)
+    <b:with> has to have the attribute 'value' (theme.xml:3:24)`,
 		);
 	});
 
@@ -408,7 +410,10 @@ describe('validate and format', () => {
 		});
 		const { code, stdout, stderr } = await run(cwd, 'format', 'theme.xml');
 		assert.strictEqual(code, 0);
-		assert.strictEqual(stdout, `${HEAD}<html><p class='a'/><b:skin/></html>`);
+		assert.strictEqual(
+			stdout,
+			`${HEAD}<html><p class='a'/><b:skin><![CDATA[]]></b:skin></html>`,
+		);
 		assert.strictEqual(stderr, '');
 	});
 
@@ -448,7 +453,7 @@ describe('validate and format', () => {
 
 	test('format writes nothing for an invalid theme', async () => {
 		const cwd = await createFixture({
-			'theme.xml': `${HEAD}<html><b:foo/><b:skin/></html>`,
+			'theme.xml': `${HEAD}<html><b:loop var='x'/><b:skin/></html>`,
 		});
 		const toFile = await run(cwd, 'format', 'theme.xml', '-o', 'out.xml');
 		assert.strictEqual(toFile.code, 1);
@@ -457,7 +462,10 @@ describe('validate and format', () => {
 		assert.strictEqual(toStdout.code, 1);
 		assert.strictEqual(toStdout.stdout, '');
 		assert.match(toStdout.stderr, /^\n {2}blogger-hbs v/);
-		assert.include(toStdout.stderr, 'Unknown element <b:foo> (theme.xml:3:7)');
+		assert.include(
+			toStdout.stderr,
+			"<b:loop> has to have the attribute 'values' (theme.xml:3:7)",
+		);
 	});
 
 	describe('--json', () => {
@@ -475,6 +483,8 @@ describe('validate and format', () => {
 				valid: true,
 				warnings: [
 					{
+						code: 'unread-attribute',
+						severity: 'warning',
 						message:
 							"<b:if> has the attribute 'rel', Blogger only reads 'cond'",
 						loc: { path: 'theme.xml', line: 3, column: 30 },
@@ -492,7 +502,7 @@ describe('validate and format', () => {
 
 		test('validate prints every error of an invalid theme', async () => {
 			const cwd = await createFixture({
-				'theme.xml': `${HEAD}<html><b:foo/><b:bar/><b:skin/></html>`,
+				'theme.xml': `${HEAD}<html><b:loop var='x'/><b:with var='y'/><b:skin/></html>`,
 			});
 			const { code, report } = await json(cwd, 'validate', 'theme.xml');
 			assert.strictEqual(code, 1);
@@ -500,12 +510,16 @@ describe('validate and format', () => {
 				valid: false,
 				errors: [
 					{
-						message: 'Unknown element <b:foo>',
+						code: 'missing-attribute',
+						severity: 'error',
+						message: "<b:loop> has to have the attribute 'values'",
 						loc: { path: 'theme.xml', line: 3, column: 7 },
 					},
 					{
-						message: 'Unknown element <b:bar>',
-						loc: { path: 'theme.xml', line: 3, column: 15 },
+						code: 'missing-attribute',
+						severity: 'error',
+						message: "<b:with> has to have the attribute 'value'",
+						loc: { path: 'theme.xml', line: 3, column: 24 },
 					},
 				],
 			});
@@ -519,13 +533,13 @@ describe('validate and format', () => {
 			assert.strictEqual(toStdout.code, 0);
 			assert.include(
 				toStdout.report.xml,
-				"<b:section id='s'>\n  <b:widget id='HTML1' type='HTML'/>",
+				"<b:section id='s'>\n<b:widget id='HTML1' locked='false' title='' type='HTML' visible='true'/>",
 			);
 			assert.isUndefined(toStdout.report.written);
 			assert.deepEqual(toStdout.report.info.widgets[0].loc, {
 				path: '<stdout>',
 				line: 4,
-				column: 3,
+				column: 1,
 			});
 
 			const toFile = await json(cwd, 'format', 'theme.xml', '-o', 'out.xml');
@@ -535,7 +549,7 @@ describe('validate and format', () => {
 			assert.deepEqual(toFile.report.info.widgets[0].loc, {
 				path: 'out.xml',
 				line: 4,
-				column: 3,
+				column: 1,
 			});
 			assert.strictEqual(
 				await fs.readFile(path.join(cwd, 'out.xml'), 'utf-8'),

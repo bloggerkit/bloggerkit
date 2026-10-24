@@ -3,7 +3,7 @@ import { assert, describe, test } from 'vitest';
 import { createFixture } from '../../test/fixture';
 import { compileTemplate } from '../compiler';
 import { renderTemplate } from '../runtime';
-import { processXml } from '../xml';
+import { formatXml, inspectXml, parseXml } from '../xml';
 import { collectStats, formatSize, formatStats } from './stats';
 
 const bytes = (text: string) => Buffer.byteLength(text);
@@ -30,9 +30,11 @@ describe('collectStats', () => {
 			root,
 			plugins: [{ name: 'p', provide: () => ({ x: '<i/>' }) }],
 		});
-		const { xml, info } = processXml(renderTemplate(compiled), {
-			format: true,
-		});
+		const document = parseXml(renderTemplate(compiled));
+		const formatted = formatXml(document);
+		assert.isTrue(formatted.ok);
+		const xml = formatted.ok ? formatted.xml : '';
+		const info = inspectXml(document, formatted);
 
 		const { files, theme } = await collectStats(
 			compiled,
