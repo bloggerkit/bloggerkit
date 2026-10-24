@@ -98,7 +98,6 @@ describe('parse', () => {
 		['"a" + data:x ?: "b"', 'default-in-operation'],
 		['20 + 25 + ""', 'plus-joins-numbers'],
 		['"x" + "ab".length', 'member-applies-to-all'],
-		['data:post.title contains "20"', 'text-search-on-data'],
 		['data:n == 007', 'number-text-equality'],
 		['data:a / data:b', 'divisor-may-be-zero'],
 		['snippet(((data:a).b))', 'missing-member-of-parentheses'],

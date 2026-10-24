@@ -3,7 +3,15 @@
  * to be refused or not computable.
  */
 import { describe, expect, test } from 'vitest';
-import { ExpressionError, evaluate, parse, RichValue, toText } from './index';
+import {
+	ExpressionError,
+	evaluate,
+	parse,
+	print,
+	RichValue,
+	type Root,
+	toText,
+} from './index';
 
 const DATA = {
 	blog: {
@@ -121,7 +129,68 @@ describe('data', () => {
 			['data-leading-dot', 'write data:blog.title'],
 		]);
 		expect(warnings('data:blog.title')).toEqual([]);
-		expect(warnings('data:a..b')).toEqual([]);
+		expect(warnings('data:a..b')).toEqual([
+			['member-access', 'write it as it reads: data:a.b'],
+		]);
+	});
+
+	// as Blogger was found to read them
+	test('a member read written oddly is warned about, with how it reads', () => {
+		const warnings = (source: string) =>
+			parse(source).warnings.map((w) => [w.code, w.fix]);
+		for (const [source, path] of [
+			['data:blog..title', 'data:blog.title'],
+			['data:blog...title', 'data:blog.title'],
+			['data:blog.title.', 'data:blog.title'],
+			['data:blog.title..', 'data:blog.title'],
+			['data:blog .title', 'data:blog.title'],
+			['data:m .c', 'data:m.c'],
+		]) {
+			expect(warnings(source)).toEqual([
+				['member-access', `write it as it reads: ${path}`],
+			]);
+		}
+		// a dash is part of a name, at its start and end too
+		for (const source of [
+			'data:blog.title',
+			'data:m.a-b',
+			'data:m.-c',
+			'data:m.c-',
+			'data:-m.c',
+			'data:m-.c',
+			'(data:x).y',
+		]) {
+			expect(warnings(source)).toEqual([]);
+		}
+	});
+
+	test('a space after the dot of a member read is refused', () => {
+		for (const source of [
+			'data:blog . title',
+			'data:blog. title',
+			'data:m. c',
+			'(data:x). y',
+		]) {
+			expect(parse(source).errors.map((e) => e.code)).toEqual([
+				'member-space-after-dot',
+			]);
+		}
+		// a dot at the end of the path, then an operator
+		expect(parse('data:x. and data:y').errors).toEqual([]);
+	});
+
+	test('a key of a map can start and end with a dash, and have two', () => {
+		const m = evaluate('{ -c: 3, c-: 4, a--b: 5 }');
+		expect(
+			['data:m.-c', 'data:m.c-', 'data:m.a--b'].map((path) =>
+				String(evaluate(path, { data: { m } })),
+			),
+		).toEqual(['3', '4', '5']);
+		expect(print(parse('{ -c: 3, c-: 4 }').ast as Root)).toBe(
+			'{ -c: 3, c-: 4 }',
+		);
+		// a dash alone is not a key
+		expect(parse('{ -: 1 }').errors).not.toEqual([]);
 	});
 });
 

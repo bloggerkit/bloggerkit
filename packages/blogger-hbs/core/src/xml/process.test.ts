@@ -1675,23 +1675,21 @@ describe('checks', () => {
 				loc.column,
 			]);
 		assert.deepEqual(
-			warnings(
-				`<html><b:if cond='data:x contains &quot;a&quot;'/><b:skin/></html>`,
-			),
+			warnings(`<html><b:if cond='data:a / data:x &gt; 1'/><b:skin/></html>`),
 			[
 				[
-					`Expression in the attribute 'cond' of <b:if>: \`data:x\` may not be text. Fix: turn it into text where it is used: (data:x + "")`,
+					"Expression in the attribute 'cond' of <b:if>: The divisor of `/` is data, which may be 0. Fix: test it first: data:n != 0 ? x / data:n : 0",
 					3,
-					19,
+					28,
 				],
 			],
 		);
 		// placed after entities, as they are written
 		assert.deepEqual(
 			warnings(
-				`<html><b:if cond='&quot;a&quot; in data:x'/><b:skin/></html>`,
+				`<html><b:if cond='data:a &lt; data:b / data:x'/><b:skin/></html>`,
 			).map(([, line, column]) => [line, column]),
-			[[3, 36]],
+			[[3, 40]],
 		);
 		assert.deepEqual(
 			warnings(
@@ -1708,7 +1706,7 @@ describe('checks', () => {
 		// formatting warns the same
 		assert.lengthOf(
 			written(
-				`${HEAD}<html><b:if cond='data:x contains &quot;a&quot;'/><b:skin/></html>`,
+				`${HEAD}<html><b:if cond='data:a / data:x &gt; 1'/><b:skin/></html>`,
 				{ format: true },
 			).warnings,
 			1,
@@ -2055,7 +2053,7 @@ describe('checkAttributes', () => {
 });
 
 describe('parseXml, checkXml, formatXml and inspectXml', () => {
-	const misplaced = `\n${XML_DECLARATION}<html expr:class='data:a contains &quot;b&quot;'><b:skin/></html>`;
+	const misplaced = `\n${XML_DECLARATION}<html expr:class='data:a / data:b'><b:skin/></html>`;
 
 	test('checks as written, and formats what formatting fixes', () => {
 		const document = parseXml(misplaced, { path: 'theme.xml' });
@@ -2085,11 +2083,11 @@ describe('parseXml, checkXml, formatXml and inspectXml', () => {
 		// warnings in the theme given, and in the formatted one
 		assert.deepEqual(
 			warnings.map(({ loc }) => [loc.line, loc.column]),
-			[[2, 58]],
+			[[2, 67]],
 		);
 		assert.deepEqual(
 			formatted.warnings.map(({ loc }) => [loc.line, loc.column]),
-			[[2, 19]],
+			[[2, 28]],
 		);
 		assert.strictEqual(formatted.warnings[0].message, warnings[0].message);
 		// formatted once for the document
@@ -2181,21 +2179,23 @@ describe('parseXml, checkXml, formatXml and inspectXml', () => {
 			]);
 		// `<html><b:if cond='` is 18 characters: the value starts at column 19
 		assert.deepEqual(
-			places(`<html><b:if   cond='&quot;a&quot; in data:x'/>${SKIN}</html>`),
-			[[3, 36]],
+			places(
+				`<html><b:if   cond='data:a &lt; data:b / data:x'/>${SKIN}</html>`,
+			),
+			[[3, 40]],
 		);
 		// `data:a &amp;&amp; ` before `data:x`, as the expression is printed
 		assert.deepEqual(
 			places(
-				`<html><b:if cond='data:a&amp;&amp;data:x contains "b"'/>${SKIN}</html>`,
+				`<html><b:if cond='data:a&amp;&amp;1 / data:x &gt; 1'/>${SKIN}</html>`,
 			),
-			[[3, 37]],
+			[[3, 41]],
 		);
 	});
 
 	test('warnings are in the order of the document', () => {
 		const warnings = written(
-			`${HEAD}<html><b:if rel='x' cond='data:x contains &quot;a&quot;'/><b:skin/></html>`,
+			`${HEAD}<html><b:if rel='x' cond='1 / data:x &gt; 1'/><b:skin/></html>`,
 		).warnings;
 		const columns = warnings.map(({ loc }) => loc.column);
 		assert.isAbove(warnings.length, 1);
