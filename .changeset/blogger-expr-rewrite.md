@@ -1,5 +1,0 @@
----
-"blogger-expr": patch
----
-
-A new parser, checker, evaluator and formatter, following what Blogger accepts and prints. `parse(source, { context })` never throws: it returns the tree, its cost, and the `errors` and `warnings`, each with a code, a message, its cause, a fix and where it is. The tree is descriptive (`PlusChain`, `Membership`, `LambdaOperation`, `TakeOrSkip`, literals with `raw` and `value`, operators with their spelling and place, `loc` on every node), and a range of `b:loop values` is only its root. `evaluate` returns values (`Decimal`, `TextBoolean`, `RichValue`, dates, lists, maps) and throws an `ExpressionError` with a diagnostic, `toText` prints them as Blogger does, and `print` formats like Prettier, to a `printWidth`, keeping how the expression is spelled. `LexError`, `ParseError`, `PrintError`, `EvaluateError`, `Evaluator`, `evaluateNode`, `valuesEqual`, `tokenize`, `imageValue`, `urlValue`, `plain` and `RichProperty` are removed, `EvaluatorOptions` is `EvaluateOptions`, it no longer depends on `blogger-images`, and the docs are only the grammar for now

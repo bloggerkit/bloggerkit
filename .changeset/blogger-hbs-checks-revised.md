@@ -1,5 +1,0 @@
----
-"blogger-hbs": patch
----
-
-A second `<b:else>` or `<b:default>` is a warning, no longer an error, as Blogger saves it and never renders what comes after it, and so is what is in `<b:attr>`, `<b:class>`, `<b:eval>`, `<b:elseif>`, `<b:else>`, `<b:case>`, `<b:default>` and `<b:param>`, as Blogger does not render it: `Blogger does not render what is in <b:else>, write it after <b:else/>`; only `<b:include>` has to be empty. Two `<b:template-skin>` are accepted, and a comment in one is kept, as Blogger keeps it. In `<b:skin>`, only `<Group>` and `<Variable>` are read, the other tags being text, a variable name can have underscores, and every value has to be in double quotes, as Blogger reads no other: `Blogger only reads the attributes of <Variable> in <b:skin> in double quotes, write type="length"`. Formatting keeps the `<Variable>` tags as they are written, with a `value` added to those without one, and each variable of `info` has the attributes of its type, `ColorVariable`, `LengthVariable` and the others of `SkinVariable`, by `type`
