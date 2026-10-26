@@ -1,5 +1,12 @@
 # @blogger-hbs/plugin-lucide
 
+## 0.0.9
+
+### Patch Changes
+
+- Updated dependencies [[`4594403`](https://github.com/bloggerkit/bloggerkit/commit/459440382c7e8e7678ece28b8bfd674cf5372dbc)]:
+  - blogger-hbs@0.0.11
+
 ## 0.0.8
 
 ### Patch Changes
