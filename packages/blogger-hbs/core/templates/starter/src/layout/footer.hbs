@@ -1,0 +1,12 @@
+<footer class='footer'>
+  <div class='container footer-inner'>
+    {{#with (import "~/data/site.json")}}
+    <nav aria-label='Links' class='links'>
+      {{#each links}}
+      <a href='{{url}}'>{{label}}</a>
+      {{/each}}
+    </nav>
+    {{/with}}
+    <p>Thanks for reading. &#169; <data:blog.title.escaped/></p>
+  </div>
+</footer>

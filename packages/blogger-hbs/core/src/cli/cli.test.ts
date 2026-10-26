@@ -606,3 +606,89 @@ describe('validate and format', () => {
 		assert.include(output, '✗ Can not read missing.xml');
 	});
 });
+
+describe('init', () => {
+	const read = (dir: string, file: string) =>
+		fs.readFile(path.join(dir, file), 'utf-8');
+
+	test('writes a theme from the starter, named after its directory or --name', async () => {
+		const cwd = await createFixture({});
+		const { code, output } = await run(
+			cwd,
+			'init',
+			'my-theme',
+			'--name',
+			'My Theme',
+		);
+		assert.strictEqual(code, 0, output);
+		assert.include(output, '✓ Created My Theme in my-theme');
+		assert.include(output, 'cd my-theme');
+		const dir = path.join(cwd, 'my-theme');
+		for (const file of [
+			'.gitignore',
+			'README.md',
+			'blogger-hbs.config.ts',
+			'package.json',
+			'tsconfig.json',
+			'src/index.hbs',
+		]) {
+			assert.isTrue(existsSync(path.join(dir, file)), file);
+		}
+		assert.isFalse(existsSync(path.join(dir, 'gitignore')));
+		const manifest = JSON.parse(await read(dir, 'package.json'));
+		assert.strictEqual(manifest.name, 'my-theme');
+		assert.match(manifest.devDependencies['blogger-hbs'], /^\^\d+\.\d+\.\d+/);
+		assert.include(
+			await read(dir, 'blogger-hbs.config.ts'),
+			"name: 'My Theme'",
+		);
+		assert.notInclude(await read(dir, 'README.md'), '%THEME_NAME%');
+
+		const named = await run(cwd, 'init', 'Other Theme');
+		assert.strictEqual(named.code, 0, named.output);
+		assert.include(named.output, 'cd "Other Theme"');
+		const other = JSON.parse(
+			await read(path.join(cwd, 'Other Theme'), 'package.json'),
+		);
+		assert.strictEqual(other.name, 'other-theme');
+	});
+
+	test('refuses a directory that is not empty, but with --force', async () => {
+		const cwd = await createFixture({ 'notes.txt': 'kept' });
+		const refused = await run(cwd, 'init');
+		assert.strictEqual(refused.code, 1);
+		assert.include(refused.output, 'is not empty, it has notes.txt');
+		assert.isFalse(existsSync(path.join(cwd, 'package.json')));
+
+		const forced = await run(cwd, 'init', '--force');
+		assert.strictEqual(forced.code, 0, forced.output);
+		assert.notInclude(forced.output, 'cd ');
+		assert.strictEqual(await read(cwd, 'notes.txt'), 'kept');
+		assert.isTrue(existsSync(path.join(cwd, 'package.json')));
+	});
+
+	test('the theme written builds without warnings', async () => {
+		const cwd = await createFixture({});
+		await run(cwd, 'init', 'theme');
+		const dir = path.join(cwd, 'theme');
+		// blogger-hbs as installed
+		await fs.mkdir(path.join(dir, 'node_modules'));
+		await fs.symlink(PACKAGE, path.join(dir, 'node_modules/blogger-hbs'));
+		const { code, output } = await run(dir);
+		assert.strictEqual(code, 0, output);
+		assert.notInclude(output, '⚠');
+		// the includables Blogger would add to the Blog widget are in it, empty,
+		const theme = await read(dir, 'dist/theme.xml');
+		// and to the Labels widget
+		for (const id of [
+			'post',
+			'comments',
+			'postTitle',
+			'tooltipCss',
+			'cloud',
+			'list',
+		]) {
+			assert.include(theme, `<b:includable id='${id}'/>`);
+		}
+	});
+});
