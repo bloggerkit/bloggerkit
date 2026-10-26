@@ -1,5 +1,12 @@
 # blogger-hbs
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [[`5ad9664`](https://github.com/bloggerkit/bloggerkit/commit/5ad966419e57d1cd7505dbef1e705b6c65f6a2cb), [`f355440`](https://github.com/bloggerkit/bloggerkit/commit/f355440dc546c36d15ebae035b7324788d6a112a), [`f355440`](https://github.com/bloggerkit/bloggerkit/commit/f355440dc546c36d15ebae035b7324788d6a112a)]:
+  - blogger-expr@0.0.4
+
 ## 0.0.9
 
 ### Patch Changes

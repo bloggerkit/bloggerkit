@@ -1,5 +1,12 @@
 # @blogger-hbs/plugin-lucide
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies []:
+  - blogger-hbs@0.0.10
+
 ## 0.0.7
 
 ### Patch Changes
