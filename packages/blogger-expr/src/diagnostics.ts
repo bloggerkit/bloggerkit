@@ -244,6 +244,24 @@ const CATALOG = {
 			'Empty segments and a dot at the end of a path are skipped, and a member after a space is read on what is before it; written plainly, it reads the same.',
 		fix: `write it as it reads: ${path}`,
 	}),
+	'duplicate-key': ({ key, value }) => ({
+		message: `The key \`${key}\` is in the map twice: the last value, \`${value}\`, is the one read.`,
+		cause:
+			'A key written again in a map replaces the value before it, which is never read.',
+		fix: `keep one ${key}`,
+	}),
+	'quoted-key': ({ key, name }) => ({
+		message: `The key \`${key}\` keeps its quotes in its name: \`.${name}\` does not read it, only \`.${key}\`.`,
+		cause:
+			'A quoted key and an unquoted one are two keys, even with the same text: the quotes are part of the name, in `params` too.',
+		fix: `write it unquoted: ${name}`,
+	}),
+	'key-characters': ({ key, fix }) => ({
+		message: `The key \`${key}\` has characters a name can not have: it is only read as \`.${key}\`, with its quotes, which are part of its name.`,
+		cause:
+			'An unquoted key, the one a name reads, is made of letters, digits, `_`, `$` and `-`; a quoted key keeps its quotes, in `params` too.',
+		fix: `use a name of letters, digits, \`_\` and \`-\`${fix}`,
+	}),
 	'member-dots': ({ text }) => ({
 		message: `\`${text}\` is a member read, not a range.`,
 		cause:

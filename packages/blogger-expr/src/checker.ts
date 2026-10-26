@@ -3,6 +3,7 @@ import {
 	forEachChild,
 	isPath,
 	type LoopRange,
+	type MapLiteral,
 	type Node,
 	nameOf,
 	type OperatorFunctionCall,
@@ -26,6 +27,9 @@ export interface Finding {
  * literal conditions, division by a literal 0…), and warnings for expressions
  * that are accepted but may not do what they look like.
  */
+/** A name a key of a map can be written as, unquoted: letters, digits, `_`, `$` and dashes. */
+const KEY_NAME = /^[\w$-]*[\w$][\w$-]*$/;
+
 export function check(root: Root, source: string): Finding[] {
 	const findings: Finding[] = [];
 	const text = (node: Node) => source.slice(node.span.start, node.span.end);
@@ -43,8 +47,47 @@ export function check(root: Root, source: string): Finding[] {
 		}
 	};
 
+	/**
+	 * The keys of a map Blogger reads differently than they look: one written
+	 * twice, of which the last is read, and a quoted one, which keeps its
+	 * quotes in its name.
+	 */
+	const checkKeys = (node: MapLiteral) => {
+		const seen = new Set<string>();
+		for (const { key, value } of node.entries) {
+			const name = nameOf(key);
+			if (seen.has(name)) {
+				report('warning', 'duplicate-key', key.span, {
+					key: name,
+					value: text(value),
+				});
+			}
+			seen.add(name);
+			if (!key.quoted) {
+				continue;
+			}
+			if (KEY_NAME.test(key.text)) {
+				report('warning', 'quoted-key', key.span, {
+					key: name,
+					name: key.text,
+				});
+			} else {
+				const suggestion = key.text
+					.replace(/[^\w$-]+/g, '-')
+					.replace(/^-+|-+$/g, '');
+				report('warning', 'key-characters', key.span, {
+					key: name,
+					fix: suggestion ? `: ${suggestion}` : '',
+				});
+			}
+		}
+	};
+
 	const visit = (node: Node, parent: Node | undefined) => {
 		switch (node.type) {
+			case 'MapLiteral':
+				checkKeys(node);
+				break;
 			case 'Conditional':
 				checkCondition(node.condition);
 				break;

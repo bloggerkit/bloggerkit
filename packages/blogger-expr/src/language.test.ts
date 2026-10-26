@@ -194,6 +194,52 @@ describe('data', () => {
 	});
 });
 
+describe('keys of a map', () => {
+	const warnings = (source: string) =>
+		parse(source).warnings.map((w) => [w.code, w.fix]);
+
+	// as Blogger was found to read them: the last value is read
+	test('a key written twice is warned about, the last value read', () => {
+		expect(warnings('{ a: 1, a: 2 }')).toEqual([
+			['duplicate-key', 'keep one a'],
+		]);
+		expect(warnings('{ 1: 1, 1: 2 }')).toEqual([
+			['duplicate-key', 'keep one 1'],
+		]);
+		expect(String(evaluate('{ a: 1, a: 2 }.a'))).toBe('2');
+		// other keys: the case, the quotes, another map
+		expect(warnings('{ a: 1, A: 2 }')).toEqual([]);
+		expect(warnings('{ a: 1, b: { a: 2 } }')).toEqual([]);
+		expect(warnings('{ a: 1, "a": 2 }').map(([code]) => code)).toEqual([
+			'quoted-key',
+		]);
+	});
+
+	test('a quoted key keeps its quotes in its name, which is warned about', () => {
+		expect(warnings('{ "x": 1 }')).toEqual([
+			['quoted-key', 'write it unquoted: x'],
+		]);
+		expect(warnings('{ "a-b": 1 }')).toEqual([
+			['quoted-key', 'write it unquoted: a-b'],
+		]);
+		expect(String(evaluate('{ "x": 1 }."x"'))).toBe('1');
+		expect(evaluate('{ "x": 1 }.x')).toBeUndefined();
+		expect(warnings('{ x: 1, -c: 2, c-: 3, a--b: 4 }')).toEqual([]);
+	});
+
+	test('a quoted key with characters a name can not have is warned about', () => {
+		const fix = 'use a name of letters, digits, `_` and `-`';
+		expect(warnings('{ "a b": 1 }')).toEqual([
+			['key-characters', `${fix}: a-b`],
+		]);
+		expect(warnings('{ "a&b.c": 1 }')).toEqual([
+			['key-characters', `${fix}: a-b-c`],
+		]);
+		expect(warnings('{ "": 1 }')).toEqual([['key-characters', fix]]);
+		expect(warnings('{ "é": 1 }')).toEqual([['key-characters', fix]]);
+	});
+});
+
 describe('operators', () => {
 	cases([
 		['1 + 2 * 3', '7'],
