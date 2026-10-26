@@ -1,0 +1,132 @@
+<b:section class='main-section' id='main' maxwidgets='1' showaddelement='false'>
+  <b:widget id='Blog1' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'>
+    <b:widget-settings>
+      <b:widget-setting name='showDateHeader'>false</b:widget-setting>
+      <b:widget-setting name='showAuthor'>true</b:widget-setting>
+      <b:widget-setting name='showLabels'>true</b:widget-setting>
+    </b:widget-settings>
+
+    <b:includable id='main'>
+      <b:if cond='data:view.isMultipleItems'>
+        <b:if cond='data:posts.length == 0'>
+          <p class='empty'>Nothing here yet. Come back soon.</p>
+        </b:if>
+        <div class='entries'>
+          <b:loop values='data:posts' var='post'>
+            <b:include data='post' name='postCard'/>
+          </b:loop>
+        </div>
+        <b:include name='pager'/>
+        <b:else/>
+        <b:loop values='data:posts' var='post'>
+          <b:include data='post' name='postFull'/>
+        </b:loop>
+      </b:if>
+    </b:includable>
+
+    <b:includable id='postCard' var='post'>
+      <article class='entry'>
+        <h2 class='entry-title'><a expr:href='data:post.url'><data:post.title/></a></h2>
+        <b:include data='post' name='postMeta'/>
+        <p class='entry-snippet'><data:post.snippets.short/></p>
+      </article>
+    </b:includable>
+
+    <b:includable id='postFull' var='post'>
+      <article class='post'>
+        <header class='post-header'>
+          <h1 class='post-title'><data:post.title/></h1>
+          <b:include data='post' name='postMeta'/>
+        </header>
+        <div class='post-body'><data:post.body/></div>
+        <p class='back'><a expr:href='data:blog.homepageUrl'>&#8592; Back to all posts</a></p>
+      </article>
+    </b:includable>
+
+    <b:includable id='postMeta' var='post'>
+      <p class='meta'>
+        <time expr:datetime='data:post.date.iso8601'><data:post.date/></time>
+        <b:if cond='data:post.labels'>
+          <span class='meta-labels'>
+            <b:loop values='data:post.labels' var='label'>
+              <a expr:href='data:label.url'><data:label.name/></a>
+            </b:loop>
+          </span>
+        </b:if>
+      </p>
+    </b:includable>
+
+    <b:includable id='pager'>
+      <nav class='pager'>
+        <b:if cond='data:newerPageUrl'>
+          <a expr:href='data:newerPageUrl'>&#8592; Newer posts</a>
+        </b:if>
+        <b:if cond='data:olderPageUrl'>
+          <a class='older' expr:href='data:olderPageUrl'>Older posts &#8594;</a>
+        </b:if>
+      </nav>
+    </b:includable>
+
+    {{!-- Blogger adds its own includables of the Blog widget when the theme is saved, those the widget does not have: these empty ones keep them out --}}
+    <b:includable id='aboutPostAuthor'/>
+    <b:includable id='addComments'/>
+    <b:includable id='blogThisShare'/>
+    <b:includable id='bylineByName'/>
+    <b:includable id='bylineRegion'/>
+    <b:includable id='commentAuthorAvatar'/>
+    <b:includable id='commentDeleteIcon'/>
+    <b:includable id='commentForm'/>
+    <b:includable id='commentFormIframeSrc'/>
+    <b:includable id='commentItem'/>
+    <b:includable id='commentList'/>
+    <b:includable id='commentPicker'/>
+    <b:includable id='comments'/>
+    <b:includable id='commentsLink'/>
+    <b:includable id='commentsLinkIframe'/>
+    <b:includable id='commentsTitle'/>
+    <b:includable id='defaultAdUnit'/>
+    <b:includable id='emailPostIcon'/>
+    <b:includable id='facebookShare'/>
+    <b:includable id='feedLinks'/>
+    <b:includable id='feedLinksBody'/>
+    <b:includable id='footerBylines'/>
+    <b:includable id='googlePlusShare'/>
+    <b:includable id='headerByline'/>
+    <b:includable id='homePageLink'/>
+    <b:includable id='iframeComments'/>
+    <b:includable id='inlineAd'/>
+    <b:includable id='linkShare'/>
+    <b:includable id='nextPageLink'/>
+    <b:includable id='otherSharingButton'/>
+    <b:includable id='platformShare'/>
+    <b:includable id='post'/>
+    <b:includable id='postAuthor'/>
+    <b:includable id='postBody'/>
+    <b:includable id='postBodySnippet'/>
+    <b:includable id='postCommentsAndAd'/>
+    <b:includable id='postCommentsLink'/>
+    <b:includable id='postFooter'/>
+    <b:includable id='postFooterAuthorProfile'/>
+    <b:includable id='postHeader'/>
+    <b:includable id='postJumpLink'/>
+    <b:includable id='postLabels'/>
+    <b:includable id='postLocation'/>
+    <b:includable id='postMetadataJSONImage'/>
+    <b:includable id='postMetadataJSONPublisher'/>
+    <b:includable id='postPagination'/>
+    <b:includable id='postReactions'/>
+    <b:includable id='postShareButtons'/>
+    <b:includable id='postTimestamp'/>
+    <b:includable id='postTitle'/>
+    <b:includable id='previousPageLink'/>
+    <b:includable id='sharingButton'/>
+    <b:includable id='sharingButtonContent'/>
+    <b:includable id='sharingButtons'/>
+    <b:includable id='sharingButtonsMenu'/>
+    <b:includable id='sharingPlatformIcon'/>
+    <b:includable id='threadedCommentForm'/>
+    <b:includable id='threadedCommentJs'/>
+    <b:includable id='threadedComments'/>
+    <b:includable id='tooltipCss'/>
+  </b:widget>
+</b:section>

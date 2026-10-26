@@ -37,7 +37,8 @@
   },
   "files": [
     "bin",
-    "dist"
+    "dist",
+    "templates"
   ],
   "type": "module",
   "bin": {

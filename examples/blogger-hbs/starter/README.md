@@ -4,7 +4,7 @@ A small Blogger theme built with [blogger-hbs](../../../packages/blogger-hbs/cor
 
 ```sh
 pnpm build   # dist/theme.xml, to upload to Blogger, and dist/compiled.js
-pnpm dev     # build again on changes
+pnpm watch   # build again on changes
 pnpm render  # render dist/compiled.js with blogger-hbs/runtime only
 ```
 

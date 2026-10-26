@@ -1,0 +1,27 @@
+<b:section class='aside-section' id='sidebar' showaddelement='true'>
+  <b:widget id='Label1' locked='false' title='Topics' type='Label' version='2' visible='true'>
+    <b:widget-settings>
+      <b:widget-setting name='sorting'>ALPHA</b:widget-setting>
+      <b:widget-setting name='display'>LIST</b:widget-setting>
+      <b:widget-setting name='selectedLabelsList'/>
+      <b:widget-setting name='showType'>ALL</b:widget-setting>
+      <b:widget-setting name='showFreqNumbers'>false</b:widget-setting>
+    </b:widget-settings>
+
+    <b:includable id='main'>
+      <nav class='topics' expr:aria-label='data:title'>
+        <h2 class='topics-title'><data:title/></h2>
+        <ul class='topics-list'>
+          <b:loop values='data:labels' var='label'>
+            <li><a expr:href='data:label.url'><data:label.name/></a></li>
+          </b:loop>
+        </ul>
+      </nav>
+    </b:includable>
+
+    {{!-- Blogger adds its own includables of the Labels widget when the theme is saved, those the widget does not have: these empty ones keep them out --}}
+    <b:includable id='cloud'/>
+    <b:includable id='content'/>
+    <b:includable id='list'/>
+  </b:widget>
+</b:section>

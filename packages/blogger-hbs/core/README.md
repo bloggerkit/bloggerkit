@@ -13,6 +13,14 @@ Build Blogger themes from Handlebars templates, with bundled scripts and styles.
 
 ## Usage
 
+Start a new theme from the starter:
+
+```sh
+npx blogger-hbs init my-theme   # --name "My Theme", --force for a directory that is not empty
+```
+
+Or add it to a project:
+
 ```sh
 pnpm add -D blogger-hbs
 ```
@@ -31,6 +39,7 @@ export default defineConfig({
 ```sh
 blogger-hbs                              # build to dist/theme.xml
 blogger-hbs --watch                      # build again on changes
+blogger-hbs init my-theme                # a new theme from the starter
 blogger-hbs validate theme.xml           # validate a theme
 blogger-hbs format theme.xml -o out.xml  # format it
 blogger-hbs --help                       # all the options

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "blogger-hbs",
-    "dev": "blogger-hbs --watch",
+    "watch": "blogger-hbs --watch",
     "render": "node render.mjs"
   },
   "devDependencies": {

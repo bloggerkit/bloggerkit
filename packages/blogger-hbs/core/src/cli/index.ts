@@ -32,6 +32,7 @@ import {
 	XmlError,
 	type XmlInfo,
 } from '../xml';
+import { init, packageManager } from './init';
 import {
 	type BuildStats,
 	collectStats,
@@ -156,6 +157,42 @@ cli
 		const out = flags.out === undefined ? undefined : String(flags.out);
 		await processFile(String(file), { format: true, out, json: flags.json });
 	});
+
+cli
+	.command('init [dir]', 'Create a new theme from a starter')
+	.option(
+		'--name <name>',
+		'Name of the theme, the name of the directory by default',
+	)
+	.option('--force', 'Write into a directory that is not empty')
+	.example('blogger-hbs init my-theme')
+	.example('blogger-hbs init . --name "My Theme"')
+	.action(
+		async (dirArg: unknown, flags: { name?: unknown; force?: boolean }) => {
+			printHeader();
+			const { dir, files, name } = await init(
+				dirArg === undefined ? undefined : String(dirArg),
+				{
+					name: flags.name === undefined ? undefined : String(flags.name),
+					force: flags.force,
+					version,
+				},
+			);
+			const shown = path.relative(process.cwd(), dir) || '.';
+			log.success(`Created ${name} in ${shown}, ${files.length} files`);
+			const tool = packageManager();
+			const steps = [
+				...(shown === '.'
+					? []
+					: [`cd ${/^[\w./-]+$/.test(shown) ? shown : JSON.stringify(shown)}`]),
+				`${tool} install`,
+				tool === 'npm' || tool === 'bun'
+					? `${tool} run watch`
+					: `${tool} watch`,
+			];
+			log.write(`\nNext:\n${steps.map((step) => `  ${step}`).join('\n')}`);
+		},
+	);
 
 cli.help();
 // cac's own `--version` prints `name/version platform`, this one says more,
