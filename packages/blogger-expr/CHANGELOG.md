@@ -1,5 +1,15 @@
 # blogger-expr
 
+## 0.0.4
+
+### Patch Changes
+
+- [#51](https://github.com/bloggerkit/bloggerkit/pull/51) [`5ad9664`](https://github.com/bloggerkit/bloggerkit/commit/5ad966419e57d1cd7505dbef1e705b6c65f6a2cb) Thanks [@kumardeo](https://github.com/kumardeo)! - The keys of a map literal that Blogger reads differently than they look are warned about: a key written twice, of which the last value is read, ``The key `a` is in the map twice: the last value, `2`, is the one read``, a quoted key, which keeps its quotes in its name, so `{ "x": 1 }.x` reads nothing, ``Fix: write it unquoted: x``, and a quoted key with characters a name can not have, `{ "a b": 1 }`, only read as `."a b"`
+
+- [#49](https://github.com/bloggerkit/bloggerkit/pull/49) [`f355440`](https://github.com/bloggerkit/bloggerkit/commit/f355440dc546c36d15ebae035b7324788d6a112a) Thanks [@kumardeo](https://github.com/kumardeo)! - A member read is checked as Blogger reads it: a space after its dot is an error, `data:blog . title` and `data:blog. title`, as Blogger refuses it, and what Blogger reads but is not written plainly is a warning with how it reads, empty segments and dots at the end, `data:blog..title` and `data:blog.title.`, and a space before the dot of a single value, `data:blog .title`: ``Fix: write it as it reads: data:blog.title``. A key of a map can start and end with a dash, and have two, `{ -c: 1, c-: 2, a--b: 3 }`, as Blogger reads them
+
+- [#49](https://github.com/bloggerkit/bloggerkit/pull/49) [`f355440`](https://github.com/bloggerkit/bloggerkit/commit/f355440dc546c36d15ebae035b7324788d6a112a) Thanks [@kumardeo](https://github.com/kumardeo)! - `contains` and `in` with a string no longer warn that the data searched may not be text: the data can be a list, and the fix it gave, `(data:list + "")`, broke a search in a list
+
 ## 0.0.3
 
 ### Patch Changes
