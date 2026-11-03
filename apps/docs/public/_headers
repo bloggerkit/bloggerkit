@@ -15,3 +15,16 @@
 
 /og/*
   Cache-Control: public, max-age=86400
+
+# Text for AI tools. Without a charset, the dashes and quotes in them may be read wrongly
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+
+/llms-full.txt
+  Content-Type: text/plain; charset=utf-8
+
+/docs/*.md
+  Content-Type: text/markdown; charset=utf-8
+
+/skills/*.md
+  Content-Type: text/markdown; charset=utf-8

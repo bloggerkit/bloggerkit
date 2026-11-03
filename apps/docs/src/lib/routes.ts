@@ -6,7 +6,6 @@
 export const contentDir = 'src/content/docs';
 export const docsRoute = '/docs';
 export const imageRoute = '/og';
-export const docsContentRoute = '/llms.mdx/docs';
 export const resources = {
 	llms: '/llms.txt',
 	llmsFull: '/llms-full.txt',
@@ -33,9 +32,9 @@ export function getPageUrl(slug: string): string {
 	return join(docsRoute, slug);
 }
 
-/** `/llms.mdx/docs/theme-xml/tags/loops/content.md` */
+/** `/docs/theme-xml/tags/loops.md`: the page URL with `.md` added, as https://llmstxt.org suggests. */
 export function getPageMarkdownUrl(slug: string): string {
-	return `${join(docsContentRoute, slug)}/content.md`;
+	return `${getPageUrl(slug)}.md`;
 }
 
 /** `/og/docs/theme-xml/tags/loops/image.png` */
