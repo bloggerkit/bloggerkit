@@ -1,6 +1,6 @@
 /**
  * A slug is a page's path in `src/content/docs` without the extension or a final `index`, e.g.
- * `blogger-xml/tags/loops`. Safe to import in the browser.
+ * `theme-xml/tags/loops`. Safe to import in the browser.
  */
 /** The pages, relative to the project root. */
 export const contentDir = 'src/content/docs';
@@ -15,12 +15,12 @@ export const resources = {
 /** Open Graph image for pages that aren't docs: home, `/docs` and 404. */
 export const siteImageUrl = `${imageRoute}/site/image.png`;
 
-/** `blogger-xml/tags/loops.mdx` → `blogger-xml/tags/loops`, `blogger-xml/index.mdx` → `blogger-xml`. */
+/** `theme-xml/tags/loops.mdx` → `theme-xml/tags/loops`, `theme-xml/index.mdx` → `theme-xml`. */
 export function fileToSlug(file: string): string {
 	return file.replace(/\.mdx?$/, '').replace(/(?:^|\/)index$/, '');
 }
 
-/** `docs/blogger-xml/tags/loops` (a collection entry id) → `blogger-xml/tags/loops`. */
+/** `docs/theme-xml/tags/loops` (a collection entry id) → `theme-xml/tags/loops`. */
 export function getPageSlug(id: string): string {
 	return id.replace(/^docs\/?/, '');
 }
@@ -28,17 +28,17 @@ export function getPageSlug(id: string): string {
 const join = (route: string, slug: string) =>
 	slug ? `${route}/${slug}` : route;
 
-/** `/docs/blogger-xml/tags/loops`, or `/docs` for an empty slug. */
+/** `/docs/theme-xml/tags/loops`, or `/docs` for an empty slug. */
 export function getPageUrl(slug: string): string {
 	return join(docsRoute, slug);
 }
 
-/** `/llms.mdx/docs/blogger-xml/tags/loops/content.md` */
+/** `/llms.mdx/docs/theme-xml/tags/loops/content.md` */
 export function getPageMarkdownUrl(slug: string): string {
 	return `${join(docsContentRoute, slug)}/content.md`;
 }
 
-/** `/og/docs/blogger-xml/tags/loops/image.png` */
+/** `/og/docs/theme-xml/tags/loops/image.png` */
 export function getPageImageUrl(slug: string): string {
 	return `${join(`${imageRoute}/docs`, slug)}/image.png`;
 }

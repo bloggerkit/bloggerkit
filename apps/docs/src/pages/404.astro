@@ -148,7 +148,7 @@ const sections = getSections();
 	import { onPage } from '@/scripts/page';
 	import { cleanUrl, loadPagefind } from '@/scripts/pagefind';
 
-	// Turns the missing path into a search query: `/docs/blogger-xml/tag/loop.html` → `blogger xml tag loop`
+	// Turns the missing path into a search query: `/docs/theme-xml/tag/loop.html` → `theme xml tag loop`
 	const words = (path: string) =>
 		decodeURIComponent(path)
 			.replace(/\.html?$/, '')

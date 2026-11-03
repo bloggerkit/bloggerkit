@@ -54,7 +54,7 @@ const {
 	authors,
 } = Astro.props;
 const pageAuthors = getPageAuthors(authors);
-// Pages are built as `loops.html` but served at `/docs/blogger-xml/tags/loops`
+// Pages are built as `loops.html` but served at `/docs/theme-xml/tags/loops`
 const path = normalizePath(Astro.url.pathname);
 const isHome = path === '/';
 // `b:loop – Blogger Theme XML | Blogger Kit`; the home page uses the site name and tagline

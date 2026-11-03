@@ -12,7 +12,7 @@ pnpm run deploy                                 # build and deploy to Cloudflare
 
 ## Sections
 
-Every folder of `src/content/docs` with `section: true` in its `meta.ts` is a section, with its own sidebar and a card on the home page. `blogger-xml` documents Blogger itself and never mentions a package. Package sections link to it instead of explaining Blogger again.
+Every folder of `src/content/docs` with `section: true` in its `meta.ts` is a section, with its own sidebar and a card on the home page. `theme-xml` documents Blogger itself and never mentions a package. Package sections link to it instead of explaining Blogger again.
 
 ### Adding a package
 
@@ -37,7 +37,7 @@ Every folder of `src/content/docs` with `section: true` in its `meta.ts` is a se
 
 ## Adding a page
 
-1. Create the file in the folder of its topic: `src/content/docs/blogger-xml/tags/my-page.mdx` is served at `/docs/blogger-xml/tags/my-page`.
+1. Create the file in the folder of its topic: `src/content/docs/theme-xml/tags/my-page.mdx` is served at `/docs/theme-xml/tags/my-page`.
 2. Add the frontmatter (see below).
 3. List the page in `pages` of the folder's `meta.ts`. A page missing from the sidebar fails the build.
 4. When you later change the facts or examples of a page, set its `updated` to that day.
@@ -61,7 +61,7 @@ level: beginner
 | `updated`       | no       | When the facts or examples change, not for typos. Must be later than `published`                                       |
 | `authors`       | no       | GitHub usernames, or `{ name, github, url }` objects, see below. Add yourself when you write or largely rewrite a page |
 | `level`         | no       | `beginner`, `intermediate` or `advanced`                                                                               |
-| `prerequisites` | no       | Slugs of pages to read first, `blogger-xml/tags/loops`                                                                 |
+| `prerequisites` | no       | Slugs of pages to read first, `theme-xml/tags/loops`                                                                 |
 | `icon`          | no       | A Lucide name, for pages at the top of a section's sidebar                                                             |
 
 An author needs a `name`, a `github` username, or both. The GitHub username gives the photo, and the name when `name` is left out. The name links to `url`, or to the GitHub profile without one:

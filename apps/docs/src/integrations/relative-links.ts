@@ -12,7 +12,7 @@ import { contentRoot } from './content-root';
 const RELATIVE_PAGE = /^(\.{1,2}\/[^#?]*?\.mdx?)(#.*)?$/;
 
 /**
- * `./loops.mdx#ranges` → `/docs/blogger-xml/tags/loops#ranges`. Returns `undefined` for other links and throws if
+ * `./loops.mdx#ranges` → `/docs/theme-xml/tags/loops#ranges`. Returns `undefined` for other links and throws if
  * the target file doesn't exist.
  */
 async function resolveUrl(

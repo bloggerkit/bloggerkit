@@ -47,7 +47,7 @@ export const collections = {
 		loader: glob({
 			pattern: '**/[^_]*.{md,mdx}',
 			base: contentDir,
-			// `blogger-xml/tags/loops.mdx` → `docs/blogger-xml/tags/loops`, served at `/docs/...`
+			// `theme-xml/tags/loops.mdx` → `docs/theme-xml/tags/loops`, served at `/docs/...`
 			generateId: ({ entry }) => `docs/${fileToSlug(entry)}`.replace(/\/$/, ''),
 		}),
 		schema: z
@@ -68,7 +68,7 @@ export const collections = {
 					)
 					.optional(),
 				level: z.enum(levelNames).optional(),
-				/** Slugs of pages to read first, e.g. `blogger-xml/tags/loops`. */
+				/** Slugs of pages to read first, e.g. `theme-xml/tags/loops`. */
 				prerequisites: z.array(z.string()).optional(),
 				/** Becomes `datePublished` in the structured data. */
 				published: pageDate('published'),

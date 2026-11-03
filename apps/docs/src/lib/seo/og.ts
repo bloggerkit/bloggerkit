@@ -11,7 +11,7 @@ export type ImageData = {
 	section?: string;
 	/** Shown above the title. */
 	folder?: string;
-	/** Shown at the bottom, e.g. `blogger.fineshop.app/docs/blogger-xml/tags/loops`. */
+	/** Shown at the bottom, e.g. `blogger.fineshop.app/docs/theme-xml/tags/loops`. */
 	url: string;
 };
 

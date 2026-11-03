@@ -23,7 +23,7 @@ export interface Folder {
 
 /** A top-level folder with `section: true` in its `meta.ts`. It gets its own sidebar and home page card. */
 export interface Section {
-	/** Folder name, e.g. `blogger-xml`. */
+	/** Folder name, e.g. `theme-xml`. */
 	id: string;
 	name: string;
 	description?: string;
@@ -182,7 +182,7 @@ export function getTopics(section: Section): Folder[] {
 /** A section and its topics, for the search filters. */
 export interface SectionTopics {
 	name: string;
-	/** `id` is the topic's slug, e.g. `blogger-xml/tags`, so it stays unique when sections share topic names. */
+	/** `id` is the topic's slug, e.g. `theme-xml/tags`, so it stays unique when sections share topic names. */
 	topics: { id: string; name: string }[];
 }
 
@@ -241,7 +241,7 @@ export function getOverviewFolders(): Folder[] {
 }
 
 /**
- * Folders above a slug, from the section down: `blogger-xml/tags/loops` → [Blogger Theme XML, Tags]. Never
+ * Folders above a slug, from the section down: `theme-xml/tags/loops` → [Blogger Theme XML, Tags]. Never
  * includes the slug's own folder, even for an `index` page.
  */
 export function getBreadcrumbs(slug: string): Folder[] {

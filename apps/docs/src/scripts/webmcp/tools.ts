@@ -18,7 +18,7 @@ const pathInput = {
 		url: {
 			type: 'string',
 			description:
-				'The path or URL of the page, for example /docs/blogger-xml/tags/loops. The open page by default.',
+				'The path or URL of the page, for example /docs/theme-xml/tags/loops. The open page by default.',
 		},
 	},
 };
@@ -43,7 +43,7 @@ export const tools = {
 				topic: {
 					type: 'string',
 					description:
-						'Only the pages of this topic, by its id from list_topics, for example "blogger-xml/tags".',
+						'Only the pages of this topic, by its id from list_topics, for example "theme-xml/tags".',
 				},
 				limit: {
 					type: 'integer',
@@ -134,7 +134,7 @@ export const tools = {
 	read_page: {
 		title: 'Read a page',
 		description:
-			'The content of a page of the docs, as Markdown. A folder, such as /docs/blogger-xml/tags, has no content of its own: get_docs_index lists its pages.',
+			'The content of a page of the docs, as Markdown. A folder, such as /docs/theme-xml/tags, has no content of its own: get_docs_index lists its pages.',
 		inputSchema: pathInput,
 		annotations: { readOnlyHint: true },
 		async execute({ url }) {
@@ -183,7 +183,7 @@ export const tools = {
 	open_page: {
 		title: 'Open a page',
 		description:
-			'Show a page of the docs in the browser, optionally at a heading: /docs/blogger-xml/tags/loops#attributes.',
+			'Show a page of the docs in the browser, optionally at a heading: /docs/theme-xml/tags/loops#attributes.',
 		inputSchema: {
 			type: 'object',
 			properties: {
