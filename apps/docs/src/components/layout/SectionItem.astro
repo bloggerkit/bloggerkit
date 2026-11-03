@@ -1,0 +1,34 @@
+---
+import LucideIcon from '@/components/ui/LucideIcon.astro';
+import type { Section } from '@/lib/content/sections';
+
+interface Props {
+	section: Section;
+	/** Show up to two lines of description instead of truncating to one. */
+	wrap?: boolean;
+}
+
+const { section, wrap } = Astro.props;
+---
+
+<span class:list={['flex min-w-0 gap-2.5 text-start', wrap ? 'items-start' : 'items-center']}>
+	{
+		section.icon && (
+			<span class="flex shrink-0 rounded-md border border-border bg-muted p-1.5 text-muted-foreground">
+				<LucideIcon name={section.icon} />
+			</span>
+		)
+	}
+	<span class="flex min-w-0 flex-col">
+		<span class="text-sm leading-5 font-medium text-foreground">{section.name}</span>
+		{
+			section.description && (
+				<span
+					class:list={['text-meta leading-4.5 text-muted-foreground', wrap ? 'line-clamp-2' : 'truncate']}
+				>
+					{section.description}
+				</span>
+			)
+		}
+	</span>
+</span>

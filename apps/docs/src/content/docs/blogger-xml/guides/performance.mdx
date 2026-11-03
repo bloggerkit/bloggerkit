@@ -1,0 +1,251 @@
+---
+title: Performance
+description: What Blogger adds to every page and how b:css and b:js remove it, inline or external CSS and JavaScript, lazy content, fonts and fewer requests.
+level: advanced
+prerequisites:
+  - blogger-xml/basics/document
+  - blogger-xml/styles/skin
+published: 2026-10-26
+---
+
+A Blogger page loads more than the theme: Blogger adds style sheets and scripts of its own, web fonts named in the skin, and whatever the widgets bring. A fast theme decides which of these it keeps, writes the rest itself, and loads its own code only when a page needs it.
+
+```xml title="theme.xml" /b:css/ /b:js/
+<html b:css='false' b:defaultwidgetversion='2' b:js='false' b:layoutsVersion='3' b:responsive='true' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+```
+
+`b:css='false'` and `b:js='false'` turn off Blogger's style sheets and scripts. A production theme can set both, and do the work of those files in its own code. <BloggerSource kind="observed" /> See [root attributes](../reference/root-attributes.mdx).
+
+## What Blogger adds
+
+Besides the theme's own markup, a page gets Blogger's widget stylesheets (`css_bundle_v2.css` and `authorization.css`), Blogger's widget scripts at the end of `<body>`, an `@font-face` style for web fonts named in `font` skin variables, and the skins as `<style id='page-skin-1'>` and `<style id='template-skin-1'>`. The full list is on [What Blogger adds to the page](../basics/concepts.mdx#what-blogger-adds-to-the-page); `b:css='false'` removes the stylesheets and `b:js='false'` the scripts, see [`b:css`](../reference/root-attributes.mdx#bcss) and [`b:js`](../reference/root-attributes.mdx#bjs). The `@font-face` style goes only when no unused web font is named, and `<b:template-skin>` only when it is [included in the Layout editor alone](../styles/skin.mdx#rendering-it-only-in-the-layout-editor).
+
+## What changes with `b:css='false'`
+
+The theme's own CSS is untouched: `<b:skin>` and `<style>` elements render as before. What goes is Blogger's styling of the widgets, so every widget the theme does not style itself appears as plain HTML, and so does Blogger's markup that some built-in includables render. <BloggerSource kind="observed" />
+
+`authorization.css` goes too. It is the file that makes elements with the class `blog-admin` visible to the signed-in owner, so a theme that wants owner-only links loads it on demand. A theme can check for the owner this way: <BloggerSource kind="observed" />
+
+```js title="Is the visitor the blog owner?"
+function isBlogOwner(blogId) {
+  return new Promise((resolve) => {
+    // hidden by its own rule; for the owner, Blogger's file shows .blog-admin elements
+    const probe = document.createElement('div');
+    probe.className = 'owner-probe blog-admin';
+    probe.innerHTML = '<style>.owner-probe{display:none}</style>';
+    document.body.append(probe);
+    const sheet = document.createElement('link');
+    sheet.rel = 'stylesheet';
+    sheet.href = `https://www.blogger.com/dyn-css/authorization.css?targetBlogID=${blogId}`;
+    const finish = (owner) => { probe.remove(); resolve(owner); };
+    sheet.onload = () => finish(getComputedStyle(probe).display === 'block');
+    sheet.onerror = () => finish(false);
+    document.head.append(sheet);
+  });
+}
+```
+
+The blog id comes from the theme, `"<b:eval expr='(data:blog.blogId + "").jsonEscaped'/>"`, printed into a JSON block or a `data-` attribute.
+
+## What changes with `b:js='false'`
+
+Without Blogger's scripts, the widgets that need a script stop working until the theme provides one. What a theme writes itself: <BloggerSource kind="observed" />
+
+| Feature                                     | Without Blogger's scripts                                  | The theme's part                                                                                                                             |
+| ------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Comment form                                | `BLOG_CMT_createIframe` is missing: the iframe stays empty | load `data:post.commentFormIframeSrc` in an iframe, and resize it from its messages, see [Comments](./comments.mdx#without-bloggers-scripts) |
+| Threaded replies of `data:post.commentHtml` | the reply links do nothing                                 | build the thread and the reply form, see [Comments](./comments.mdx#threads)                                                                  |
+| ContactForm                                 | the form does not send                                     | post the fields to `data:submitUrl`, see [below](#the-contact-form)                                                                          |
+| Ads, analytics                              |                                                            | load AdSense and Analytics with the theme's own tags, from `data:blog.adsenseClientId` and `data:blog.analyticsAccountNumber`                |
+
+The Layout editor keeps working without them, see [Blogger's scripts and the editor](./layout-editor.mdx#bloggers-scripts-and-the-editor). Which other widget behaviors depend on Blogger's scripts, and the exact list of files `b:js` removes, are not confirmed. Test each widget the theme supports with the attribute set.
+
+### The contact form
+
+The ContactForm widget gives a URL and a token. The theme's script posts the fields to it, as a form: <BloggerSource kind="observed" />
+
+```xml title="In the ContactForm widget"
+<b:includable id='main'>
+  <form class='contact' expr:data-blog='data:blog.blogId' expr:data-submit='data:submitUrl' expr:data-token='data:contactFormToken'>
+    <input expr:placeholder='data:contactFormNameMsg' name='name' type='text'/>
+    <input expr:placeholder='data:contactFormEmailMsg' name='email' required='required' type='email'/>
+    <textarea expr:placeholder='data:contactFormMessageMsg' name='message' required='required'/>
+    <button type='submit'><data:contactFormSendMsg/></button>
+  </form>
+</b:includable>
+```
+
+```js title="Sending it" {14}
+document.querySelector('form.contact')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const fields = new FormData(form);
+  const body = new URLSearchParams({
+    name: fields.get('name') || '',
+    email: fields.get('email'),
+    message: fields.get('message'),
+    blogID: form.dataset.blog,
+    token: form.dataset.token,
+  });
+  const response = await fetch(form.dataset.submit, { method: 'POST', body });
+  // the JSON is prefixed with )]}' to stop it from being run as a script
+  const result = JSON.parse((await response.text()).replace(/^\)\]\}',?\s*/, ''));
+  const sent = response.ok && result.type !== 'error' && result.details?.emailSentStatus === 'true';
+  form.replaceChildren(sent ? 'Message sent.' : 'The message could not be sent.');
+});
+```
+
+- The answer is `{ type, details: { emailSentStatus } }`, after a `)]}'` prefix that must be removed before parsing. `emailSentStatus` is the string `"true"` when the mail went out.
+- The widget also gives every message of the form, translated: `data:contactFormMessageSentMsg`, `data:contactFormMessageNotSentMsg`, `data:contactFormInvalidEmailMsg` and more. See [ContactForm](../widget-types/contact-form.mdx).
+
+## Inline or external
+
+Blogger hosts the theme, its images and its feeds, but no other file: a theme can not upload a `.css` or `.js` next to its XML. <BloggerSource kind="observed" /> Its code is either written in the theme, or served from another host by an absolute URL: a CDN, GitHub Pages, any static host.
+
+|          | Inline, in the theme               | External, on another host                         |
+| -------- | ---------------------------------- | ------------------------------------------------- |
+| Requests | none                               | one per file, and a connection to the host        |
+| Caching  | sent again with every page         | downloaded once, then cached by the browser       |
+| Editing  | in Edit HTML, saved with the theme | deployed on the other host, versioned in the URL  |
+| Data     | can use `data:` values directly    | reads them from the page, from JSON or attributes |
+| Failure  | none                               | the host can be down or blocked                   |
+
+A common split: the CSS and the script the first screen needs, inline; the rest external or [lazy](#lazy-content).
+
+### CSS
+
+The CSS of a theme can go in `<b:skin>` or in `<style>` elements:
+
+- `<b:skin>` replaces `$(name)` with the values of the Theme Designer, and renders as `page-skin-1`, wrapped in an HTML comment. See [skin](../styles/skin.mdx).
+- `<style>` can hold `<b:if>`, `<data:…/>` and `<b:eval>`, so its CSS can change with the page.
+
+A theme can keep only the variable definitions in its skin, inside one CSS comment so the skin renders no CSS, and writes all its CSS in `<style>`, where it reads the variables as `data:skin.vars`: <BloggerSource kind="observed" />
+
+```xml title="CSS that changes with the page"
+<style>/*<![CDATA[*/
+body { margin: 0; color: var(--text); }
+/*]]>*/
+:root { --accent: <data:skin.vars.accent_color/>; }
+<b:if cond='data:view.isSingleItem'>/*<![CDATA[*/
+.post-body img { max-width: 100%; height: auto; }
+/*]]>*/</b:if><b:if cond='data:blog.isMobileRequest'>/*<![CDATA[*/
+.sidebar { display: none; }
+/*]]>*/</b:if></style>
+```
+
+- The CDATA blocks let the CSS hold `<`, `>` and `&`, and the `<b:if>` sit between them, where Blogger reads them. See [Conditions inside CDATA](../tags/conditionals.mdx#conditions-inside-cdata).
+- Pages only get the CSS they use: list pages never download the post rules.
+
+### JavaScript
+
+Scripts follow the same rules. Inline values from the data go through `.jsEscaped` or `.jsonEscaped`:
+
+```xml
+<script>/*<![CDATA[*/
+const theme = JSON.parse(document.getElementById('theme-data').textContent);
+/*]]>*/</script>
+<script id='theme-data' type='application/json'>{"blogId": "<b:eval expr='(data:blog.blogId + "").jsonEscaped'/>", "isPost": <b:eval expr='data:view.isPost ? "true" : "false"'/>}</script>
+```
+
+An external script needs an absolute URL and a valued attribute: `<script async='async' src='https://cdn.example.com/theme@2.1.0/main.js'/>`. Put the version in the URL, so a new version is never served from an old cache.
+
+## Lazy content
+
+Code that most visits never need, such as the print styles, the share dialog or the numbered pager, can stay out of every page. A theme can keep it in a separate document of the theme, fetched once and cached: <BloggerSource kind="observed" />
+
+1. The theme renders an internal document when the URL is `/search?view=-XLazyContent`: a `<head>` holding the lazy CSS and JavaScript as inert blocks, `type='text/plain'`.
+2. On the first visit, a small script fetches that URL, takes the blocks, runs them, and stores them in `localStorage` with the theme version.
+3. On the next visits, it runs them from storage, until the version changes or a time limit passes.
+
+```xml title="The internal document, first branch of the theme" {1}
+<b:if cond='data:view.isSearch and !data:view.isLabelSearch and (data:blog.view + "") contains "-XLazyContent"'>
+  <head>
+    <title>Internal document</title>
+    <style id='lazy-css' type='text/plain'>/*<![CDATA[*/ /* print styles, dialogs… */ /*]]>*/</style>
+    <script data-version='2.1.0' id='lazy-js' type='text/plain'>/*<![CDATA[*/ /* pager, share dialog… */ /*]]>*/</script>
+  </head>
+  <body/>
+<b:else/>
+  …
+</b:if>
+```
+
+```js title="Loading it" {10}
+const VERSION = '2.1.0';
+const stored = JSON.parse(localStorage.getItem('lazy') || 'null');
+const run = ({ css, js }) => {
+  document.head.append(Object.assign(document.createElement('style'), { textContent: css }));
+  document.head.append(Object.assign(document.createElement('script'), { textContent: js }));
+};
+if (stored && stored.version === VERSION && Date.now() - stored.time < 3600 * 1000) {
+  run(stored);
+} else {
+  fetch('/search?view=-XLazyContent&m=0')
+    .then((response) => response.text())
+    .then((html) => {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const data = { css: doc.getElementById('lazy-css').textContent, js: doc.getElementById('lazy-js').textContent, version: VERSION, time: Date.now() };
+      localStorage.setItem('lazy', JSON.stringify(data));
+      run(data);
+    });
+}
+```
+
+- `?view=` takes any value, and Blogger gives it to the theme as `data:blog.view`, with hyphens. A value starting with `-` does not collide with Blogger's own views. <BloggerSource kind="observed" /> See [data:blog](../data/blog.mdx).
+- `data:blog.view + ""` turns the value into a string before `contains`. <BloggerSource kind="observed" />
+- The fetch goes to `/search`, not to the homepage: a request to the homepage counts as a visit in the blog's stats. `m=0` avoids a redirect to the mobile URL. <BloggerSource kind="observed" />
+- The `type='text/plain'` blocks are never run by the browser that fetched the document; the script runs them on the page that asked.
+
+## Analytics, ads and embeds
+
+Analytics, ads and embeds are often the heaviest part of a page. A theme can load them itself, and let the owner choose how in the Theme Designer: right away, deferred, or on the first interaction. <BloggerSource kind="observed" />
+
+```xml title="Analytics only on public pages, after the first interaction"
+<b:if cond='data:blog.analyticsAccountNumber and !data:view.isPreview and !data:view.isLayoutMode and !data:view.isError'>
+  <script expr:data-id='data:blog.analyticsAccountNumber' id='analytics-loader'>/*<![CDATA[*/
+(function (id) {
+  var load = function () {
+    removeEventListener('scroll', load); removeEventListener('pointerdown', load); removeEventListener('keydown', load);
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + id;
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { dataLayer.push(arguments); };
+    gtag('js', new Date());
+    gtag('config', id);
+  };
+  addEventListener('scroll', load, { once: true, passive: true });
+  addEventListener('pointerdown', load, { once: true });
+  addEventListener('keydown', load, { once: true });
+})(document.getElementById('analytics-loader').dataset.id);
+/*]]>*/</script>
+</b:if>
+```
+
+- `data:blog.analyticsAccountNumber` is the Analytics id of the blog's settings, so the owner sets it in the dashboard.
+- Previews, the Layout editor and 404 pages are not real visits.
+- Lazy loading misses visitors who leave without scrolling or tapping; that is the trade.
+
+## Fewer requests
+
+| Do                                                                      | Saves                                                                                     |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `b:css='false'`, with the widgets styled by the theme                   | two style sheets                                                                          |
+| `b:js='false'`, with the comment and contact forms written by the theme | Blogger's widget scripts                                                                  |
+| `<b:template-skin>` only in the Layout editor                           | its CSS on every page                                                                     |
+| No web fonts in unused `font` variables                                 | the `@font-face` style and its font files                                                 |
+| `cond` instead of CSS to hide sections                                  | the HTML, images and scripts of hidden widgets, see [Page layouts](./page-layouts.mdx)    |
+| Resized images, `loading='lazy'` below the fold                         | bytes and requests, see [Images](./images.mdx)                                            |
+| A jump break in long posts, cards on lists                              | the full posts on every list page, see [Posts and pagination](./posts-and-pagination.mdx) |
+| `summary` feeds with a small `max-results`                              | bytes of every script request, see [Feeds](./feeds.mdx)                                   |
+| Comment form loaded on demand                                           | an iframe on every post                                                                   |
+| `dns-prefetch` or `preconnect` for the hosts used early                 | connection time                                                                           |
+
+```xml title="Early connections" {3}
+<link href='https://blogger.googleusercontent.com' rel='dns-prefetch'/>
+<link href='https://www.blogger.com' rel='dns-prefetch'/>
+<link crossorigin='anonymous' href='https://fonts.gstatic.com' rel='preconnect'/>
+```
+
+`crossorigin` needs a value in the XML, as every attribute does: `crossorigin='anonymous'`. <BloggerSource kind="observed" />

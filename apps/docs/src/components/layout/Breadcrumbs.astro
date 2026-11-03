@@ -1,0 +1,28 @@
+---
+import ChevronRight from '@lucide/astro/icons/chevron-right';
+import type { Folder } from '@/lib/content/sections';
+import { getPageUrl } from '@/lib/routes';
+
+interface Props {
+	folders: Folder[];
+}
+
+const { folders } = Astro.props;
+---
+
+{
+	folders.length > 0 && (
+		<nav aria-label="Breadcrumb" class="mb-3" data-pagefind-ignore data-breadcrumbs>
+			<ol class="m-0 flex list-none flex-wrap items-center gap-1 p-0 text-sm text-muted-foreground">
+				{folders.map((folder, i) => (
+					<li class="flex items-center gap-1">
+						{i > 0 && <ChevronRight size={14} aria-hidden="true" />}
+						<a href={getPageUrl(folder.slug)} class="no-underline hover:text-foreground">
+							{folder.name}
+						</a>
+					</li>
+				))}
+			</ol>
+		</nav>
+	)
+}

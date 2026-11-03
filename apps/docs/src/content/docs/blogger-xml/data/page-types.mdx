@@ -1,0 +1,177 @@
+---
+title: Page types
+description: 'Every kind of page Blogger renders with a theme: its URLs and HTTP status, data:blog.pageType and data:view.type, and every data:view flag on it.'
+level: intermediate
+published: 2026-10-26
+---
+
+A blog has one theme for all its pages. The theme finds out which page it is rendering from three sources of data: `data:blog.pageType`, the oldest; `data:view.type`; and the `data:view.is…` flags, which the 2017 themes use.
+
+```xml title="One header, every page"
+<b:if cond='data:view.isError'>
+  <p class='site-title'><a expr:href='data:blog.homepageUrl'><data:blog.title/></a></p>
+  <h1>404</h1>
+<b:elseif cond='data:view.isSingleItem'/>
+  <p class='site-title'><a expr:href='data:blog.homepageUrl'><data:blog.title/></a></p>
+<b:else/>
+  <h1 class='site-title'><data:blog.title/></h1>
+</b:if>
+```
+
+The blog title is the main heading on lists and a link on the other pages, where the post title takes the `<h1>`.
+
+The values on this page were checked on live blogs in October 2026, on a blog with one of Blogger's 2017 themes for most pages and on a blog with a custom theme for static pages.
+
+## Kinds of pages
+
+| Kind        | Shows                                                          | URLs                                                                                                                   | HTTP status                       |
+| ----------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Homepage    | The newest posts                                               | `/`                                                                                                                    | 200                               |
+| All posts   | Every post, newest first; also the older pages of the homepage | `/search`, `/search?updated-max=…&max-results=N`, `/search?max-results=N`, `/search?by-date=true`                      | 200                               |
+| Label       | The posts with a label                                         | `/search/label/LABEL`, `/search?label=LABEL`, with `?updated-max=…&max-results=N` for the older pages                  | 200, even for a label no post has |
+| Search      | The posts matching a query                                     | `/search?q=QUERY`, with `&max-results=N`; with a label, `/search/label/LABEL?q=QUERY` or `/search?q=QUERY&label=LABEL` | 200                               |
+| Archive     | The posts of a period                                          | `/YYYY/` and `/YYYY/MM/`, with or without the final slash; `/YYYY_MM_DD_archive.html`                                  | 200                               |
+| Post        | One post                                                       | `/YYYY/MM/slug.html`                                                                                                   | 200                               |
+| Static page | One page                                                       | `/p/slug.html`                                                                                                         | 200                               |
+| 404         | An error                                                       | any other path, a post or page that does not exist, and the empty search `/search?q=`                                  | 404                               |
+
+Any of these URLs also takes `?m=1`, the mobile version; `?hl=xx`, another language; `?view=name`, another rendering of the theme, see [`data:blog.view`](./blog.mdx#datablogview); and `?showComment=…`, a link to a comment. Blogger removes `?showComment=` and `?view=` from `data:blog.url`, and writes `/search?label=X` as `/search/label/X`. On the homepage, other parameters than `?m=1` are dropped; on `/search?q=…` and on 404 pages the query string is kept. <BloggerSource kind="observed" />
+
+The `/search` pages also read `start`, `updated-min`, `sort-by` and the other parameters of the post list; client scripts that build numbered pages rely on them, see [posts and pagination](../guides/posts-and-pagination.mdx). <BloggerSource kind="observed" />
+
+### Older pages of the homepage
+
+The "Older posts" link of the homepage, `data:olderPageUrl` of the Blog widget, leads to `/search?updated-max=DATE&max-results=N`, the list of all posts from a date, so the second page of the homepage is an "All posts" page. A URL `/?updated-max=…` is still the homepage, and `data:blog.url` writes it as `/`. See [`isHomepage`](./view.mdx#ishomepage).
+
+### Archives
+
+Daily and weekly archives have `/YYYY_MM_DD_archive.html` URLs, with `data:view.archive.day`. <BloggerSource kind="observed" /> On a blog archived by month, `/2026_05_01_archive.html` and `/2026_05_07_archive.html` both showed May 2026, with `data:blog.url` set to `/2026/05/`, and `/2026/05/01/` was a 404 page.
+
+### Reserved paths
+
+Paths such as `/.well-known/…` and `/cdn-cgi/…` reach the theme as 404 pages, with `data:view.isError`. A theme can answer them with a bare document instead of its themed error page. One way is to compare the canonical URL of the page with both forms of each path, after one slash and after the double slash of 404 URLs: <BloggerSource kind="observed" />
+
+```xml
+<b:if cond='data:view.isError and [".well-known", "cdn-cgi"] any (segment => ["/", "//"] any (prefix => snippet(data:view.url.canonical) contains snippet(path(data:blog.homepageUrl.canonical, (prefix + data:segment + "/")))))'>
+  <b:include name='bare-404'/>
+<b:else/>
+  <b:include name='page'/>
+</b:if>
+```
+
+The inner lambda reads the outer parameter as `data:segment`, and `snippet` turns both URLs into plain text before `contains`.
+
+### Previews and the Layout editor
+
+Blogger also renders the theme inside the dashboard. In a preview of the theme or of a post, `data:view.isPreview` is true; in the Layout editor, where sections and widgets are arranged, `data:view.isLayoutMode` is true. These pages need a signed-in owner and Google does not document their URLs. Which other flags a post preview sets is not confirmed. See [Detecting the editor](../guides/layout-editor.mdx#detecting-the-editor).
+
+### Responses
+
+Some answers of the blog host are redirects rather than pages, such as phones sent to `?m=1`, see [Mobile requests](./blog.mdx#mobile-requests). Responses can carry an `x-robots-tag` header. In the HTML of a page the host of the blog also appears in JSON-escaped form, `\/\/example.blogspot.com`, inside Blogger's scripts. <BloggerSource kind="observed" />
+
+## `data:blog.pageType`
+
+| Value         | Pages                                    | Source                            |
+| ------------- | ---------------------------------------- | --------------------------------- |
+| `index`       | Homepage, all posts, labels and searches | <BloggerSource kind="official" /> |
+| `archive`     | Date archives                            | <BloggerSource kind="official" /> |
+| `item`        | Posts                                    | <BloggerSource kind="official" /> |
+| `static_page` | Static pages                             | <BloggerSource kind="observed" /> |
+| `error_page`  | 404 pages                                | <BloggerSource kind="observed" /> |
+
+Google's description lists `item`, `archive` and `index`. In practice static pages give `static_page`, which Google's own examples test, and 404 pages give `error_page`. `index` does not tell the homepage from a search: use `data:view.isHomepage`.
+
+Several values are tested with `in` and a list:
+
+```xml
+<b:if cond='data:blog.pageType in ["item", "static_page"]'>
+  <b:include data='post' name='post-full'/>
+</b:if>
+```
+
+Google's examples write the same list in braces, `{"item", "static_page"}`; the 2017 themes write lists with brackets. See [Lists in braces](../expressions/values.mdx#lists-in-braces) and [Membership](../expressions/operators.mdx#membership).
+
+## `data:view.type`
+
+| Value   | Pages                                              |
+| ------- | -------------------------------------------------- |
+| `feed`  | Homepage, all posts, labels, searches and archives |
+| `item`  | Posts and static pages                             |
+| `error` | 404 pages                                          |
+
+`type` groups pages by layout: a list of posts, one item, or an error. Every 404 URL tried gave `error`. Prefer the flags, `data:view.isError` over `data:view.type == "error"`.
+
+## Flags matrix
+
+Every flag on every kind of page. **true** means set; an empty cell means false, or missing from the data, which a condition treats the same. Each value was seen on a live blog.
+
+| Field                  | Homepage | All posts | Label    | Search   | Archive   | Post     | Static page   | 404          |
+| ---------------------- | -------- | --------- | -------- | -------- | --------- | -------- | ------------- | ------------ |
+| `data:blog.pageType`   | `index`  | `index`   | `index`  | `index`  | `archive` | `item`   | `static_page` | `error_page` |
+| `data:view.type`       | `feed`   | `feed`    | `feed`   | `feed`   | `feed`    | `item`   | `item`        | `error`      |
+| `isHomepage`           | **true** |           |          |          |           |          |               |              |
+| `isMultipleItems`      | **true** | **true**  | **true** | **true** | **true**  |          |               |              |
+| `isSingleItem`         |          |           |          |          |           | **true** | **true**      |              |
+| `isPost`               |          |           |          |          |           | **true** |               |              |
+| `isPage`               |          |           |          |          |           |          | **true**      |              |
+| `isSearch`             |          | **true**  | **true** | **true** |           |          |               |              |
+| `isLabelSearch`        |          |           | **true** |          |           |          |               |              |
+| `isArchive`            |          |           |          |          | **true**  |          |               |              |
+| `isError`              |          |           |          |          |           |          |               | **true**     |
+| `isPreview`            |          |           |          |          |           |          |               |              |
+| `isLayoutMode`         |          |           |          |          |           |          |               |              |
+| `isMobile` with `?m=1` |          |           |          |          |           |          |               |              |
+
+`isPreview` and `isLayoutMode` are true only in the dashboard. `isMobile` stayed false with `?m=1` on every blog tested, see [Mobile requests](./blog.mdx#mobile-requests). What each flag means is in [The flags](./view.mdx#the-flags).
+
+## Other fields by page
+
+| Field                               | Homepage                  | All posts               | Label                  | Search                       | Archive                         | Post                       | Static page                | 404          |
+| ----------------------------------- | ------------------------- | ----------------------- | ---------------------- | ---------------------------- | ------------------------------- | -------------------------- | -------------------------- | ------------ |
+| `data:view.search`                  |                           | empty map               | `label`, headings      | `query`, headings            |                                 |                            |                            |              |
+| `data:view.archive`                 |                           |                         |                        |                              | `year`, `month`, `rangeMessage` |                            |                            |              |
+| `data:view.postId`                  |                           |                         |                        |                              |                                 | the id                     |                            |              |
+| `data:view.pageId`                  |                           |                         |                        |                              |                                 |                            | the id                     |              |
+| `data:view.featuredImage`           |                           |                         |                        |                              |                                 | when the post has an image | when the page has an image |              |
+| `data:view.title`                   | blog title                | blog title              | blog title             | blog title                   | blog title                      | post title                 | page title                 | blog title   |
+| `data:blog.pageName`                | empty                     | empty                   | the label              | `Search results for Q`       | `May 2026`                      | post title                 | page title                 | empty        |
+| `data:blog.pageTitle`               | blog title                | blog title              | `Blog: label`          | `Blog: Search results for Q` | `Blog: May 2026`                | `Blog: post title`         | `Blog: page title`         | blog title   |
+| `data:blog.searchLabel`             |                           |                         | the label              | with `label` in the URL      |                                 |                            |                            |              |
+| `data:blog.searchQuery`             |                           |                         | with `q` in the URL    | the query                    |                                 |                            |                            |              |
+| `<body>` classes of the 2017 themes | `homepage-view feed-view` | `search-view feed-view` | `label-view feed-view` | `search-view feed-view`      | `archive-view feed-view`        | `post-view item-view`      | `item-view page-view`      | `error-view` |
+
+"Headings" are `resultsMessage` and `resultsMessageHtml`, see [`data:view.search`](./view.mdx#dataviewsearch). A label page with a `q` parameter has both `label` and `query`. The 2017 themes write their body classes from the flags; the static page classes are those of the custom theme tested.
+
+## What to keep in mind
+
+`isSearch` is missing, not false, off `/search` pages; `isMultipleItems` ignores the number of posts; a 404 page is neither single nor multiple, and its URLs have a double slash. These points are explained with each flag in [The flags](./view.mdx#the-flags).
+
+## Mobile
+
+Any page takes `?m=1`, the mobile version. `data:view.isMobile` stayed false on every blog tested; `data:blog.isMobile`, `isMobileRequest` and `mobileClass` depend on the theme. The values per theme are in [Mobile requests](./blog.mdx#mobile-requests).
+
+## Choosing a test
+
+| Page                                                     | Condition                                                                     |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| The homepage, first page only                            | `data:view.isHomepage`                                                        |
+| The homepage of a blog with no posts, in the Blog widget | `data:view.url == data:blog.homepageUrl and !data:olderPageUrl`               |
+| Any list of posts                                        | `data:view.isMultipleItems`                                                   |
+| Any list except the homepage                             | `data:view.isMultipleItems != data:view.isHomepage`                           |
+| The list of all posts, `/search` alone                   | `data:view.url.canonical == path(data:blog.homepageUrl.canonical, "search")`  |
+| The older pages of the homepage                          | `data:view.isSearch and !data:view.isLabelSearch and !data:view.search.query` |
+| A label page                                             | `data:view.isLabelSearch`                                                     |
+| A search with a query                                    | `data:view.search.query`                                                      |
+| An archive                                               | `data:view.isArchive`                                                         |
+| A post or a static page                                  | `data:view.isSingleItem`                                                      |
+| A post                                                   | `data:view.isPost`                                                            |
+| A static page                                            | `data:view.isPage`                                                            |
+| A 404 page                                               | `data:view.isError`                                                           |
+| A preview                                                | `data:view.isPreview`                                                         |
+| The Layout editor                                        | `data:view.isLayoutMode`                                                      |
+
+The flags read better than comparisons of `pageType`, and they separate pages that `pageType` lumps together. <BloggerSource kind="observed" /> The conditions using `!=` and `path` come from production themes.
+
+### Sections and widgets by page
+
+`cond` on `<b:section>` and `<b:widget>` takes any of these tests, `cond='data:view.isHomepage'`, and renders them on those pages only. See [`cond` of sections](../layout/sections.mdx#cond) and [`cond` of widgets](../layout/widgets.mdx#cond). The older `pageType` attribute of `<b:widget>` is deleted when saved, see [`pageType`](../layout/widgets.mdx#pagetype).

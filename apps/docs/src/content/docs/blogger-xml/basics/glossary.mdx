@@ -1,0 +1,130 @@
+---
+title: Glossary
+description: The words this guide uses, each in a sentence or two, with the page that covers it in full.
+level: beginner
+published: 2026-10-26
+---
+
+The theme language has its own vocabulary, and some of its words mean something else elsewhere: a _section_ is not an HTML `<section>`, and a _widget_ is what the dashboard calls a gadget. Each term below has a short definition and a link to the page that explains it.
+
+## The file
+
+### Theme
+
+The single XML file that decides the HTML of every page of a blog: the markup, the CSS, the areas for widgets and the widgets themselves. One theme renders every kind of page, the homepage, posts, static pages, label and search results, archives and the 404 page. See [How themes work](./concepts.mdx).
+
+### Rendering
+
+What Blogger does with the theme on every visit: it reads the XML with the data of the requested page, runs its conditions and loops, and sends plain HTML. It happens on Blogger's servers, so the browser never sees a `b:` tag or an `expr:` attribute. See [Rendering happens on Blogger's servers](./concepts.mdx#rendering-happens-on-bloggers-servers).
+
+### Edit HTML
+
+The editor of the dashboard where the XML of the theme is changed, in the menu next to **Customize** on the **Theme** page. **Save** sends the whole file back to Blogger. See [Editing a theme](./concepts.mdx#editing-a-theme).
+
+### Saving
+
+When a theme is saved, Blogger checks its XML and its layout, and refuses it with an error when something is wrong there. When it accepts it, it stores a rewritten copy, with its own formatting. Expressions and the attributes of logic tags are not checked: a mistake in them shows only when a page renders. See [Saving a theme](./saving.mdx).
+
+### Markup error
+
+A mistake that saves and fails when a page renders it. In a widget, the widget is not rendered and Blogger leaves `<!--Failed to render gadget '…'. There was an error processing the markup. -->` in its place; outside a widget, the page fails with a 500 error. See [Markup errors](./saving.mdx#markup-errors).
+
+### CDATA
+
+A `<![CDATA[ … ]]>` section, which Blogger does not read: a `data:` tag or an `expr:` written inside it reaches the browser as typed. Scripts and CSS are wrapped in CDATA for that reason. See [Rendering happens on Blogger's servers](./concepts.mdx#rendering-happens-on-bloggers-servers).
+
+## Layout
+
+### Section
+
+An area of the page that holds widgets, written `<b:section>`. It is what the blog owner sees as a box in the Layout editor. A section contains widgets and nothing else, and sections are not nested. See [b:section](../layout/sections.mdx).
+
+### Widget
+
+One block of content in a section, written `<b:widget>`: the Blog widget with the posts, an HTML widget with the owner's code, a list of labels. The dashboard calls widgets _gadgets_. A widget holds its includables and the settings the owner made. See [b:widget](../layout/widgets.mdx).
+
+### Widget type
+
+The kind of a widget, in its `type` attribute: `Blog`, `Header`, `HTML`, `LinkList` and the others. Each type gets its own data and its own built-in markup. See [Widget types](../widget-types/index.mdx).
+
+### Includable
+
+A named block of markup inside a widget, written `<b:includable>`. Blogger renders the one with the id `main`; the others render only when they are included with `<b:include>`. See [b:includable and b:include](../layout/includables.mdx).
+
+### Built-in includable
+
+An includable defined on Blogger's servers and called by name from a theme, such as `all-head-content`, which writes the standard tags of `<head>`, or `widget-title`. See [Built-in includables](../layout/includables.mdx#built-in-includables).
+
+### Default markup
+
+Includables written once, in `<b:defaultmarkups>`, for every widget of a type, or for the whole theme. See [b:defaultmarkups](../layout/default-markups.mdx).
+
+### Layout editor
+
+The page of the dashboard where the owner adds, moves and edits widgets, opened from its **Layout** tab. Blogger draws it by rendering the theme in a special mode, with the sections as boxes. See [The Layout editor](./concepts.mdx#the-layout-editor) and [the guide](../guides/layout-editor.mdx).
+
+## Logic and data
+
+### `b:` tag
+
+An element of the theme language, such as `<b:if>`, `<b:loop>` or `<b:section>`. Blogger replaces it with its output, so none is left in the page. [Elements](../reference/elements.mdx) lists them all.
+
+### Data
+
+The values Blogger hands to the theme for the page being rendered: the blog, the page, its posts and comments, the widgets. They are read with `data:` paths, such as `data:post.title`, and printed with data tags, such as `<data:post.title/>`. See [Data](../data/index.mdx) and [Data tags and b:eval](../tags/output.mdx).
+
+### Global data
+
+The data that exists everywhere in the theme, inside widgets and outside them: `data:blog` for the blog, `data:view` for the page, `data:messages`, `data:skin` and `data:widgets`. See [Global data](./concepts.mdx#global-data).
+
+### Widget data
+
+The data a widget type computes for its own includables: `data:posts` in a Blog widget, `data:links` in a LinkList widget. See [Widget data](./concepts.mdx#widget-data).
+
+### Page type
+
+The kind of page being rendered: the homepage, a post, a static page, a label or search page, an archive, or the 404 page. A theme tells them apart with the flags of `data:view`, such as `data:view.isPost`. See [Page types](../data/page-types.mdx).
+
+### Expression
+
+The small language of the computed attributes: `cond` in `<b:if>`, `values` in `<b:loop>`, `expr:` attributes and the others. `data:view.type == "item"` is an expression. See [Expressions](../expressions/index.mdx).
+
+### `expr:` attribute
+
+An HTML attribute whose value is computed from an expression: `expr:href='data:post.url'` becomes `href` with the URL of the post. See [Attributes](../tags/attributes.mdx).
+
+### Lambda
+
+An expression applied to each item of a list, to test, count, filter, transform or search it: `data:posts filter (p => p.id != data:view.postId)`. See [Lambdas](../expressions/lambdas.mdx).
+
+### Message
+
+One of Blogger's interface texts, such as "Older Posts", in the language of the blog: `data:messages` holds them, and `<b:message>` prints one with the values it needs. See [data:messages](../data/messages.mdx) and [b:message and b:param](../tags/messages.mdx).
+
+## Styles
+
+### Skin
+
+The CSS of the blog, written in `<b:skin>`. See [b:skin and b:template-skin](../styles/skin.mdx).
+
+### Template skin
+
+The CSS of the Layout editor, written in `<b:template-skin>`, with selectors that start with `body#layout`. See [b:skin and b:template-skin](../styles/skin.mdx).
+
+### Theme Designer
+
+The page of the dashboard where the owner changes colors, fonts, widths and the background without touching the XML, opened with **Customize** on the **Theme** page. The theme declares what can be changed as variables in the skin, and uses them in its CSS. See [Theme Designer](../styles/theme-designer.mdx).
+
+## Versions
+
+### Layouts version
+
+The generation of a theme, set on `<html>`. Current themes are version 3, written `b:layoutsVersion='3'`; versions 1 and 2 are older. See [Versions](./concepts.mdx#versions) and [Classic themes](../reference/classic-themes.mdx).
+
+### Widget version
+
+Which data and which built-in markup the widgets get. In a version 3 theme, `b:defaultwidgetversion='2'` gives the widgets version 2. See [Versions](./concepts.mdx#versions).
+
+## Where facts come from
+
+Facts in this guide carry a badge with their source, explained in [Status badges](../reference/sources.mdx#status-badges). Every page also has a level under its title, **Beginner**, **Intermediate** or **Advanced**, see [Reading the guide](../index.mdx#reading-the-guide).

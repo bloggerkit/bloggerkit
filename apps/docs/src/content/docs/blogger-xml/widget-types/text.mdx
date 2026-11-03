@@ -1,0 +1,105 @@
+---
+title: Text
+description: The Text widget, which prints formatted text typed in a rich-text editor.
+published: 2026-10-26
+---
+
+The `Text` widget prints formatted text that the blog owner types in a rich-text editor. Blogger stores and returns that text as HTML. Its data and its built-in markup are those of the [HTML](./html.mdx) widget; the type and the editor are the only differences.
+
+## Quick example
+
+A welcome note for the sidebar, with the title as a heading:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:widget id='Text1' locked='false' title='Welcome' type='Text' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='content'><![CDATA[Short notes on <b>theme development</b>, posted every week.]]></b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <h2 class='side-title'><data:title/></h2>
+    <div class='side-text'><data:content/></div>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget Text' data-version='2' id='Text1'>
+  <h2 class='side-title'>Welcome</h2>
+  <div class='side-text'>Short notes on <b>theme development</b>, posted every week.</div>
+</div>
+```
+
+</CodeTabs>
+
+## Placement and limits
+
+|                     |                                                                                          | Source                            |
+| ------------------- | ---------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                | `Text`                                                                                   | <BloggerSource kind="official" /> |
+| Per blog            | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type)          |                                   |
+| Width               | 100 pixels or more                                                                       | <BloggerSource kind="observed" /> |
+| Placement           | Any section                                                                              | <BloggerSource kind="observed" /> |
+| Locked              | Not usually                                                                              | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                                 | <BloggerSource kind="observed" /> |
+| Classic mobile view | Hidden by default                                                                        | <BloggerSource kind="official" /> |
+| Dynamic Views       | Supported on desktop, in the right sidebar. Not in Dynamic mobile or Mobile Default 2010 | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting   | Values                                      | Data      | Meaning                | Source                            |
+| --------- | ------------------------------------------- | --------- | ---------------------- | --------------------------------- |
+| `content` | HTML, in a CDATA section when it has markup | `content` | The text of the widget | <BloggerSource kind="observed" /> |
+
+A Text widget written with no settings saves, with none added and an empty title. An empty `content` is dropped when the theme is saved. <BloggerSource kind="observed" />
+
+## Widget data
+
+| Field     | V1  | V2  | Type   | Holds                                                              | Source                            |
+| --------- | --- | --- | ------ | ------------------------------------------------------------------ | --------------------------------- |
+| `title`   | ✓   | ✓   | string | The widget title, up to 100 characters                             | <BloggerSource kind="observed" /> |
+| `content` | ✓   | ✓   | string | The text, as an HTML string. `<data:content/>` prints it unescaped | <BloggerSource kind="official" /> |
+
+## Built-in includables
+
+| Includable | V1  | V2  | Renders                                               | Source                            |
+| ---------- | --- | --- | ----------------------------------------------------- | --------------------------------- |
+| `main`     | ✓   | ✓   | The title, then `div.widget-content` with the content | <BloggerSource kind="observed" /> |
+
+The markup is the HTML widget's: in version 2, `widget-title` then `div.widget-content`; in version 1, an `h2.title` when there is a title, `div.widget-content`, and the obsolete `quickedit` include. There is no other built-in includable.
+
+Some exports have a `main` that only includes a built-in, `<b:include name='text-content'/>`. It is defined in no theme and not documented. In a test HTML widget it failed with a [markup error](../basics/saving.mdx#markup-errors); in a Text widget it is not confirmed. <BloggerSource kind="observed" />
+
+## Writing your own markup
+
+### An option the owner can switch off
+
+A Text widget makes a good on/off switch for a feature of the theme: the owner hides or shows it in the Layout editor, and the theme renders it only when it is on. A theme credit in the footer, printed by the theme and not from the widget's text, which only explains what the widget does:
+
+```xml {1}
+<b:widget cond='not data:blog.adultContent and not data:view.isPreview' id='Text21' locked='true' title='Credit' type='Text' version='2' visible='false'>
+  <b:widget-settings>
+    <b:widget-setting name='content'><![CDATA[Shows "Theme by …" in the footer. Hide this widget to remove it.]]></b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:class name='footer-credit'/>
+    Theme by <a href='https://example.com/'>Example Design</a>.
+  </b:includable>
+</b:widget>
+```
+
+`visible='false'` installs the widget hidden, and the `cond` keeps it off adult blogs and out of the dashboard preview. <BloggerSource kind="observed" />
+
+### Escaping the text
+
+`data:content` is HTML. To use it where markup is not allowed, such as a `meta` tag or a `data-` attribute, strip it with [`snippet`](../expressions/functions.mdx) first:
+
+```xml
+<meta expr:content='snippet(data:content, { length: 150, links: false })' name='description'/>
+```
+
+## Things to know
+
+- **Editor.** The Text widget opens a rich-text editor, the HTML widget a code editor. Both store HTML.
+- **HTTPS.** The Text widget is compatible with HTTPS blogs.

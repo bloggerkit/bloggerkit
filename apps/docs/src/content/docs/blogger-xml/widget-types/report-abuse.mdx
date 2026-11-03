@@ -1,0 +1,97 @@
+---
+title: ReportAbuse
+description: The Report Abuse widget, a single link to Blogger's form for reporting content that breaks its policies.
+published: 2026-10-26
+---
+
+`ReportAbuse` is one link: "Report Abuse", pointing to Blogger's reporting form, where anyone can flag a blog for breaking the Terms of Service or the Content Policy. Blogger adds it to its themes. It took over from the report link of the [Navbar](./navbar.mdx) when the 2017 themes dropped the bar. The widget has no settings and no data of its own: by default, its `main` includes the Common includable `reportAbuse`.
+
+## Quick example
+
+The default `main` is a single include. A theme can just as well write the link itself:
+
+<CodeTabs>
+
+```xml title="theme.xml" {4}
+<b:widget id='ReportAbuse1' locked='true' title='' type='ReportAbuse' version='2' visible='true'>
+  <b:includable id='main'>
+    <a class='report-link' href='https://www.blogger.com/go/report-abuse' rel='noopener nofollow' target='_blank'>
+      <data:messages.reportAbuse/>
+    </a>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget ReportAbuse' data-version='2' id='ReportAbuse1'>
+<a class='report-link' href='https://www.blogger.com/go/report-abuse' rel='noopener nofollow' target='_blank'>
+Report Abuse
+</a>
+</div>
+```
+
+</CodeTabs>
+
+The text comes from `data:messages.reportAbuse`, so it follows the language of the blog.
+
+## Placement and limits
+
+| Property              | Value                                                                                                    | Source                            |
+| --------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                  | `ReportAbuse`                                                                                            | <BloggerSource kind="observed" /> |
+| Per blog              | 1. A second one is refused when saving, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Suggested width       | 100px                                                                                                    | <BloggerSource kind="observed" /> |
+| Where Blogger puts it | A sidebar or the footer                                                                                  | <BloggerSource kind="observed" /> |
+| Locked                | Locked in the 2017 themes (`locked='true'` in 7 of the 16 official exports)                              | <BloggerSource kind="observed" /> |
+| Markup                | Editable                                                                                                 | <BloggerSource kind="observed" /> |
+| Not available in      | Mobile Default 2010, Dynamic Views                                                                       | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+None. A ReportAbuse written with no settings saves with none added and an empty title. A second one is refused when the theme is saved. <BloggerSource kind="observed" />
+
+## Widget data
+
+None of its own. The only text is the global message `data:messages.reportAbuse`, "Report Abuse". Whether the widget also has a `data:title`, holding a localized "Report Abuse", is not confirmed; the default markup does not use one.
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders                                                                  | Source                            |
+| ---------- | --- | --- | -------------------------------------------------------------------------------- | --------------------------------- |
+| `main`     | Yes | Yes | `<b:include name='reportAbuse'/>` and nothing else. No official theme changes it | <BloggerSource kind="observed" /> |
+
+`reportAbuse` belongs to the [Common includables](../layout/default-markups.mdx): any widget can include it, and a `<b:defaultmarkup type='Common'>` can replace it. Blogger's version writes an `h3.title` holding an `a.report_abuse` link to `https://www.blogger.com/go/report-abuse`, opened in a new tab, with `data:messages.reportAbuse` as text. On live blogs the link carries `rel='noopener nofollow'`.
+
+## Writing your own markup
+
+### Restyle the default once for all widgets
+
+Replace the Common includable instead of each widget's `main`, and every `reportAbuse` include picks it up:
+
+```xml
+<b:defaultmarkups>
+  <b:defaultmarkup type='Common'>
+    <b:includable id='reportAbuse'>
+      <p class='report'>
+        <a href='https://www.blogger.com/go/report-abuse' rel='noopener nofollow' target='_blank'><data:messages.reportAbuse/></a>
+      </p>
+    </b:includable>
+  </b:defaultmarkup>
+</b:defaultmarkups>
+```
+
+### A link in the footer, without the widget
+
+The address is fixed, so the link can live anywhere in the theme. A footer line next to the copyright:
+
+```xml
+<footer class='site-footer'>
+  <span><data:blog.title/></span>
+  <a href='https://www.blogger.com/go/report-abuse' rel='noopener nofollow' target='_blank'><data:messages.reportAbuse/></a>
+</footer>
+```
+
+## Things to know
+
+- **Keep a way to report.** Hosts in the EU have reporting obligations under the Digital Services Act, which makes a visible report link the safe choice for any theme. No Google page says a theme must contain this widget.
+- **Not a widget title.** The default link is wrapped in `h3.title`, so it picks up the theme's widget-title styles unless you override `reportAbuse`.

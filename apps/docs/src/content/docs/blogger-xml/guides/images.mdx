@@ -1,0 +1,297 @@
+---
+title: Images
+description: Blogger image URLs and their size parameters, resizeImage and sourceSet, responsive and lazy images, thumbnails, YouTube videos and missing avatars.
+level: intermediate
+prerequisites:
+  - blogger-xml/expressions/functions
+published: 2026-10-26
+---
+
+Almost every image of a Blogger blog is hosted by Google: the images of the posts, the Image widget, the Header, the author photos and the comment avatars. Google's image servers resize and crop an image from parameters written in its URL, so a theme never needs several files of one image. It asks for the size it needs with [`resizeImage`](../expressions/functions.mdx), or writes the parameters itself.
+
+<CodeTabs>
+
+```xml title="A card image, 640 × 360"
+<b:if cond='data:post.featuredImage'>
+  <img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 640, "16:9")' height='360' loading='lazy' width='640'/>
+</b:if>
+```
+
+```html title="Rendered"
+<img alt='First frost' height='360' loading='lazy' src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh/w640-h360-p-k-no-nu/frost.jpg' width='640'/>
+```
+
+</CodeTabs>
+
+The post stored the image as `…/s1600/frost.jpg`. `resizeImage` replaced `s1600` with `w640-h360-p-k-no-nu`: 640 pixels wide, 360 high, cropped around the subject.
+
+## Image URLs
+
+Google-hosted images are on `blogger.googleusercontent.com`, `bp.blogspot.com` (`1.bp.blogspot.com`, `2.bp.blogspot.com`…) and `lh3.googleusercontent.com` (also `lh4`, `lh5`, `lh6`): any subdomain of `blogspot.com` or `googleusercontent.com`. <BloggerSource kind="observed" /> The parameters sit in one of two places:
+
+| Shape                                 | Example                                                                        | Parameters |
+| ------------------------------------- | ------------------------------------------------------------------------------ | ---------- |
+| A path segment before the file name   | `https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh/s1600/frost.jpg` | `s1600`    |
+| The same, older host                  | `https://1.bp.blogspot.com/-Xk2/YAb/AAAAAAAAB3c/abc/s1600/frost.jpg`           | `s1600`    |
+| After the last `=`, with no file name | `https://blogger.googleusercontent.com/img/a/AVvXsEi=s1600`                    | `s1600`    |
+| The same, on `lh3`                    | `https://lh3.googleusercontent.com/pw/AP1Gcz=s150-p-k`                         | `s150-p-k` |
+
+<BloggerSource kind="observed" />
+
+- The post editor writes `/img/b/…/s1600/name.jpg` for uploaded images, and the image picker of widgets writes `/img/a/…=s1600` or `lh3` URLs. Both work with `resizeImage`.
+- The parameters are short tokens joined with `-`. Their order does not matter, and an empty token, from a doubled or trailing `-`, is ignored.
+- `s0` asks for the original file, with no change.
+- `resizeImage` recognizes Blogger's URLs by the host and the shape of the path, and on `lh3` only replaces the `=` shape. See [Which images](../expressions/functions.mdx#which-images).
+
+### Parameters
+
+| Token                  | Meaning                                                                    |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `w640`                 | Width, in pixels                                                           |
+| `h360`                 | Height, in pixels                                                          |
+| `s1600`                | Size of the longest side, in pixels                                        |
+| `s0`                   | The original size                                                          |
+| `c`                    | Crop to the box of `w` and `h`, from the center                            |
+| `p`                    | Crop to the box, around the subject ("smart" crop)                         |
+| `cc`                   | Crop to a circle                                                           |
+| `ci`                   | Crop to a square                                                           |
+| `pd`                   | Pad to the box instead of cropping, with `pc0xRRGGBB` as the padding color |
+| `nu`                   | No upscaling: never larger than the original                               |
+| `k`                    | No animation: the first frame of a GIF                                     |
+| `no`                   | No play button over video thumbnails                                       |
+| `rw`, `rj`, `rp`, `rg` | Serve as WebP, JPEG, PNG or GIF                                            |
+| `fh`, `fv`             | Flip horizontally, vertically                                              |
+| `r90`, `r180`, `r270`  | Rotate                                                                     |
+| `br16`                 | Rounded corners, radius in pixels                                          |
+| `b4`, `c0xRRGGBB`      | A border, its width and color                                              |
+| `bc0xRRGGBB`           | Background color, for transparent images                                   |
+| `e30`                  | Cache lifetime, in days                                                    |
+
+<BloggerSource kind="observed" />
+
+A client library for Blogger images knows more tokens. They come from its code; what they do on Blogger is not confirmed: <BloggerSource kind="observed" />
+
+| Token           | Meaning in the library                                                   |
+| --------------- | ------------------------------------------------------------------------ |
+| `rwa`           | Serve as animated WebP                                                   |
+| `rh`            | Serve as MP4                                                             |
+| `h`, alone      | Serve as HTML                                                            |
+| `nw`            | One more format token, with no name in the library                       |
+| `d`             | Download: serve the file to be saved                                     |
+| `o`             | Show the play button over a video thumbnail, the opposite of `no`        |
+| `a2`            | A frame of an animation, by number                                       |
+| `ba3`           | A symbol over the image, `0` to `11`                                     |
+| `pd8`           | `pd` with a number, read as a number token; its meaning is not confirmed |
+| `fcrop64=1,…`   | A free crop, with 6 to 16 hexadecimal digits after `1,`                  |
+| `fSoften=1,2,3` | Soften, with three numbers                                               |
+
+In the library, every color token, `c`, `bc` and `pc`, takes `0xRRGGBB` or `0xAARRGGBB`, with an alpha channel first. The format tokens, `rj`, `rp`, `rw`, `rwa`, `rg`, `rh`, `nw` and `h`, exclude each other.
+
+Only one crop mode (`c`, `p`, `cc`, `ci`, or the padding of `pd`) and one format (`rw`, `rj`, `rp`, `rg`) apply at a time. Some letters mean two things, told apart by the digits after them: `s` alone forces scaling, `s72` is a size; `c` alone is the crop, `c0x…` a color; `h` alone is a format, `h360` a height.
+
+Read with this table, the URLs Blogger writes:
+
+| Parameters            | Where                           | Means                                                              |
+| --------------------- | ------------------------------- | ------------------------------------------------------------------ |
+| `w640-h360-p-k-no-nu` | `resizeImage(img, 640, "16:9")` | 640 × 360, smart crop, first frame, no play button, never upscaled |
+| `w640`                | `resizeImage(img, 640)`         | 640 wide, the height follows the image                             |
+| `s72-c`               | `data:post.thumbnailUrl`        | 72 × 72, cropped                                                   |
+| `s1600`               | images inserted in posts        | at most 1600 on the longest side                                   |
+| `s150-p-k`            | an Image widget of 150 px       | 150 at most, smart crop, first frame                               |
+
+### Writing parameters by hand
+
+`resizeImage` only writes `w`, `h`, `p` (`n` for a video thumbnail), `k`, `no` and `nu`. A URL in a string, a CSS file or a script can take any token: <BloggerSource kind="observed" />
+
+```txt
+…/AVvXsEh/s1600/frost.jpg           the original upload
+…/AVvXsEh/w400-h400-cc/frost.jpg    a round avatar, 400 px
+…/AVvXsEh/w1200-rw/frost.jpg        1200 wide, as WebP
+…/AVvXsEi=w96-h96-c-rp              the same idea on the "=" shape
+```
+
+Change only the parameter segment, or the text after the last `=`. The rest of the URL is the image id and must stay as it is.
+
+## `resizeImage`
+
+`resizeImage(image, width, ratio)` gives the URL of the image at a width, cropped to a ratio when one is given: it replaces the size already in the URL, in both shapes, and returns an image with `.isResizable`, `.width` and `.height`. A URL Blogger can not resize comes back unchanged. Bad arguments save, then fail when the call renders. The rules for the width, the ratio, the URL and the result are on [`resizeImage`](../expressions/functions.mdx#resizeimage).
+
+## `sourceSet`
+
+`sourceSet(image, widths, ratio)` writes the value of a `srcset` attribute: the image at each width of the list, with the ratio rules of `resizeImage`. Its rules are on [`sourceSet`](../expressions/functions.mdx#sourceset).
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 640, "16:9")' expr:srcset='sourceSet(data:post.featuredImage, [320, 480, 640, 960, 1280], "16:9")' height='360' sizes='(max-width: 700px) 100vw, 640px' width='640'/>
+```
+
+```html title="Rendered srcset"
+…/w320-h180-p-k-no-nu/frost.jpg 320w, …/w480-h270-p-k-no-nu/frost.jpg 480w, …/w640-h360-p-k-no-nu/frost.jpg 640w, …/w960-h540-p-k-no-nu/frost.jpg 960w, …/w1280-h720-p-k-no-nu/frost.jpg 1280w
+```
+
+</CodeTabs>
+
+- `srcset` does not replace `src`: browsers without `srcset` support, and some crawlers, read `src`. Keep both.
+- `sizes` tells the browser how wide the image will be shown, so it picks the right file before the CSS is loaded. Without it, the browser assumes the full width of the screen.
+- The Image widget has a ready `data:sourceSet` of its own, see [Image](../widget-types/image.mdx#widget-data).
+
+## Responsive images
+
+A responsive image needs four things: a `srcset` with several widths, a `sizes` that matches the layout, a `width` and `height` so the page does not move when it loads, and an `alt`.
+
+```xml title="A post image in a two-column grid"
+<b:with value='resizeImage(data:post.featuredImage, 600, "3:2")' var='image'>
+  <img expr:alt='data:post.title' expr:height='data:image.height ?: 400' expr:src='data:image' expr:srcset='sourceSet(data:post.featuredImage, [300, 450, 600, 900], "3:2")' sizes='(max-width: 640px) 100vw, 50vw' width='600'/>
+</b:with>
+```
+
+`width` and `height` give the browser the ratio of the image; CSS still decides its displayed size with `width: 100%; height: auto`. The values come from the resized image, with a fallback when Blogger can not resize it.
+
+### Background images
+
+In CSS, an image URL goes through `.cssEscaped`, so quotes and slashes in it can not break the rule: <BloggerSource kind="observed" />
+
+```xml
+<b:if cond='data:view.featuredImage.isResizable'>
+  <style>
+    .post-hero { background-image: url(<b:eval expr='resizeImage(data:view.featuredImage, 1600, "16:9").cssEscaped'/>); }
+    @media (max-width: 800px) {
+      .post-hero { background-image: url(<b:eval expr='resizeImage(data:view.featuredImage, 800, "16:9").cssEscaped'/>); }
+    }
+  </style>
+</b:if>
+```
+
+## Lazy images
+
+`loading='lazy'` makes the browser wait until an image is near the screen. It needs nothing else, and works without JavaScript. Leave it off the first image of the page, the one visitors see first, and give that one `fetchpriority='high'` instead:
+
+```xml {3-4}
+<b:loop index='i' values='data:posts' var='post'>
+  <img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 640, "16:9")' decoding='async' height='360' width='640'>
+    <b:attr expr:value='data:i == 0 ? "eager" : "lazy"' name='loading'/>
+    <b:attr cond='data:i == 0' name='fetchpriority' value='high'/>
+  </img>
+</b:loop>
+```
+
+`<img>` is written with an end tag here, so it can hold `<b:attr>` children. Blogger renders a normal `<img>`. <BloggerSource kind="observed" /> See [attributes](../tags/attributes.mdx).
+
+A theme can also have a script-driven mode: the real URL goes in `data-src`, `src` holds a tiny placeholder, and a script swaps them. The placeholder is the same image at 35 pixels, which the browser blurs while the real file loads. A `<noscript>` copy keeps the image for visitors and crawlers without JavaScript: <BloggerSource kind="observed" />
+
+```xml
+<img class='lazyload' expr:alt='data:post.title' expr:data-src='resizeImage(data:post.featuredImage, 640, "16:9")' expr:src='resizeImage(data:post.featuredImage, 35, "16:9")' height='360' width='640'/>
+<noscript><img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 640, "16:9")' loading='lazy'/></noscript>
+```
+
+Use a resized Blogger image or a `data:` URL as the placeholder, never the full image of another host: it would load the whole file twice.
+
+### One includable for every image
+
+Every image of a theme needs the same steps. A theme can put them in one includable, called with an object of options. A shorter version of it:
+
+```xml title="In a Common default markup" {6-7}
+<b:includable id='@image' var='img'>
+  <b:with value='data:img.ratio ?: "16:9"' var='ratio'>
+    <b:with value='resizeImage(data:img.src, data:img.width, data:ratio)' var='src'>
+      <img decoding='async' expr:alt='data:img.alt ?: ""' expr:src='data:src' expr:width='data:img.width'>
+        <b:attr cond='data:src.height' expr:value='data:src.height' name='height'/>
+        <b:attr cond='data:src.isResizable' expr:value='sourceSet(data:img.src, [320, 480, 640, 960, 1280], data:ratio)' name='srcset'/>
+        <b:attr cond='data:src.isResizable' expr:value='data:img.sizes ?: "100vw"' name='sizes'/>
+        <b:attr expr:value='data:img.eager ? "eager" : "lazy"' name='loading'/>
+        <b:attr cond='data:img.eager' name='fetchpriority' value='high'/>
+        <b:class cond='data:img.class' expr:name='data:img.class'/>
+      </img>
+    </b:with>
+  </b:with>
+</b:includable>
+```
+
+<CodeTabs>
+
+```xml title="A call"
+<b:include data='{ alt: data:post.title, class: "card-image", eager: data:post.isFirstPost, sizes: "(max-width: 700px) 100vw, 640px", src: data:post.featuredImage, width: 640 }' name='@image'/>
+```
+
+```html title="Rendered for the first post"
+<img alt='First frost' class='card-image' decoding='async' fetchpriority='high' height='360' loading='eager' sizes='(max-width: 700px) 100vw, 640px' src='…/w640-h360-p-k-no-nu/frost.jpg' srcset='…/w320-h180-p-k-no-nu/frost.jpg 320w, …' width='640'/>
+```
+
+</CodeTabs>
+
+- With `var='img'`, the object passed by `<b:include data>` is `data:img` inside the includable. See [includables](../layout/includables.mdx).
+- A Common includable is callable from every widget. See [default markups](../layout/default-markups.mdx).
+- The `srcset` and `sizes` are only written when Blogger can resize the image; an image of another host gets a plain `<img>`.
+
+## Thumbnails
+
+The image of a post is `data:post.featuredImage` in version 2 widgets, the first image of the post or the thumbnail of its first YouTube video; `thumbnailUrl`, `firstImageUrl`, `data:view.featuredImage` and `data:blog.postImageUrl` hold it in other forms. Each field is on [Addresses and images](../data/post.mdx#addresses-and-images) and [`featuredImage`](../data/post.mdx#featuredimage), and the PopularPosts and FeaturedPost widgets give each of their posts a `featuredImage` too.
+
+A post with no image has an empty `featuredImage`. Production themes fall back on a default image the owner sets in the Theme Designer, as a `string` skin variable: <BloggerSource kind="observed" />
+
+```xml {1}
+<b:with value='data:post.featuredImage ?: snippet(data:skin.vars.default_thumbnail)' var='thumb'>
+  <b:if cond='data:thumb'>
+    <img expr:alt='data:post.title' expr:src='resizeImage(data:thumb, 300, "1:1")' height='300' loading='lazy' width='300'/>
+  <b:else/>
+    <div class='thumb-placeholder'/>
+  </b:if>
+</b:with>
+```
+
+`snippet()` with one argument turns the skin variable into a plain string, which `resizeImage` accepts. See [skin data](../data/skin.mdx).
+
+Another widget can read the image of the post shown, through the Blog widget: `data:widgets.Blog.first.posts.first.featuredImage`. A theme can use it for its Open Graph image. See [Head and SEO](./head-and-seo.mdx).
+
+## YouTube thumbnails
+
+When a post starts with a YouTube video, `featuredImage` is the thumbnail of the video, through Blogger's image proxy, with `.isYoutube` true and the larger `.youtubeMaxResDefaultUrl`. These properties, and the swap to the larger thumbnail, are on [Images](../expressions/properties.mdx#images).
+
+On YouTube, `hqdefault.jpg` is 4:3 with black bars above and below a 16:9 video, and `maxresdefault.jpg` is 16:9, without bars. Videos uploaded in low definition have no `maxresdefault.jpg`: YouTube then serves a small gray placeholder. <BloggerSource kind="observed" /> Which of these files each proxied URL serves is not confirmed. A CSS crop takes care of any bars left in the file:
+
+```css
+.card-image { aspect-ratio: 16 / 9; width: 100%; height: auto; object-fit: cover; }
+```
+
+`object-fit: cover` crops any bars and fills the box with any other image, so one rule serves both.
+
+## Images hosted elsewhere
+
+A post can show an image from any site. As the first image of the post, it reaches `featuredImage` through Blogger's image proxy and resizes like an upload; as a string, a URL of another site is not resized, and `sourceSet` gives nothing for it. See [Which images](../expressions/functions.mdx#which-images). Whether an Image widget given the URL of another site gets the proxy is not confirmed. Test the image before writing a responsive markup:
+
+```xml
+<b:if cond='data:post.featuredImage.isResizable'>
+  <img expr:src='resizeImage(data:post.featuredImage, 640, "16:9")' expr:srcset='sourceSet(data:post.featuredImage, [320, 640, 960], "16:9")' height='360' sizes='(max-width: 700px) 100vw, 640px' width='640'/>
+<b:else/>
+  <img class='fit-cover' expr:src='data:post.featuredImage' height='360' loading='lazy' width='640'/>
+</b:if>
+```
+
+### Protocol-relative URLs
+
+The Image widget stores some uploads as `//blogger.googleusercontent.com/…`, and comment avatars come as `//blogger.googleusercontent.com/…` or `//lh3.googleusercontent.com/…`, with no scheme. <BloggerSource kind="observed" /> They work in `src`, but not in Open Graph tags, JSON-LD or a feed reader. A theme adds the scheme first:
+
+```xml
+<b:with value='data:sourceUrl contains "//" and data:sourceUrl not contains "http://" and data:sourceUrl not contains "https://" ? "https:" + data:sourceUrl : data:sourceUrl' var='imageUrl'>
+  <meta expr:content='resizeImage(data:imageUrl, 1200, "1200:630")' property='og:image'/>
+</b:with>
+```
+
+## Missing avatars
+
+A commenter without a photo gets an empty `authorAvatarSrc`, or a placeholder whose path contains `/img/blank`, and the URL can lack its scheme. The test and an example that adds the scheme only when needed are on [Avatars](../data/comments.mdx#avatars).
+
+## Faster images
+
+- A theme can declare the image hosts early, so the browser connects before it reads the first image: <BloggerSource kind="observed" />
+
+  ```xml
+  <link href='https://blogger.googleusercontent.com' rel='dns-prefetch'/>
+  <link href='https://1.bp.blogspot.com' rel='dns-prefetch'/>
+  <link href='https://lh3.googleusercontent.com' rel='dns-prefetch'/>
+  ```
+
+- Ask for the displayed size, not more: a 300-pixel card from an `s1600` URL downloads a file many times too large.
+- Use `-k` (no animation) on thumbnails of GIFs, which `resizeImage` already adds with a ratio.
+- See [Performance](./performance.mdx) for the rest of the page.

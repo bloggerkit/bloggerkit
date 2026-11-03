@@ -1,0 +1,226 @@
+---
+title: PopularPosts
+description: The Popular Posts widget, which lists the most viewed posts of the blog over a chosen period.
+published: 2026-10-26
+---
+
+The `PopularPosts` widget, "Popular Posts" in the Layout editor, lists up to 10 of the most viewed posts of the blog, over all time or the last year, month or week, with optional snippets and images. In version 2 its posts have the shape of the [Blog](./blog.mdx) widget's posts, and its built-in markup is shared with [FeaturedPost](./featured-post.mdx).
+
+## Quick example
+
+The post being read is removed from the list, the first post gets a large image and a snippet, and the widget hides itself when nothing is left.
+
+<CodeTabs>
+
+```xml title="theme.xml" {9,11-12}
+<b:widget id='PopularPosts1' locked='true' title='Popular Posts' type='PopularPosts' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='numItemsToShow'>5</b:widget-setting>
+    <b:widget-setting name='showSnippets'>true</b:widget-setting>
+    <b:widget-setting name='showThumbnails'>true</b:widget-setting>
+    <b:widget-setting name='timeRange'>LAST_WEEK</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main' var='this'>
+    <b:with value='data:posts filter (p => p.id != data:view.postId)' var='posts'>
+      <b:if cond='data:posts.empty'>
+        <b:class name='hidden'/>
+        <b:attr name='aria-hidden' value='true'/>
+      <b:else/>
+        <h2 class='side-title'><data:title/></h2>
+        <ol class='popular'>
+          <b:loop index='i' values='data:posts' var='post'>
+            <li>
+              <b:class cond='data:i == 0' name='popular-top'/>
+              <b:if cond='data:i == 0 and data:this.postDisplay.showFeaturedImage and data:post.featuredImage'>
+                <img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 640, "16:9")' height='360' loading='lazy' width='640'/>
+              </b:if>
+              <a expr:href='data:post.url.canonical'><data:post.title/></a>
+              <b:if cond='data:i == 0 and data:this.postDisplay.showSnippet'>
+                <p><data:post.snippets.short/></p>
+              </b:if>
+            </li>
+          </b:loop>
+        </ol>
+      </b:if>
+    </b:with>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered, on a post page"
+<div class='widget PopularPosts' data-version='2' id='PopularPosts1'>
+  <h2 class='side-title'>Popular Posts</h2>
+  <ol class='popular'>
+    <li class='popular-top'>
+      <img alt='Writing a theme from scratch' height='360' loading='lazy' src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/…/w640-h360-p-k-no-nu/cover.png' width='640'/>
+      <a href='https://example.blogspot.com/2026/09/theme-from-scratch.html'>Writing a theme from scratch</a>
+      <p>Start with an empty file, add a section and a Blog widget, and…</p>
+    </li>
+    <li><a href='https://example.blogspot.com/2026/08/conditions.html'>Conditions in themes</a></li>
+  </ol>
+</div>
+```
+
+</CodeTabs>
+
+- `b:class` and `b:attr` in the empty branch act on the widget wrapper, so an empty widget leaves only a hidden `div`.
+- Off post pages, `data:view.postId` is empty and the filter keeps every post.
+
+## Placement and limits
+
+|                     |                                                                                                                    | Source                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| Type                | `PopularPosts`                                                                                                     | <BloggerSource kind="official" /> |
+| Per blog            | At least 2; a higher maximum is not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type)    | <BloggerSource kind="observed" /> |
+| Width               | 300 pixels or more                                                                                                 | <BloggerSource kind="observed" /> |
+| Placement           | Under the post, on post pages, in Contempo, Essential, Notable and Soho. In the sidebar, on post pages, in Emporio | <BloggerSource kind="observed" /> |
+| Locked              | Installed locked by Blogger's responsive themes                                                                    | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                                                           | <BloggerSource kind="observed" /> |
+| Classic mobile view | Hidden by default                                                                                                  | <BloggerSource kind="official" /> |
+| Compatibility       | Not Mobile Default 2010 or Dynamic mobile                                                                          | <BloggerSource kind="observed" /> |
+
+Blogger's responsive themes render it on post pages only, and only when it has a post other than the current one, with a `cond` on the widget: `data:view.isSingleItem and data:posts any (p => p.id != data:view.postId)`. In that `cond`, `data:posts` is the widget's own list, not the Blog widget's. <BloggerSource kind="observed" />
+
+## Widget settings
+
+| Setting          | Values                                             | Data                                                        | Meaning                                             | Source                            |
+| ---------------- | -------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------- | --------------------------------- |
+| `numItemsToShow` | `1` to `10` in the Layout editor                   | the length of `posts`                                       | How many posts                                      | <BloggerSource kind="observed" /> |
+| `timeRange`      | `ALL_TIME`, `LAST_YEAR`, `LAST_MONTH`, `LAST_WEEK` | the posts                                                   | The period: all time, or the last 365, 30 or 7 days | <BloggerSource kind="observed" /> |
+| `showSnippets`   | `true`, `false`                                    | `showSnippets` (V1), `postDisplay.showSnippet` (V2)         | Show the snippets                                   | <BloggerSource kind="observed" /> |
+| `showThumbnails` | `true`, `false`                                    | `showThumbnails` (V1), `postDisplay.showFeaturedImage` (V2) | Show the images                                     | <BloggerSource kind="observed" /> |
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A PopularPosts widget written with no settings gets `numItemsToShow` `10`, `showThumbnails` `true`, `showSnippets` `true` and `timeRange` `LAST_YEAR`, with an empty title.
+- In the theme file, `numItemsToShow` `-1` and `0` are kept, and `1000000` is stored as `10`. What a value outside `1` to `10` shows is not confirmed.
+- `timeRange` is case-sensitive.
+
+## Widget data
+
+### Version 2
+
+| Field                           | Type    | Holds                                             | Source                            |
+| ------------------------------- | ------- | ------------------------------------------------- | --------------------------------- |
+| `title`                         | string  | The widget title                                  | <BloggerSource kind="official" /> |
+| `postDisplay`                   | object  | What to show                                      | <BloggerSource kind="observed" /> |
+| `postDisplay.showTitle`         | boolean | Show the titles. Set by Blogger, not by the owner | <BloggerSource kind="observed" /> |
+| `postDisplay.showSnippet`       | boolean | Show the snippets, from `showSnippets`            | <BloggerSource kind="observed" /> |
+| `postDisplay.showFeaturedImage` | boolean | Show the images, from `showThumbnails`            | <BloggerSource kind="observed" /> |
+| `postDisplay.showDate`          | boolean | Show the date. Set by Blogger                     | <BloggerSource kind="observed" /> |
+| `postDisplay.showAuthor`        | boolean | Show the author. Set by Blogger                   | <BloggerSource kind="observed" /> |
+| `posts`                         | list    | The posts, up to 10, with the fields below        | <BloggerSource kind="observed" /> |
+
+Each post has these fields of a Blog widget post; see [Post data](../data/post.mdx) for what they hold:
+
+| Field                                                                                       | Type                                            | Source                              |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------- |
+| `id`                                                                                        | number                                          | <BloggerSource kind="observed" />   |
+| `title`, `body`                                                                             | string                                          | <BloggerSource kind="observed" />   |
+| `snippets.short`, `snippets.long`                                                           | string                                          | <BloggerSource kind="observed" />   |
+| `featuredImage`                                                                             | image                                           | <BloggerSource kind="observed" />   |
+| `url`                                                                                       | URL                                             | <BloggerSource kind="observed" />   |
+| `shareUrl`, `emailPostUrl`, `commentsUrlOnclick`                                            | string                                          | <BloggerSource kind="observed" />   |
+| `commentsUrl`                                                                               | URL                                             | <BloggerSource kind="observed" />   |
+| `numberOfComments`                                                                          | number                                          | <BloggerSource kind="observed" />   |
+| `allowComments`, `hasJumpLink`                                                              | boolean                                         | <BloggerSource kind="observed" />   |
+| `date`, `lastUpdated`                                                                       | date                                            | <BloggerSource kind="observed" />   |
+| `labels[i].name`, `labels[i].url`                                                           | string                                          | <BloggerSource kind="observed" />   |
+| `author.name`, `author.profileUrl`, `author.authorPhoto.image`, `.width`, `.height`, `.alt` |                                                 | <BloggerSource kind="observed" />   |
+| `absoluteUrl`                                                                               | URL. Replaced by `url` in 2015                  | <BloggerSource kind="deprecated" /> |
+| `commentSource`                                                                             | number. Always `0` since Google+ closed in 2019 | <BloggerSource kind="deprecated" /> |
+
+### Version 1
+
+| Field                    | Type    | Holds                                                                                                                                                              | Source                            |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| `title`                  | string  | The widget title, up to 100 characters                                                                                                                             | <BloggerSource kind="observed" /> |
+| `showThumbnails`         | boolean | Show the images                                                                                                                                                    | <BloggerSource kind="observed" /> |
+| `showSnippets`           | boolean | Show the snippets                                                                                                                                                  | <BloggerSource kind="observed" /> |
+| `thumbnailSize`          | number  | Always `72`. Legacy, nothing replaces it in version 2                                                                                                              | <BloggerSource kind="observed" /> |
+| `posts`                  | list    | The posts, up to 10                                                                                                                                                | <BloggerSource kind="observed" /> |
+| `posts[i].id`            | string  | The post id                                                                                                                                                        | <BloggerSource kind="observed" /> |
+| `posts[i].href`          | URL     | The post URL, `url` in version 2                                                                                                                                   | <BloggerSource kind="observed" /> |
+| `posts[i].title`         | string  | The post title                                                                                                                                                     | <BloggerSource kind="observed" /> |
+| `posts[i].snippet`       | string  | Plain text, up to 140 characters followed by "...", from the part before the jump break. `snippets.short` in version 2                                             | <BloggerSource kind="observed" /> |
+| `posts[i].thumbnail`     | string  | The first image or video thumbnail, cropped to 72 by 72 for Google-hosted images and 120 by 90 for YouTube and Blogger videos. Empty for an image hosted elsewhere | <BloggerSource kind="observed" /> |
+| `posts[i].featuredImage` | image   | The first image of the post; for a video, a 480 by 360 thumbnail                                                                                                   | <BloggerSource kind="observed" /> |
+
+## Built-in includables
+
+### Version 2
+
+| Includable                                                                                                                                       | Renders                                                                                                                                                        | Source                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `main` (`var='this'`)                                                                                                                            | `widget-title`, then `div.widget-content` with `snippetedPosts`. Shared with FeaturedPost                                                                      | <BloggerSource kind="observed" />   |
+| `snippetedPosts`                                                                                                                                 | `div` with `role='feed'`, one `article.post` with `role='article'` and `snippetedPostContent` per post, the current post left out                              | <BloggerSource kind="observed" />   |
+| `snippetedPostContent`                                                                                                                           | `div.post-content` with `snippetedPostTitle`, `snippetedPostByline`, the Common `postSnippet` and `snippetedPostThumbnail`, each behind its `postDisplay` flag | <BloggerSource kind="observed" />   |
+| `snippetedPostTitle`                                                                                                                             | `h3.post-title > a`                                                                                                                                            | <BloggerSource kind="observed" />   |
+| `snippetedPostByline`                                                                                                                            | `div.item-byline` with `postAuthor` and `postTimestamp`, when the Blog widget shows those items and `postDisplay` allows them                                  | <BloggerSource kind="observed" />   |
+| `snippetedPostThumbnail`                                                                                                                         | `div.item-thumbnail > a` with `responsiveImage`, sizes 72 and 144, ratio `1:1`                                                                                 | <BloggerSource kind="observed" />   |
+| `headerByline`, `footerBylines`, `bylineByName`, `bylineRegion`                                                                                  | The bylines, as in the Blog widget                                                                                                                             | <BloggerSource kind="observed" />   |
+| `postAuthor`, `postTimestamp`, `postLabels`, `postLocation`, `postCommentsLink`, `commentsLink`, `postJumpLink`, `emailPostIcon`                 | The byline items, as in the Blog widget                                                                                                                        | <BloggerSource kind="observed" />   |
+| `postShareButtons`, `sharingButtons`, `sharingButtonsMenu`, `sharingButton`, `sharingButtonContent`, `sharingPlatformIcon`, `otherSharingButton` | The share menu, as in the Blog widget                                                                                                                          | <BloggerSource kind="observed" />   |
+| `blogThisShare`, `commentsLinkIframe`, `facebookShare`, `googlePlusShare`, `linkShare`, `platformShare`, `postReactions`                         | Kept for old themes. `postReactions` has been empty since 2021                                                                                                 | <BloggerSource kind="deprecated" /> |
+
+In `snippetedPosts`, the posts are filtered with `filter (p => p.id != data:view.postId)` before the loop. `snippetedPostContent` tests `data:this.postDisplay.showTitle`, `showDate or showAuthor`, `showSnippet`, and `showFeaturedImage and data:post.featuredImage`. The byline includables read the byline settings of the Blog widget through `data:widgets`.
+
+A theme can keep the built-in loop and change only one post's markup, by overriding `snippetedPostContent`. It sees `data:post`, and `data:i` when the theme's own `snippetedPosts` loops with `index='i'`:
+
+```xml
+<b:includable id='snippetedPostContent'>
+  <b:include cond='data:i == 0 and data:this.postDisplay.showFeaturedImage and data:post.featuredImage' name='snippetedPostThumbnail'/>
+  <b:include cond='data:this.postDisplay.showTitle' name='snippetedPostTitle'/>
+  <time expr:datetime='data:post.date.iso8601'><b:eval expr='format(data:post.date, "MMM d")'/></time>
+</b:includable>
+```
+
+### Version 1
+
+`main` only. It writes an `h2` title, then `div.widget-content.popular-posts > ul` with one `li` per post, in one of four shapes:
+
+1. No snippets, no images: a link to the post.
+2. Snippets only: `div.item-title` with the link and `div.item-snippet`.
+3. Images only: `div.item-thumbnail-only` with the image and the title.
+4. Both: `div.item-content` with `div.item-thumbnail`, `div.item-title` and `div.item-snippet`.
+
+The image is `resizeImage(data:post.featuredImage, 72, "1:1")` when the featured image is resizable, `data:post.thumbnail` otherwise, linked to the post with `target='_blank'`. A `div` with `clear: both` follows each item with an image, and the obsolete `quickedit` include closes the widget.
+
+### What Blogger's themes change
+
+| Theme               | `main`                                                                                                            | Other overrides                                                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contempo, Essential | Default title `data:messages.popularPostsFromThisBlog`, then `super.main`                                         | `commentsLink`, `postFooter`, `postFooterJumpLink`, `postJumpLink`, `postLabels`, `postShareButtons`, `snippetedPostByline`, `snippetedPostContent` |
+| Emporio             | Default title `data:messages.popularPosts`, then `super.main`                                                     | `commentsLink`, `itemBody` (a `div.item-content` with `postSnippet`, Emporio's own), `snippetedPostContent`, `snippetedPostThumbnail`               |
+| Notable             | Default title `data:messages.popularPostsFromThisBlog`, then `widget-title` and `snippetedPosts`, without `super` | `commentsLink`, `footerBylines`, `headerByline`, `postFooter`, `postJumpLink`, `postShareButtons`, `sharingButtonContent`, `snippetedPostContent`   |
+| Soho                | As Emporio                                                                                                        | `emailPostIcon`, `footerBylines`, `headerByline`, `postLabels`, `sharingButtonContent`, `snippetedPostContent`                                      |
+
+These lists match the exports of the themes. <BloggerSource kind="observed" />
+
+## Writing your own markup
+
+### Posts not already on the page
+
+On a list page, a popular post may also be one of the posts of the Blog widget. Their ids are in `data:widgets.Blog`:
+
+```xml
+<b:with value='data:widgets.Blog.first.posts map (p => p.id)' var='shownIds'>
+  <b:with value='data:posts filter (p => p.id not in data:shownIds)' var='posts'>
+    <b:loop values='data:posts' var='post'>
+      <a expr:href='data:post.url'><data:post.title/></a>
+    </b:loop>
+  </b:with>
+</b:with>
+```
+
+### Data for a script
+
+```xml
+<script id='popular-json' type='application/json'>[<b:loop index='i' values='data:posts' var='p'>{"id":"<data:p.id/>","title":"<data:p.title.jsonEscaped/>","url":"<data:p.url.jsonEscaped/>"}<b:if cond='data:i &lt; data:posts.length - 1'>,</b:if></b:loop>]</script>
+```
+
+## Things to know
+
+- **The current post.** The built-in `snippetedPosts` leaves out the current post, so on a post page the widget can show one post fewer than `numItemsToShow`.
+- **Types.** `posts[i].id` is a string in version 1 and a number in version 2.
+- **Retired.** `thumbnailSize`, `absoluteUrl`, `commentSource` and the share includables marked above. `quickedit` in the version 1 `main` is obsolete.

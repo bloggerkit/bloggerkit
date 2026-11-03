@@ -1,0 +1,199 @@
+---
+title: How themes work
+description: The ideas behind a Blogger theme, from the XML Blogger stores to the HTML a reader receives on every page.
+level: beginner
+published: 2026-10-26
+---
+
+A theme lives in two forms. The one you write is **XML**: a single document that mixes HTML with Blogger's own tags, `data:` paths and `expr:` attributes. Blogger stores that document. The one a reader gets is **HTML**: on every request, Blogger renders the XML with the data of the requested page, and none of its own tags are left in the result.
+
+<CodeTabs>
+
+```xml title="In the theme" {2,5,7}
+<head>
+  <title><data:view.title.escaped/></title>
+</head>
+<body>
+  <b:if cond='data:view.isHomepage'>
+    <h1 class='site-title'><data:blog.title/></h1>
+  </b:if>
+```
+
+```html title="Rendered for the homepage"
+<head>
+  <title>Garden Notes</title>
+</head>
+<body>
+    <h1 class='site-title'>Garden Notes</h1>
+```
+
+```html title="Rendered for a post"
+<head>
+  <title>Planting garlic in October</title>
+</head>
+<body>
+```
+
+</CodeTabs>
+
+`<data:view.title.escaped/>` became the title of the page, and the `<b:if>` disappeared: on the homepage its content stayed, on the post it was dropped. The same theme gave two different pages. <BloggerSource kind="observed" />
+
+## Rendering happens on Blogger's servers
+
+Blogger evaluates every expression, condition and loop before it sends the page. The browser never sees a `b:` tag or an `expr:` attribute, only the HTML, CSS and JavaScript they produced. So a condition costs nothing in the browser, and nothing in the theme can react to the reader after the page is sent: that part is the job of JavaScript. <BloggerSource kind="observed" />
+
+A few consequences follow:
+
+- **CDATA is opaque.** Blogger does not read inside a `<![CDATA[ … ]]>` section. A `<data:blog.title/>` or an `expr:` written there reaches the browser as typed. Scripts and CSS use CDATA for that reason. <BloggerSource kind="observed" />
+- **The theme is the only file.** Blogger cannot host other files for a theme: no separate stylesheet, script or image upload. CSS goes in the skin or in `<style>` elements, JavaScript in `<script>` elements, and anything larger is loaded from another host by absolute URL. <BloggerSource kind="observed" />
+- **Data is per page.** Each request gets the data of that page only. A post page knows its post and its comments; it does not know the other posts of the blog, except what widgets such as PopularPosts or FeaturedPost provide.
+
+## One theme for every page
+
+There is no separate template for posts, pages or search results. The same XML renders the homepage, every post and static page, label and search results, archives and the 404 page. What changes is the data, and the theme tests it to decide what to show:
+
+```xml
+<b:if cond='data:view.isSingleItem'>
+  <nav class='crumbs'>
+    <a expr:href='data:blog.homepageUrl'><data:messages.home/></a>
+  </nav>
+</b:if>
+```
+
+The flags of `data:view` say which kind of page is being rendered. [Page types](../data/page-types.mdx) lists the value of every flag on every page, and [Page layouts](../guides/page-layouts.mdx) shows how to give each kind of page its own markup.
+
+### Page types
+
+The homepage, label and search pages, archives, posts, static pages and the 404 page each set their own flags. `data:view.isMultipleItems` is true on every page that lists posts, and `data:view.isSingleItem` on posts and static pages; a 404 page is neither. `data:blog.pageType` is the older way to tell pages apart; version 3 themes use `data:view`. [Flags matrix](../data/page-types.mdx#flags-matrix) gives the URL, the type and every flag of each kind of page. <BloggerSource kind="observed" />
+
+## Sections, widgets and includables
+
+The body of a theme is HTML with **sections** placed in it. A section is an area that holds **widgets**, added with the "Add a Gadget" link of the dashboard. A widget is one instance of a widget type, such as the Blog widget with the posts or an HTML widget with the owner's code, and the markup it renders is written in its **includables**. <BloggerSource kind="official" />
+
+```xml
+<footer class='site-footer'>
+  <b:section class='footer' id='footer' name='Footer' showaddelement='yes'>
+    <b:widget id='HTML1' locked='false' title='About' type='HTML' version='2' visible='true'>
+      <b:includable id='main'>
+        <h3 class='widget-title'><data:title/></h3>
+        <div class='widget-body'><data:content/></div>
+      </b:includable>
+    </b:widget>
+  </b:section>
+</footer>
+```
+
+Here `<footer>` is plain HTML. The `footer` section is the area the blog owner sees in the Layout editor, `HTML1` is the widget in it, and its `main` includable says how it looks: the title the owner gave it, then the HTML the owner wrote in it.
+
+- A [section](../layout/sections.mdx) contains widgets and nothing else. Any HTML can surround it, and sections are not nested.
+- A [widget](../layout/widgets.mdx) sits directly in a section. It holds its includables and a `<b:widget-settings>` element where Blogger keeps the settings made in the dashboard.
+- An [includable](../layout/includables.mdx) is a named block of markup. Blogger renders the one with the id `main`; the others render only when `main`, or an includable it calls, includes them with `<b:include>`.
+- A [default markup](../layout/default-markups.mdx) gives includables to every widget of a type, and Common includables to the whole theme.
+
+Blogger also has **built-in includables**, defined on its servers and called by name from a theme: `all-head-content` writes the standard tags of `<head>`, `widget-title` the title of a widget, and each widget type has its own. See [Built-in includables](../layout/includables.mdx#built-in-includables).
+
+### Widget data
+
+Each widget type computes its own data for the page being rendered and hands it to the includables of the widget. A Blog widget has `data:posts`, a Header widget `data:title` and `data:description`, a LinkList widget `data:links`. <BloggerSource kind="official" />
+
+```xml title="A LinkList widget" {2}
+<b:widget id='LinkList1' locked='false' title='Elsewhere' type='LinkList' version='2' visible='true'>
+  <b:includable id='main' var='this'>
+    <h3 class='widget-title'><data:title/></h3>
+    <b:include name='items'/>
+  </b:includable>
+  <b:includable id='items'>
+    <ul class='links'>
+      <b:loop values='data:this.links' var='link'>
+        <li><a expr:href='data:link.target' rel='noopener'><data:link.name/></a></li>
+      </b:loop>
+    </ul>
+  </b:includable>
+</b:widget>
+```
+
+- Inside every includable of the widget, its data is read by name: `data:title`, `data:links`.
+- `var='this'` on `main` gives the same data a second name, so `data:this.links` and `data:links` are the same list. Blogger's own themes write `var='this'` on most `main` includables. <BloggerSource kind="observed" />
+- A name created by `var`, by a loop or by `<b:with>` is still visible in the includables called from there: `items` reads `data:this` without declaring it. <BloggerSource kind="observed" />
+- `<b:include data='…'>` passes a value to the includable it calls, under the name in that includable's `var`. See [Includables](../layout/includables.mdx#passing-data).
+
+### Global data
+
+Some data exists everywhere in the theme, inside widgets and outside them: `data:blog` (the blog), `data:view` (the page), `data:messages` (Blogger's translated texts), `data:skin` (the Theme Designer values) and `data:widgets` (every widget of the blog). `data:widget`, the widget being rendered, with its id, type and section, exists only while a widget renders. <BloggerSource kind="observed" /> Every field is listed in [Data](../data/index.mdx).
+
+## The Layout editor
+
+The Layout editor, opened from the **Layout** tab of the dashboard, draws the sections of the theme as boxes, with the widgets inside them. The blog owner adds, moves, edits and removes widgets there. <BloggerSource kind="official" /> To draw it, Blogger renders the theme itself, in a special mode:
+
+- `<body>` gets the id `layout`, so CSS can target the editor with `body#layout`. <BloggerSource kind="observed" />
+- `data:view.isLayoutMode` is `true`. On the blog it is empty. <BloggerSource kind="observed" />
+- Each section is drawn with its `name` as a title and an "Add a Gadget" link, unless `showaddelement` turns the link off. <BloggerSource kind="observed" />
+- Widgets are not rendered. Each is replaced by a box with its title, its type and an edit link. <BloggerSource kind="observed" />
+
+The CSS of the editor goes in [`<b:template-skin>`](../styles/skin.mdx), with selectors that start with `body#layout`, so the boxes can be arranged like the real page. The editor also runs the conditions of the theme: a section in a condition that is false there disappears from the editor, so such conditions add `data:view.isLayoutMode`. [The Layout editor](../guides/layout-editor.mdx) shows the HTML of the boxes, the CSS, [the conditions](../guides/layout-editor.mdx#detecting-the-editor) and the other techniques. <BloggerSource kind="observed" />
+
+## Versions
+
+Two version numbers describe a theme. The **layouts version** is set on `<html>` and is the generation of the theme. The **widget version** decides which data and which built-in markup the widgets get.
+
+| Layouts version | Since | Written as                                              | Widget version | Blogger's themes of this generation                                              |
+| --------------- | ----- | ------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------- |
+| 1               | 2006  | no version attribute                                    | 1              | The first layouts themes                                                         |
+| 2               | 2010  | `b:version='2'`                                         | 1              | Simple, Picture Window, Awesome Inc., Watermark, Ethereal, Travel, Dynamic Views |
+| 3               | 2017  | `b:layoutsVersion='3'` and `b:defaultwidgetversion='2'` | 2              | Contempo, Soho, Emporio, Notable, Essential                                      |
+
+<BloggerSource kind="observed" />
+
+Blogger's themes use only these three pairs. In a version 3 theme, `b:defaultwidgetversion='2'` is what gives the widgets version 2: without it they stay at version 1. <BloggerSource kind="observed" />
+
+What each generation brings:
+
+- **Version 1** has no `<b:template-skin>` and only version 1 widgets. <BloggerSource kind="observed" />
+- **Version 2** adds `<b:template-skin>`, the `macro:` tags that generate sections, and separate mobile templates (the widget `mobile` attribute, `data:blog.isMobile`). See [Classic themes](../reference/classic-themes.mdx). <BloggerSource kind="observed" />
+- **Version 3** themes are responsive, with no mobile template. Their version 2 widgets have new built-in markup and new data, and the theme gets the global `data:widgets` list, the widget `visible` attribute, default markups with the `Common` type, and `<b:template-script>`. <BloggerSource kind="observed" />
+
+Blogger gives the version of each widget to the theme as `data:widget.version`, and renders it as `data-version` on the widget element; the `version` attribute of `<b:widget>` does not always set it, see [`version`](../layout/widgets.mdx#version). The logic tags and lambdas belong to the platform, not to a theme version, see [Classic themes](../reference/classic-themes.mdx#what-differs-from-layouts-version-3). <BloggerSource kind="observed" />
+
+## What Blogger adds to the page
+
+The rendered page holds more than the markup of the theme. Some of it the theme asks for, some Blogger adds on its own: <BloggerSource kind="observed" />
+
+| Where                       | What                                                                                                                                                                                                      | When                                                                |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `<head>`                    | Two `<meta>` tags of the Google AdSense platform                                                                                                                                                          | Always, even in an empty `<head/>`                                  |
+| `<head>`                    | Meta tags, favicon, canonical link, feed links, Open Graph tags                                                                                                                                           | Where the theme includes `all-head-content`                         |
+| `<head>`                    | Links to Blogger's widget stylesheets: `css_bundle`, and `authorization.css`, which shows the admin controls, such as the quick edit icons and the elements of class `blog-admin`, to the signed-in owner | Unless `<html>` has `b:css='false'`                                 |
+| `<head>`                    | A `<style>` with the `@font-face` rules of web fonts chosen in the Theme Designer                                                                                                                         | When a font variable names a web font, before the skin              |
+| `<head>`                    | The skin, as `<style id='page-skin-1' type='text/css'>`, then the template skin, as `<style id='template-skin-1' type='text/css'>`                                                                        | Where `<b:skin>` and `<b:template-skin>` are                        |
+| Around sections and widgets | An element with the class `section` for each section, a `<div class='widget TYPE' data-version='N' id='ID'>` for each widget                                                                              | Always                                                              |
+| `<body>`                    | A class such as `variant-indie_light`                                                                                                                                                                     | Blogger's own themes, from the variant chosen in the Theme Designer |
+| End of `<body>`             | Blogger's widget script, then a script that starts its widget manager and registers each widget                                                                                                           | Unless `<html>` has `b:js='false'`                                  |
+
+The widget manager script carries a JSON copy of the page data, `data:blog`, `data:view` and the widget list. Reading it in the page source is a quick way to see the data of a page. With `b:js='false'` on `<html>`, Blogger leaves out its widget scripts, and the theme provides the features they power, such as comment forms, itself. <BloggerSource kind="observed" />
+
+```html title="The end of a rendered page (shortened)"
+<script type="text/javascript" src="https://www.blogger.com/static/v1/widgets/1234567890-widgets.js"></script>
+<script type='text/javascript'>
+_WidgetManager._Init('//www.blogger.com/rearrange?blogID\x3d1111111111111111111','//example.blogspot.com/','1111111111111111111');
+_WidgetManager._SetDataContext([{'name': 'blog', 'data': {'blogId': '1111111111111111111', 'title': 'Garden Notes', …}}, …]);
+_WidgetManager._RegisterWidget('_HeaderView', new _WidgetInfo('Header1', 'header', document.getElementById('Header1'), {}, 'displayModeFull'));
+_WidgetManager._RegisterWidget('_BlogView', new _WidgetInfo('Blog1', 'main', document.getElementById('Blog1'), {…}, 'displayModeFull'));
+</script>
+</body>
+```
+
+The second argument of each `_WidgetInfo` is the id of the section the widget is in.
+
+## Editing a theme
+
+A theme is changed from the **Theme** page of the dashboard:
+
+- **Edit HTML**, in the menu next to **Customize**, opens the XML in an editor. **Save** sends the whole file back. <BloggerSource kind="official" /> Blogger checks it and refuses to save it, with an error message, when something is wrong; when it accepts it, it stores a rewritten copy. Many mistakes are not checked when saving, and show only when a page renders. Both are described in [Saving a theme](./saving.mdx). <BloggerSource kind="observed" />
+- **Customize** opens the Theme Designer, which edits the values of the [Theme Designer variables](../styles/theme-designer.mdx), and takes extra CSS under Theme Designer › Advanced › Add CSS. <BloggerSource kind="official" />
+- **Backup** downloads the theme as an XML file, and **Restore** uploads one and makes it the theme of the blog. <BloggerSource kind="official" />
+
+Widgets are added, moved and configured in the Layout editor, and each change there is written into the XML: a new `<b:widget>` element, a widget moved to another section, new values in its `<b:widget-settings>`. The XML and the Layout editor are two views of one theme. <BloggerSource kind="observed" />
+
+<Callout type="warn" title="Back up before you edit">
+Download a backup before editing the XML or restoring another file. A widget's settings and content live inside its `<b:widget>` element: deleting the element and saving deletes the widget, with the text or code the owner put in it. A widget id cannot be changed either; a new id is a new widget.
+</Callout>

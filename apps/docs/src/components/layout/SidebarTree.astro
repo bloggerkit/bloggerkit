@@ -1,0 +1,100 @@
+---
+import ChevronRight from '@lucide/astro/icons/chevron-right';
+import LucideIcon from '@/components/ui/LucideIcon.astro';
+import type { Page } from '@/lib/content/pages';
+import { type TreeNode, walk } from '@/lib/content/sections';
+import { getPageUrl } from '@/lib/routes';
+
+interface Props {
+	nodes: TreeNode[];
+	pages: Map<string, Page>;
+	current?: string;
+	/** Set for a sub-folder's children: adds indentation and a guide line. */
+	nested?: boolean;
+}
+
+const { nodes, pages, current, nested } = Astro.props;
+const item =
+	'flex items-center gap-2 rounded-lg px-2 py-1.5 text-muted-foreground no-underline transition-colors hover:bg-accent hover:text-foreground';
+const currentItem =
+	'aria-[current=page]:bg-primary/10 aria-[current=page]:font-medium aria-[current=page]:text-primary';
+// Icons come from a folder's `meta.ts`, a page's frontmatter or a link
+const icon = 'shrink-0 opacity-80';
+---
+
+<ul
+	class:list={[
+		'm-0 flex list-none flex-col gap-0.5 p-0 text-sm leading-snug',
+		// Guide line under the folder icon; children align with the folder name
+		nested && 'my-0.5 ms-4 border-s border-border ps-2',
+	]}
+>
+	{
+		nodes.map((node) => {
+			if (node.type === 'separator') {
+				return <li class="mt-5 px-2 pb-1 font-medium text-foreground first:mt-0">{node.name}</li>;
+			}
+			if (node.type === 'page') {
+				const page = pages.get(node.slug)?.data;
+				return (
+					<li>
+						<a
+							href={getPageUrl(node.slug)}
+							class:list={[item, currentItem]}
+							aria-current={node.slug === current ? 'page' : undefined}
+						>
+							{page?.icon && <LucideIcon name={page.icon} size={16} class={icon} />}
+							{page?.title ?? node.slug}
+						</a>
+					</li>
+				);
+			}
+			if (node.type === 'link') {
+				return (
+					<li>
+						<a href={node.url} class={item}>
+							{node.icon && <LucideIcon name={node.icon} size={16} class={icon} />}
+							{node.name}
+						</a>
+					</li>
+				);
+			}
+			// The folder name links to its index or overview; the chevron toggles it
+			const url = getPageUrl(node.slug);
+			// Open if `defaultOpen`, or if it holds the current page
+			const open = node.defaultOpen || current === node.slug || (current !== undefined && [...walk(node)].includes(current));
+			// The folder's index page is the folder link itself, so skip it here
+			const children = node.children.filter((child) => !(child.type === 'page' && child.slug === node.slug));
+			const id = `sidebar-${node.slug.replaceAll('/', '-')}`;
+			return (
+				<li>
+					{/* One row: the link and the chevron share its background, on hover and for the current page */}
+					<div class="flex items-center rounded-lg transition-colors hover:bg-accent has-[[aria-current=page]]:bg-primary/10">
+						<a
+							href={url}
+							class="flex flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-muted-foreground no-underline transition-colors hover:text-foreground aria-[current=page]:font-medium aria-[current=page]:text-primary"
+							aria-current={current === node.slug ? 'page' : undefined}
+						>
+							{node.icon && <LucideIcon name={node.icon} size={16} class={icon} />}
+							{node.name}
+						</a>
+						<button
+							type="button"
+							class="inline-flex cursor-pointer rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+							aria-expanded={open ? 'true' : 'false'}
+							aria-controls={id}
+							data-sidebar-toggle
+						>
+							<ChevronRight size={16} class="transition-transform [[aria-expanded=true]>&]:rotate-90" aria-hidden="true" />
+							{/* `aria-expanded` carries the state, so the label stays the same */}
+							<span class="sr-only">{node.name} pages</span>
+						</button>
+					</div>
+					<div id={id} hidden={!open}>
+						<Astro.self nodes={children} pages={pages} current={current} nested />
+					</div>
+				</li>
+			);
+		})
+	}
+</ul>

@@ -1,0 +1,91 @@
+/*
+ * Print the content alone, on white, in the light theme, with every code line, tab and accordion shown.
+ * The page chrome uses `print:hidden`. This is all CSS because Chrome re-lays out the print preview
+ * when a print setting changes, after `afterprint` has fired.
+ */
+@media print {
+	/* Our margin boxes replace the browser's header and footer, even with "Headers and footers" ticked */
+	@page {
+		margin: 1.5cm;
+
+		@top-center {
+			content: "";
+		}
+
+		@bottom-right {
+			content: counter(page) " / " counter(pages);
+			color: #5e5e5e;
+			font-family: var(--font-sans), sans-serif;
+			font-size: 8pt;
+		}
+	}
+
+	/* Backgrounds print even with "Background graphics" unticked, since the design relies on them */
+	html:root[data-theme] {
+		--background: #fff;
+		print-color-adjust: exact;
+	}
+
+	/* An accordion opened for print would otherwise be printed mid-animation */
+	*,
+	::before,
+	::after,
+	::details-content {
+		animation: none !important;
+		transition: none !important;
+	}
+
+	/* Every tab, under its label, as without JavaScript */
+	[data-tabs] [role="tablist"],
+	[data-code-tabs] [role="tablist"] {
+		display: none;
+	}
+
+	/* Must be in the base layer: an `!important` outside layers loses to Tailwind's `[hidden]` one inside.
+	   Written out because the minifier turns `:is()` around `>` into a bare `[hidden]` */
+	@layer base {
+		[data-tabs] > [data-tab][hidden],
+		[data-code-tabs] > [data-code][hidden] {
+			/* biome-ignore lint/complexity/noImportantStyles: over Tailwind's own `!important` */
+			display: block !important;
+		}
+	}
+
+	[data-tabs] [data-tab-label],
+	[data-code-tabs] [data-code-caption],
+	[data-code-tabs] [data-code-icon] {
+		display: revert;
+	}
+
+	[data-tabs] > [data-tab]:not(:last-child) {
+		border-bottom-width: 1px;
+	}
+
+	/* Open every accordion. `src/scripts/print.ts` also opens them for browsers without `::details-content` */
+	.markdown details::details-content {
+		content-visibility: visible;
+		height: auto;
+	}
+
+	/* A link's address, when it leaves the site */
+	.markdown a[href^="http"]:not(.not-content *)::after {
+		content: " (" attr(href) ")";
+		color: var(--muted-foreground);
+		font-size: 0.875em;
+		overflow-wrap: anywhere;
+	}
+
+	/* A table that scrolls sideways can't break across pages */
+	.markdown table:not(.not-content *) {
+		display: table;
+		overflow: visible;
+	}
+
+	:is(h1, h2, h3, h4) {
+		break-after: avoid;
+	}
+
+	:is(img, tr, blockquote, summary) {
+		break-inside: avoid;
+	}
+}

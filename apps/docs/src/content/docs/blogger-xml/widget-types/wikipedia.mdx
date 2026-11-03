@@ -1,0 +1,130 @@
+---
+title: Wikipedia
+description: The Wikipedia widget, a search box that lists matching Wikipedia articles inside the widget.
+published: 2026-10-26
+---
+
+`Wikipedia` is a search box for Wikipedia. The visitor types a word, and the matching articles are listed under the box without leaving the blog. The template only draws the form and some empty containers; the searching and the list of results are done by a script; that it is Blogger's widget script, finding the parts by their ids, is not confirmed.
+
+## Quick example
+
+A form that keeps the ids of the default markup, so Blogger's script can still drive it:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:widget id='Wikipedia1' locked='false' title='Look it up' type='Wikipedia' version='2' visible='true'>
+  <b:includable id='main'>
+    <b:include name='widget-title'/>
+    <div class='wikipedia-search-main-container'>
+      <form class='wikipedia-search-form' expr:id='data:widget.instanceId + "_wikipedia-search-form"' name='wikipedia'>
+        <input class='wikipedia-search-input' expr:id='data:widget.instanceId + "_wikipedia-search-input"' type='search'/>
+        <input class='wikipedia-search-button' type='submit' value='Search'/>
+      </form>
+      <div class='wikipedia-search-results-header' expr:id='data:widget.instanceId + "_wikipedia-search-results-header"'><data:searchResultsMsg/></div>
+      <div class='wikipedia-search-results' expr:id='data:widget.instanceId + "_wikipedia-search-results"'/>
+      <div expr:dir='data:blog.languageDirection' expr:id='data:widget.instanceId + "_wikipedia-search-more"'/>
+    </div>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered, before a search"
+<div class='widget Wikipedia' data-version='2' id='Wikipedia1'>
+<h3 class='title'>
+Look it up
+</h3>
+<div class='wikipedia-search-main-container'>
+<form class='wikipedia-search-form' id='Wikipedia1_wikipedia-search-form' name='wikipedia'>
+<input class='wikipedia-search-input' id='Wikipedia1_wikipedia-search-input' type='search'/>
+<input class='wikipedia-search-button' type='submit' value='Search'/>
+</form>
+<div class='wikipedia-search-results-header' id='Wikipedia1_wikipedia-search-results-header'>Search results</div>
+<div class='wikipedia-search-results' id='Wikipedia1_wikipedia-search-results'></div>
+<div dir='ltr' id='Wikipedia1_wikipedia-search-more'></div>
+</div>
+</div>
+```
+
+</CodeTabs>
+
+## Placement and limits
+
+| Property                 | Value                                                                                                    | Source                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `Wikipedia`                                                                                              | <BloggerSource kind="official" /> |
+| Per blog                 | 1. A second one is refused when saving, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Suggested width          | 300px                                                                                                    | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | Any section. The 2017 themes do not style it                                                             | <BloggerSource kind="observed" /> |
+| Locked                   | Not by default                                                                                           | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                                                 | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                                                    | <BloggerSource kind="official" /> |
+| Not available in         | Mobile Default 2010, Dynamic Views                                                                       | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+None. The editor only sets the title. A Wikipedia widget written with no settings gets the title `Wikipedia`. A second one is refused when the theme is saved. <BloggerSource kind="observed" />
+
+## Widget data
+
+The data is the same in both widget versions. All texts follow the language of the blog.
+
+| Field               | Type   | English text                           | Source                            |
+| ------------------- | ------ | -------------------------------------- | --------------------------------- |
+| `title`             | string | The widget title, up to 100 characters | <BloggerSource kind="observed" /> |
+| `searchResultsMsg`  | string | "Search results"                       | <BloggerSource kind="observed" /> |
+| `noResultsFoundMsg` | string | "No results found."                    | <BloggerSource kind="observed" /> |
+| `enterTextMsg`      | string | "Please enter text to search."         | <BloggerSource kind="observed" /> |
+| `moreMsg`           | string | "More »"                               | <BloggerSource kind="observed" /> |
+| `fetchingErrorMsg`  | string | "An error occurred. Please try again." | <BloggerSource kind="observed" /> |
+
+The default markup prints only `searchResultsMsg`. The others are the texts the script shows: no result, empty box, more results, network error.
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders                                                  | Source                            |
+| ---------- | --- | --- | ---------------------------------------------------------------- | --------------------------------- |
+| `main`     | Yes | Yes | v1: the title and the search. v2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`  | No  | Yes | The form and the result containers                               | <BloggerSource kind="observed" /> |
+
+Inside `div.wikipedia-search-main-container`, with `ID` standing for `data:widget.instanceId`:
+
+| Part                                  | Id                                   | Content                                                                                                                                   |
+| ------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `form.wikipedia-search-form`          | `ID_wikipedia-search-form`           | `div.wikipedia-searchtable` with a Wikipedia logo linked to Wikipedia, `input.wikipedia-search-input` and `input.wikipedia-search-button` |
+| `input.wikipedia-search-input`        | `ID_wikipedia-search-input`          | The text box                                                                                                                              |
+| `div.wikipedia-search-results-header` | `ID_wikipedia-search-results-header` | `searchResultsMsg`                                                                                                                        |
+| `div.wikipedia-search-results`        | `ID_wikipedia-search-results`        | Empty, for the results                                                                                                                    |
+| `div` in a `nobr`                     | `ID_wikipedia-search-more`           | Empty, for the "More" link; `dir` from `data:blog.languageDirection`                                                                      |
+
+The two versions differ in the details:
+
+|                | Version 1                                                                            | Version 2                                                      |
+| -------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| Wikipedia link | `http://wikipedia.org/wiki/`                                                         | `https://wikipedia.org/wiki/`                                  |
+| Logo           | `//www.blogger.com/img/widgets/icon_wikipedia_w.png`                                 | the same file on `https://resources.blogblog.com/img/widgets/` |
+| "More" element | classes `wikipedia-search-more` and `wikipedia-search-ltr` or `wikipedia-search-rtl` | no class                                                       |
+
+## Writing your own markup
+
+### A search that works without any script
+
+A theme without Blogger's widget script (`b:js='false'`) gets a form that does nothing. A plain form that opens Wikipedia's own search, in the blog's language, needs no script at all:
+
+```xml {3}
+<b:includable id='main'>
+  <b:include name='widget-title'/>
+  <form expr:action='"https://" + data:blog.locale.language + ".wikipedia.org/w/index.php"' method='get' rel='noopener' target='_blank'>
+    <input aria-label='Wikipedia' name='search' required='required' type='search'/>
+    <button type='submit'><data:title/></button>
+  </form>
+</b:includable>
+```
+
+`data:blog.locale.language` gives `en`, `fr`, `de`…, which is also the subdomain of each Wikipedia.
+
+## Things to know
+
+- **Keep the ids** when you rely on Blogger's script: they are built from `data:widget.instanceId`, and whether the script looks them up by these ids is not confirmed.
+- **Left-to-right or right-to-left.** `data:blog.languageDirection` is `ltr` or `rtl`, from the blog language.
+- **`quickedit`** in the version 1 `main` no longer does anything.

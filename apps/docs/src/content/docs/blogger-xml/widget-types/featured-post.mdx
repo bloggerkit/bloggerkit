@@ -1,0 +1,222 @@
+---
+title: FeaturedPost
+description: The widget that pins one post, picked by the blog owner or always the newest, above the other content.
+published: 2026-10-26
+---
+
+`FeaturedPost` puts a single post forward. In the Layout editor it is called "Featured Post" (older dashboards said "Post selection"). The owner either picks a post from a list, or leaves the widget on "most recent post", in which case it always shows the newest published post.
+
+In version 2 the widget is a close relative of [PopularPosts](./popular-posts.mdx): same data shape, same built-in includables, and its post carries the same fields as a post of the [Blog](./blog.mdx) widget.
+
+## Quick example
+
+A pinned post card, with its own markup instead of Blogger's:
+
+<CodeTabs>
+
+```xml title="theme.xml" {10}
+<b:widget id='FeaturedPost1' locked='true' title='Pinned' type='FeaturedPost' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='postId'>0</b:widget-setting>
+    <b:widget-setting name='showFirstImage'>true</b:widget-setting>
+    <b:widget-setting name='showPostTitle'>true</b:widget-setting>
+    <b:widget-setting name='showSnippet'>true</b:widget-setting>
+    <b:widget-setting name='useMostRecentPost'>true</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main' var='this'>
+    <b:loop values='data:posts' var='post'>
+      <article class='pinned'>
+        <b:if cond='data:this.postDisplay.showFeaturedImage and data:post.featuredImage'>
+          <img alt='' expr:src='resizeImage(data:post.featuredImage, 640, "16:9")' loading='lazy'/>
+        </b:if>
+        <b:if cond='data:this.postDisplay.showTitle'>
+          <h3><a expr:href='data:post.url'><data:post.title/></a></h3>
+        </b:if>
+        <b:if cond='data:this.postDisplay.showSnippet'>
+          <p><data:post.snippets.short/></p>
+        </b:if>
+      </article>
+    </b:loop>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget FeaturedPost' data-version='2' id='FeaturedPost1'>
+<article class='pinned'>
+<img alt='' loading='lazy' src='https://blogger.googleusercontent.com/img/b/AVvXsE.../w640-h360-p-k-no-nu/cover.jpg'/>
+<h3><a href='https://example.blogspot.com/2026/05/moving-house.html'>Moving house</a></h3>
+<p>We finally packed the last box. Here is what we learnt about planning a move in a week...</p>
+</article>
+</div>
+```
+
+</CodeTabs>
+
+`data:posts` is a list even though it holds one post, so the markup loops over it. The `show…` flags come from the checkboxes of the widget, so the owner can turn the image, title and snippet on and off without touching the theme.
+
+## Placement and limits
+
+| Property                 | Value                                                                                                                      | Source                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `FeaturedPost`                                                                                                             | <BloggerSource kind="official" /> |
+| Per blog                 | 1. A second one is refused when saving, see [Widgets per type](../reference/limits.mdx#widgets-per-type)                   | <BloggerSource kind="observed" /> |
+| Suggested width          | 300px                                                                                                                      | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | The 2017 themes reserve a slot above the posts (in `page_body`, or a `featured_post` section) and limit it to the homepage | <BloggerSource kind="observed" /> |
+| Locked                   | The 2017 themes add it locked (`locked='true'` in 7 of the 16 official exports)                                            | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                                                                   | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                                                                      | <BloggerSource kind="official" /> |
+| Not available in         | Dynamic Views, Mobile Default 2010                                                                                         | <BloggerSource kind="observed" /> |
+
+Nothing in the widget itself restricts it to the homepage. Blogger's themes do it with `cond='data:view.isHomepage'` on the `<b:widget>`; without that `cond` the widget renders on every page.
+
+## Widget settings
+
+| Setting             | Values            | Read as                                                     | Meaning                                                            | Source                            |
+| ------------------- | ----------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------- |
+| `useMostRecentPost` | `true`, `false`   | which post lands in `posts`                                 | `true` always features the newest published post                   | <BloggerSource kind="observed" /> |
+| `postId`            | a post id, or `0` | `posts[0].id`                                               | The post picked in the editor. `0` while `useMostRecentPost` is on | <BloggerSource kind="observed" /> |
+| `showPostTitle`     | `true`, `false`   | `showPostTitle` (v1), `postDisplay.showTitle` (v2)          | Show the title                                                     | <BloggerSource kind="observed" /> |
+| `showSnippet`       | `true`, `false`   | `showSnippet` (v1), `postDisplay.showSnippet` (v2)          | Show the excerpt                                                   | <BloggerSource kind="observed" /> |
+| `showFirstImage`    | `true`, `false`   | `showFirstImage` (v1), `postDisplay.showFeaturedImage` (v2) | Show the first image of the post                                   | <BloggerSource kind="observed" /> |
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A FeaturedPost written with no settings saves with none added, and the title `Featured post`. One written with only `useMostRecentPost` stores no settings either.
+- `postId` `5` is kept; `abc` and `-1` are refused with the value as the message, and an empty one with no message.
+- A second FeaturedPost widget is refused.
+
+With `useMostRecentPost` off, the editor offers a searchable list of posts and stores the id of the one you pick in `postId`. The excerpt the editor previews is built from at most the first 1,000 characters of the post.
+
+## Widget data
+
+The two versions expose the post differently: version 1 flattens it into fields of the widget, version 2 gives a list of post objects.
+
+### Version 1
+
+| Field             | Type    | Content                                                                                                                                       | In v2                           | Source                            |
+| ----------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------- |
+| `title`           | string  | Widget title, up to 100 characters                                                                                                            | `title`                         | <BloggerSource kind="observed" /> |
+| `showPostTitle`   | boolean | Title checkbox                                                                                                                                | `postDisplay.showTitle`         | <BloggerSource kind="observed" /> |
+| `showSnippet`     | boolean | Excerpt checkbox                                                                                                                              | `postDisplay.showSnippet`       | <BloggerSource kind="observed" /> |
+| `showFirstImage`  | boolean | Image checkbox                                                                                                                                | `postDisplay.showFeaturedImage` | <BloggerSource kind="observed" /> |
+| `postTitle`       | string  | Title of the post                                                                                                                             | `posts[i].title`                | <BloggerSource kind="observed" /> |
+| `postUrl`         | URL     | Address of the post                                                                                                                           | `posts[i].url`                  | <BloggerSource kind="observed" /> |
+| `postSummary`     | string  | Plain-text excerpt: 140 characters followed by "...". HTML, line breaks and everything after the jump break are dropped                       | `posts[i].snippets.short`       | <BloggerSource kind="observed" /> |
+| `postSummaryLong` | string  | Same rules, up to 1,000 characters                                                                                                            | `posts[i].snippets.long`        | <BloggerSource kind="observed" /> |
+| `postFirstImage`  | string  | URL of the first image                                                                                                                        | `posts[i].featuredImage`        | <BloggerSource kind="observed" /> |
+| `postNumComments` | number  | Comment count                                                                                                                                 | `posts[i].numberOfComments`     | <BloggerSource kind="observed" /> |
+| `sharePostUrl`    | string  | `https://www.blogger.com/share-post.g?blogID=…&postID=…`, completed with `&target=` and `email`, `blog`, `twitter`, `facebook` or `pinterest` | `posts[i].shareUrl`             | <BloggerSource kind="observed" /> |
+
+### Version 2
+
+| Field                                            | Type    | Content                                                           | Source                            |
+| ------------------------------------------------ | ------- | ----------------------------------------------------------------- | --------------------------------- |
+| `title`                                          | string  | Widget title                                                      | <BloggerSource kind="official" /> |
+| `postDisplay.showTitle`                          | boolean | "Show post title" checkbox                                        | <BloggerSource kind="observed" /> |
+| `postDisplay.showSnippet`                        | boolean | Excerpt checkbox                                                  | <BloggerSource kind="observed" /> |
+| `postDisplay.showFeaturedImage`                  | boolean | Image checkbox                                                    | <BloggerSource kind="observed" /> |
+| `postDisplay.showDate`, `postDisplay.showAuthor` | boolean | Set by Blogger for the theme; the editor has no checkbox for them | <BloggerSource kind="observed" /> |
+| `posts`                                          | list    | The featured post, as a one-item list                             | <BloggerSource kind="observed" /> |
+
+A post of `posts` has the fields of a PopularPosts post: `id`, `title`, `body`, `snippets.short`, `snippets.long`, `featuredImage`, `url`, `absoluteUrl`, `shareUrl`, `emailPostUrl`, `commentsUrl`, `commentsUrlOnclick`, `commentSource`, `numberOfComments`, `allowComments`, `hasJumpLink`, `date`, `lastUpdated`, `labels` and `author`. Each is described in [post data](../data/post.mdx).
+
+Other widgets see the featured post through `data:widgets`: each FeaturedPost entry has a `postId`. See [widget data](../data/widgets.mdx).
+
+## Built-in includables
+
+### Version 1
+
+| Includable | What it renders                                                                                                                                                                                                                                 | Source                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `main`     | The title, then `content`, then `quickedit`                                                                                                                                                                                                     | <BloggerSource kind="observed" /> |
+| `content`  | A `div.post-summary` holding an `h3` with the linked title, a `p` with `postSummary` and an `img.image` with `postFirstImage`, each behind its `show…` flag and a non-empty check, followed by an inline style that sets `.image` to full width | <BloggerSource kind="observed" /> |
+
+### Version 2
+
+Version 2 reuses the includables of [PopularPosts](./popular-posts.mdx). `main` (`var='this'`) writes `widget-title`, then a `.widget-content` that includes `snippetedPosts`. The full set Blogger provides:
+
+| Group         | Includables                                                                                                                                                                      | Source                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Entry point   | `main`                                                                                                                                                                           | <BloggerSource kind="observed" />   |
+| Post snippet  | `snippetedPosts`, `snippetedPostContent`, `snippetedPostTitle`, `snippetedPostByline`, `snippetedPostThumbnail`                                                                  | <BloggerSource kind="observed" />   |
+| Bylines       | `headerByline`, `footerBylines`, `bylineRegion`, `bylineByName`, `postAuthor`, `postTimestamp`, `postLabels`, `postLocation`, `postJumpLink`, `postCommentsLink`, `commentsLink` | <BloggerSource kind="observed" />   |
+| Sharing       | `postShareButtons`, `sharingButtons`, `sharingButtonsMenu`, `sharingButton`, `sharingButtonContent`, `sharingPlatformIcon`, `otherSharingButton`, `emailPostIcon`                | <BloggerSource kind="observed" />   |
+| Being retired | `blogThisShare`, `commentsLinkIframe`, `facebookShare`, `googlePlusShare`, `linkShare`, `platformShare`, `postReactions`                                                         | <BloggerSource kind="deprecated" /> |
+
+`snippetedPosts` loops over `data:posts` and includes `snippetedPostContent` once per post, with the post in `data:post`. Overriding one of the inner includables is enough to change a part of the card while Blogger keeps the loop.
+
+Blogger's own themes override this widget heavily through `<b:defaultmarkup>`: they reorder the thumbnail before the snippet, add their byline and share buttons, and Soho gives the widget a default title from `data:messages.featured` before calling `super.main`. Notable replaces `snippetedPosts` altogether with a hero card.
+
+## Writing your own markup
+
+### Change one part, keep the rest
+
+Override only the includable you need. Here the title gets a heading level and a class, while Blogger's `snippetedPosts` still loops and calls it:
+
+```xml {6}
+<b:widget id='FeaturedPost1' locked='true' title='' type='FeaturedPost' version='2' visible='true'>
+  <b:includable id='main' var='this'>
+    <b:include name='snippetedPosts'/>
+  </b:includable>
+  <b:includable id='snippetedPostTitle'>
+    <h2 class='pinned-title'><a expr:href='data:post.url'><data:post.title.escaped/></a></h2>
+  </b:includable>
+</b:widget>
+```
+
+### Hide the post on its own page
+
+When the visitor is reading the featured post, a card pointing to that same post is noise. Filter it out of the loop with the id of the current view:
+
+```xml {3}
+<b:includable id='snippetedPosts'>
+  <div class='pinned-list' role='feed'>
+    <b:loop values='data:posts filter (p => p.id != data:view.postId)' var='post'>
+      <article class='pinned' expr:data-id='data:post.id'>
+        <b:include name='snippetedPostContent'/>
+      </article>
+    </b:loop>
+  </div>
+</b:includable>
+```
+
+On every other page `data:view.postId` is empty, so the filter keeps the post.
+
+### Do not show the post twice on the homepage
+
+On the homepage, the featured post is often in the Blog widget's list too: always when the widget shows the most recent post, and whenever the owner picked one recent enough to be on the first page. Blogger's 2017 themes remove it from the Blog widget's list, then call `super.main`. <BloggerSource kind="observed" /> A short version, in the `main` of the Blog widget:
+
+```xml {2}
+<b:includable id='main' var='this'>
+  <b:with value='data:widgets.FeaturedPost map (w => w.postId)' var='pinnedIds'>
+    <b:with value='data:view.isHomepage ? (data:posts filter (p => p.id not in data:pinnedIds)) : data:posts' var='posts'>
+      <b:include name='super.main'/>
+    </b:with>
+  </b:with>
+</b:includable>
+```
+
+- `data:widgets.FeaturedPost` lists every FeaturedPost widget of the page, each with its `postId`, see [FeaturedPost and PopularPosts entries](../data/widgets.mdx#featuredpost-and-popularposts-entries).
+- A theme with FeaturedPost widgets in several sections can keep only the one above the posts, `data:widgets.FeaturedPost filter (w => w.sectionId == "theme_section_top") map (w => w.postId)`.
+- A filtered list can end up empty while the page is not: test `data:posts.empty` inside the `b:with`.
+- The opposite also works: leave the Blog widget alone and drop the featured post when it is already in the list, `data:posts filter (p => p.id not in (data:widgets.Blog.first.posts map (b => b.id)))`.
+
+### Use the widget switches in your own classes
+
+The flags are booleans, so they fit `b:class` well:
+
+```xml
+<article class='pinned'>
+  <b:class cond='not data:this.postDisplay.showFeaturedImage' name='no-image'/>
+  <b:class cond='data:this.postDisplay.showFeaturedImage and not data:post.featuredImage' name='image-missing'/>
+  <b:include name='snippetedPostContent'/>
+</article>
+```
+
+## Things to know
+
+- **Homepage only is a theme choice.** Add `cond='data:view.isHomepage'` to the `<b:widget>` to match Blogger's themes.
+- **One post, in a list.** `posts` holds a single entry. Loop over it, as Blogger's own includables do, rather than reading `data:posts[0]` directly.
+- **Excerpts are plain text.** `snippets.short` and `snippets.long` contain no HTML, and stop at the jump break.
+- **Retired parts.** The share includables marked above are being phased out, and `quickedit` in the version 1 `main` no longer does anything.

@@ -1,0 +1,216 @@
+---
+title: Header
+description: The Page Header widget, which prints the blog title and description, with an optional banner image.
+published: 2026-10-26
+---
+
+The `Header` widget, "Page Header" in the Layout editor, prints the title of the blog, its description, and optionally a banner image. The banner can sit behind the text, take the place of the title and description, or come before the description. The title is the blog's own: changing it in the widget changes **Settings > General > Title**, and the other way round.
+
+## Quick example
+
+The title is an `h1` on list pages and an `h2` on post pages, where the post title is the `h1`. It links to the homepage, except on the homepage itself. A banner, when one is set, is printed as an image above the title.
+
+<CodeTabs>
+
+```xml title="theme.xml" {2,28}
+<b:section id='theme_section_header' maxwidgets='1' name='Header' showaddelement='false'>
+  <b:widget id='Header1' locked='true' title='My Blog (Header)' type='Header' version='2' visible='true'>
+    <b:widget-settings>
+      <b:widget-setting name='displayHeight'>0</b:widget-setting>
+      <b:widget-setting name='displayUrl'/>
+      <b:widget-setting name='displayWidth'>0</b:widget-setting>
+      <b:widget-setting name='imagePlacement'>BEHIND</b:widget-setting>
+      <b:widget-setting name='sectionWidth'>-1</b:widget-setting>
+      <b:widget-setting name='shrinkToFit'>false</b:widget-setting>
+      <b:widget-setting name='useImage'>false</b:widget-setting>
+    </b:widget-settings>
+    <b:includable id='main' var='this'>
+      <b:class expr:name='data:sourceUrl ? "has-banner" : "no-banner"'/>
+      <b:include cond='data:sourceUrl' name='image'/>
+      <b:include name='title'/>
+      <b:include cond='data:description' name='description'/>
+    </b:includable>
+    <b:includable id='image'>
+      <b:tag class='brand-logo' expr:name='data:view.isHomepage ? "div" : "a"'>
+        <b:attr cond='not data:view.isHomepage' expr:value='data:blog.homepageUrl.canonical' name='href'/>
+        <img expr:alt='data:title' expr:height='data:height' expr:src='data:sourceUrl' expr:width='data:width'/>
+      </b:tag>
+    </b:includable>
+    <b:includable id='title'>
+      <b:tag class='brand-title' expr:name='data:view.isSingleItem ? "h2" : "h1"'>
+        <b:tag expr:name='data:view.isHomepage ? "span" : "a"'>
+          <b:attr cond='not data:view.isHomepage' expr:value='data:blog.homepageUrl.canonical' name='href'/>
+          <data:title/>
+        </b:tag>
+      </b:tag>
+    </b:includable>
+    <b:includable id='description'>
+      <p class='brand-description'><data:description/></p>
+    </b:includable>
+  </b:widget>
+</b:section>
+```
+
+```html title="Rendered, on a post page, without a banner"
+<div class='widget Header no-banner' data-version='2' id='Header1'>
+  <h2 class='brand-title'><a href='https://example.blogspot.com/'>My Blog</a></h2>
+  <p class='brand-description'>Notes on building Blogger themes.</p>
+</div>
+```
+
+</CodeTabs>
+
+The `title` attribute of `<b:widget>` is the name of the widget in the Layout editor, by default the blog title followed by `(Header)`. What the page shows is `data:title`.
+
+## Placement and limits
+
+|                     |                                                                                                                         | Source                            |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                | `Header`                                                                                                                | <BloggerSource kind="official" /> |
+| Per blog            | 1. A second one is refused when saving, see [Widgets per type](../reference/limits.mdx#widgets-per-type)                | <BloggerSource kind="observed" /> |
+| Width               | The width of the blog                                                                                                   | <BloggerSource kind="observed" /> |
+| Placement           | A header section of its own in Blogger's themes. It renders in any section, but its options are designed for the header | <BloggerSource kind="observed" /> |
+| Locked              | Usually. Blogger's themes install it locked                                                                             | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                                                                | <BloggerSource kind="observed" /> |
+| Classic mobile view | Shown by default                                                                                                        | <BloggerSource kind="official" /> |
+| Dynamic Views       | Not used: they draw their own header                                                                                    | <BloggerSource kind="observed" /> |
+
+Blogger's themes always have exactly one, `Header1`. <BloggerSource kind="observed" />
+
+## Widget settings
+
+Blogger writes them when the widget is saved in the Layout editor. See [Widgets](../layout/widgets.mdx) for how settings are stored.
+
+| Setting          | Values                                    | Without a banner | Data                 | Meaning                                                     | Source                            |
+| ---------------- | ----------------------------------------- | ---------------- | -------------------- | ----------------------------------------------------------- | --------------------------------- |
+| `displayUrl`     | image URL, or empty                       | empty            | `sourceUrl`, `image` | The banner                                                  | <BloggerSource kind="observed" /> |
+| `displayWidth`   | number                                    | `0`              | `width`              | Width of the banner                                         | <BloggerSource kind="observed" /> |
+| `displayHeight`  | number                                    | `0`              | `height`             | Height of the banner                                        | <BloggerSource kind="observed" /> |
+| `useImage`       | `true`, `false`                           | `false`          | `useImage`           | The header has a banner                                     | <BloggerSource kind="observed" /> |
+| `shrinkToFit`    | `true`, `false`                           | `false`          | `shrinkToFit`        | "Shrink to fit": scale the banner down to the section width | <BloggerSource kind="observed" /> |
+| `imagePlacement` | `BEHIND`, `REPLACE`, `BEFORE_DESCRIPTION` | `BEHIND`         | `imagePlacement`     | Where the banner goes                                       | <BloggerSource kind="observed" /> |
+| `sectionWidth`   | number                                    | `-1`             | `sectionWidth`       | Width of the section when the banner was saved. Legacy      | <BloggerSource kind="observed" /> |
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A Header written with no settings gets the values of the "Without a banner" column, and the title `BLOG (Header)`, where `BLOG` is the blog title.
+- With a `displayUrl`, `displayWidth` must be 1 or more: `0` is refused "Must be at least 1". A `displayUrl` that is not a URL is refused "URL is malformed".
+- Without a `displayUrl`, `useImage`, `displayWidth` and `imagePlacement` are reset to their defaults: `REPLACE` and `BEFORE_DESCRIPTION` are stored `BEHIND`, and `displayWidth` `abc` or `-1` is stored `0`, without a message.
+- `imagePlacement` is case-sensitive: `behind` is refused.
+- An unknown setting name is refused with "The widget settings in widget with id Header1 is not valid.", without the name.
+
+## Widget data
+
+Google documents `title` and `description`. The other fields are read by Blogger's own markup.
+
+| Field                        | V1  | V2  | Type                     | Holds                                                                                                         | Source                            |
+| ---------------------------- | --- | --- | ------------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `title`                      | ✓   | ✓   | string                   | The blog title, up to 100 characters                                                                          | <BloggerSource kind="observed" /> |
+| `description`                | ✓   | ✓   | string                   | The blog description, up to 500 characters                                                                    | <BloggerSource kind="official" /> |
+| `useImage`                   | ✓   | ✓   | boolean                  | `true` when `displayUrl` holds a URL                                                                          | <BloggerSource kind="observed" /> |
+| `imagePlacement`             | ✓   | ✓   | string                   | `BEHIND`, `REPLACE` or `BEFORE_DESCRIPTION`, see [Placement of the banner](#placement-of-the-banner)          | <BloggerSource kind="observed" /> |
+| `sourceUrl`                  | ✓   | ✓   | string                   | The banner URL, as a plain string                                                                             | <BloggerSource kind="observed" /> |
+| `image`                      |     | ✓   | image                    | The banner at its original size, for `responsiveImage` and `resizeImage`                                      | <BloggerSource kind="observed" /> |
+| `width`                      | ✓   | ✓   | string (V1), number (V2) | Display width of the banner                                                                                   | <BloggerSource kind="observed" /> |
+| `height`                     | ✓   | ✓   | string (V1), number (V2) | Display height of the banner                                                                                  | <BloggerSource kind="observed" /> |
+| `widthStyleStr`              | ✓   |     | string                   | A declaration `width: Npx;`, the original width or, with shrink to fit, the section width                     | <BloggerSource kind="observed" /> |
+| `backgroundPositionStyleStr` | ✓   | ✓   | string                   | `left` or `right`, from the writing direction of the blog language, like `data:blog.locale.languageAlignment` | <BloggerSource kind="observed" /> |
+| `shrinkToFit`                | ✓   | ✓   | boolean                  | The "Shrink to fit" option                                                                                    | <BloggerSource kind="observed" /> |
+| `sectionWidth`               | ✓   | ✓   | number                   | The section width saved with the banner, `-1` without one. Refreshed only when the widget is saved again      | <BloggerSource kind="observed" /> |
+| `mobile`                     | ✓   |     | boolean                  | `true` in the classic mobile view, `?m=1`. Use `data:view.isMobile` instead                                   | <BloggerSource kind="observed" /> |
+
+The 300-pixel cap of the [Image](./image.mdx) widget does not apply: header banners are usually wider. <BloggerSource kind="observed" />
+
+### Placement of the banner
+
+| `imagePlacement`     | Option in the Layout editor             | What Blogger's markup prints                                           |
+| -------------------- | --------------------------------------- | ---------------------------------------------------------------------- |
+| `BEHIND`             | Behind title and description            | The title and the description, with the banner as their CSS background |
+| `REPLACE`            | Instead of title and description        | The banner as an `img`, linked to the homepage                         |
+| `BEFORE_DESCRIPTION` | Have description placed after the image | The banner as an `img`, then the description                           |
+
+With `REPLACE`, the title is not printed by the built-in markup of version 1, which leaves the page without the blog name as text. A theme that keeps the banner and the title, hiding the title with CSS, keeps it readable for search engines and screen readers. A theme can also ignore the setting and decide from `data:sourceUrl` alone, as the first example does.
+
+## Built-in includables
+
+| Includable         | V1  | V2              | Renders                                                                | Source                            |
+| ------------------ | --- | --------------- | ---------------------------------------------------------------------- | --------------------------------- |
+| `main`             | ✓   | ✓, `var='this'` | Picks the banner, title and description from `imagePlacement`          | <BloggerSource kind="observed" /> |
+| `title`            | ✓   | ✓               | The blog title, linked to the homepage except on the homepage          | <BloggerSource kind="observed" /> |
+| `description`      | ✓   | ✓               | The description                                                        | <BloggerSource kind="observed" /> |
+| `image`            |     | ✓               | The banner as a responsive image, linked to the homepage               | <BloggerSource kind="observed" /> |
+| `behindImageStyle` |     | ✓               | A `<style>` that sets the banner as the background of `.header-widget` | <BloggerSource kind="observed" /> |
+
+### `main`
+
+**Version 2.** `main` wraps everything in `div.header-widget`. It includes `image` for `REPLACE` and `BEFORE_DESCRIPTION`, `title` for any other value, and `description` unless the value is `REPLACE`. After the wrapper, it includes `behindImageStyle` for `BEHIND`.
+
+**Version 1.** `main` writes the markup itself:
+
+- Without a banner: `#header-inner`, with `.titlewrapper > h1.title` holding the `title` includable, then `description`.
+- `BEHIND`: the same markup, with an inline `background-image` built from `sourceUrl`, `backgroundPositionStyleStr`, `widthStyleStr` and `height`. In the classic mobile view the background is left out.
+- `REPLACE` and `BEFORE_DESCRIPTION`: an `img#Header1_headerimg` linked to the homepage, then `description` for `BEFORE_DESCRIPTION`. No `h1` and no title text.
+
+### `title`
+
+**Version 2.** An `h1` holding the title. The link to the homepage is added with a `b:tag` whose `cond` is `data:view.url != data:blog.homepageUrl`.
+
+**Version 1.** The link only, the `h1` being in `main`. It compares `data:blog.url` with `data:blog.homepageUrl`.
+
+### `description`
+
+Version 2 writes the description in a `p`. Version 1 writes `.descriptionwrapper > p.description > span`.
+
+### `image`
+
+Includes `responsiveImage` inside `a.header-image-wrapper` linking to the homepage, with `image: data:image`, the blog title as `altText`, and `width` and `height` as `originalWidth` and `originalHeight`.
+
+### `behindImageStyle`
+
+When a banner is set, includes `responsiveImageStyle` with `image: data:this.image` and `selector: ".header-widget"`, which writes CSS backgrounds for several widths. Then a `<style>` with `background-position` set to `data:blog.locale.languageAlignment` and `background-repeat: no-repeat`.
+
+The same Common includable gives a background banner to a theme's own wrapper. Blogger renders the widget as `div.Header`, so the selector can be the widget itself:
+
+```xml
+<b:includable id='behindImageStyle'>
+  <b:include cond='data:image' data='{ image: data:image, selector: ".Header" }' name='responsiveImageStyle'/>
+</b:includable>
+```
+
+### What Blogger's themes change
+
+The responsive themes override three includables in their [default markups](../layout/default-markups.mdx): <BloggerSource kind="observed" />
+
+- `title` wraps `super.title` in a `div` that gets the class `replaced` when the placement is `REPLACE`.
+- `image` calls `super.image`, then also includes `title` for `REPLACE`, so the title stays in the page and is hidden with CSS.
+- `description` is skipped on post pages, in Emporio only.
+
+Contempo also adds `background-size: cover` to `behindImageStyle`.
+
+## Writing your own markup
+
+### A logo from the widget
+
+When the blog owner uploads a square logo instead of a banner, the theme can print it at a fixed size. Without a saved size (`data:width` and `data:height` are `0`), [`resizeImage`](../expressions/functions.mdx) crops it to a square:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:includable id='image'>
+  <b:with value='data:width and data:height ? { src: data:sourceUrl, width: data:width, height: data:height } : { src: resizeImage(data:sourceUrl, 200, "1:1"), width: 200, height: 200 }' var='logo'>
+    <img class='brand-logo' expr:alt='data:title' expr:height='data:logo.height' expr:src='data:logo.src' expr:width='data:logo.width'/>
+  </b:with>
+</b:includable>
+```
+
+```html title="Rendered, without a saved size"
+<img alt='My Blog' class='brand-logo' height='200' src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/…/w200-h200-p-k-no-nu/logo.png' width='200'/>
+```
+
+</CodeTabs>
+
+## Things to know
+
+- **Types of `width` and `height`.** Strings in version 1, numbers in version 2.
+- **Uploads.** A banner uploaded from the widget goes to the photo album of the blog. Set "Shrink to fit" before uploading.
+- **Legacy.** `sectionWidth` and its setting are left from fixed-width themes. `mobile` and `widthStyleStr` exist in version 1 only.

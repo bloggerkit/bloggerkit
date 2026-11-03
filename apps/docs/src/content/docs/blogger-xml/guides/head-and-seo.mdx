@@ -1,0 +1,453 @@
+---
+title: Head and SEO
+description: 'Build the head of a Blogger theme, with or without all-head-content: title, description, canonical URL, robots, social cards, structured data, favicon.'
+level: intermediate
+prerequisites:
+  - blogger-xml/data/view
+  - blogger-xml/tags/conditionals
+published: 2026-10-26
+---
+
+Everything search engines and social networks read about a page sits in its `<head>`: the title, the description, the canonical URL, the cards shown when the page is shared, and the structured data. A Blogger theme writes all of it from [`data:blog`](../data/blog.mdx), [`data:view`](../data/view.mdx) and the posts of the Blog widget, in one of two ways:
+
+- include Blogger's [`all-head-content`](../layout/includables.mdx) and add what it lacks;
+- write every tag itself, and leave `all-head-content` out.
+
+The second way gives full control, and is how production themes work. This page goes through both, tag by tag.
+
+## A first head
+
+The shortest head that works on every page: the viewport, the title of the page, Blogger's head tags and the skin.
+
+```xml title="theme.xml"
+<head>
+  <meta content='width=device-width, initial-scale=1' name='viewport'/>
+  <title><data:view.title.escaped/></title>
+  <b:include data='blog' name='all-head-content'/>
+  <b:skin><![CDATA[body { margin: 0; font-family: system-ui, sans-serif; }]]></b:skin>
+</head>
+```
+
+`data:view.title` is the title of the post or page on single items, and the blog title elsewhere. Everything else (charset, canonical URL, feeds, Open Graph, favicon) comes from `all-head-content`. The order of `<title>` and `all-head-content` is a habit, not a rule: classic themes put `all-head-content` first. <BloggerSource kind="observed" />
+
+## What `all-head-content` writes
+
+`all-head-content` is a built-in includable: its markup lives on Blogger's servers, and the theme only names it, once, in `<head>`, with `data='blog'`. <BloggerSource kind="observed" /> On a post of a blog named Field Notes, it renders:
+
+```html title="Rendered on a post"
+<meta content='text/html; charset=UTF-8' http-equiv='Content-Type'/>
+<meta content='#f4f1ea' name='theme-color'/>
+<meta content='#f4f1ea' name='msapplication-navbutton-color'/>
+<meta content='blogger' name='generator'/>
+<link href='https://example.blogspot.com/favicon.ico' rel='icon' type='image/x-icon'/>
+<link href='https://example.blogspot.com/2026/03/first-frost.html' rel='canonical'/>
+<link rel="alternate" type="application/atom+xml" title="Field Notes - Atom" href="https://example.blogspot.com/feeds/posts/default" />
+<link rel="alternate" type="application/rss+xml" title="Field Notes - RSS" href="https://example.blogspot.com/feeds/posts/default?alt=rss" />
+<link rel="service.post" type="application/atom+xml" title="Field Notes - Atom" href="https://www.blogger.com/feeds/4815162342108/posts/default" />
+<link rel="alternate" type="application/atom+xml" title="Field Notes - Atom" href="https://example.blogspot.com/feeds/7310984426/comments/default" />
+<link href='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh/s1600/frost.jpg' rel='image_src'/>
+<meta content='The first cold night of the year, and what it did to the garden.' name='description'/>
+<meta content='https://example.blogspot.com/2026/03/first-frost.html' property='og:url'/>
+<meta content='First frost' property='og:title'/>
+<meta content='The first cold night of the year, and what it did to the garden.' property='og:description'/>
+<meta content='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh/w1200-h630-p-k-no-nu/frost.jpg' property='og:image'/>
+```
+
+| Output                                             | From                                                                 | When                                            | Source                            |
+| -------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------- |
+| `Content-Type` meta with the charset               | `data:blog.encoding`                                                 | always                                          | <BloggerSource kind="observed" /> |
+| `theme-color` and `msapplication-navbutton-color`  | the `body.background.color` skin variable                            | version 3 themes                                | <BloggerSource kind="observed" /> |
+| `generator`                                        | `blogger`                                                            | always                                          | <BloggerSource kind="observed" /> |
+| Favicon link                                       | `data:blog.blogspotFaviconUrl`, the Favicon set in the Layout editor | always                                          | <BloggerSource kind="observed" /> |
+| `rating` meta, `adult`                             | `data:blog.adultContent`                                             | adult blogs                                     | <BloggerSource kind="observed" /> |
+| Canonical link                                     | the URL of the page                                                  | always                                          | <BloggerSource kind="observed" /> |
+| Feed links                                         | [`data:blog.feedLinks`](../data/blog.mdx)                            | when the feeds are on                           | <BloggerSource kind="official" /> |
+| `image_src` link                                   | `data:view.featuredImage`                                            | items with an image                             | <BloggerSource kind="observed" /> |
+| Description meta                                   | the search description of the blog or the post                       | when search descriptions are enabled and filled | <BloggerSource kind="observed" /> |
+| `og:url`, `og:title`, `og:description`, `og:image` | the Common includable `openGraphMetaData`                            | always; `og:image` when there is an image       | <BloggerSource kind="observed" /> |
+
+What it does not write:
+
+- no `<title>` and no viewport: the theme writes both;
+- no Twitter (X) card tags;
+- no `robots` rules from the theme;
+- no structured data: in Blogger's own themes, JSON-LD comes from the Blog widget, through its `postMetadataJSON` includable, not from the head.
+
+So a theme that keeps `all-head-content` still writes the title, the viewport and the Twitter tags. Everything below that `all-head-content` also writes must then be left out, or it is in the page twice.
+
+## Writing the head yourself
+
+Leaving `all-head-content` out removes every tag of the table above. Each one has to come back from the theme, or be dropped on purpose:
+
+| Tag           | Write it with                                                                                 |
+| ------------- | --------------------------------------------------------------------------------------------- |
+| Charset       | `<meta expr:charset='data:blog.encoding'/>`                                                   |
+| Canonical URL | `<link expr:href='data:view.url.canonical' rel='canonical'/>`, see [below](#canonical-url)    |
+| Feeds         | `<data:blog.feedLinks/>`, or your own `<link rel='alternate'>` tags, see [Feeds](./feeds.mdx) |
+| Favicon       | `data:blog.blogspotFaviconUrl`, or an Image widget, see [below](#favicon)                     |
+| Description   | `data:view.description`, see [below](#meta-description)                                       |
+| Open Graph    | your own `og:` tags, see [below](#open-graph)                                                 |
+| Theme color   | `<meta content='…' name='theme-color'/>`, from a skin variable or a literal                   |
+| Generator     | `<meta content='Blogger' name='generator'/>`, optional                                        |
+
+A theme can start its head like this, before any widget:
+
+```xml title="The start of the head"
+<meta expr:charset='data:blog.encoding'/>
+<meta content='IE=edge' http-equiv='X-UA-Compatible'/>
+<meta content='width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=5, user-scalable=yes' name='viewport'/>
+<b:if cond='!data:view.isError'>
+  <link expr:href='data:blog.url.canonical' rel='canonical'/>
+  <data:blog.feedLinks/>
+  <meta expr:content='data:blog.adultContent ? "adult" : "general"' name='rating'/>
+  <meta expr:content='data:blog.title' name='application-name'/>
+</b:if>
+<meta content='Blogger' name='generator'/>
+```
+
+Blogger still adds its own scripts and styles to the page whatever the head holds, unless the theme turns them off with `b:css` and `b:js`, see [Performance](./performance.mdx). <BloggerSource kind="observed" />
+
+<Callout type="warn" title="Valueless attributes">
+The theme is XML: every attribute needs a value. Write `async='async'` or `async=''`, `crossorigin='anonymous'`, `itemscope='itemscope'`. A bare `async` makes the theme fail to save. <BloggerSource kind="observed" />
+</Callout>
+
+## Title per page type
+
+`data:view.title` alone gives the same title to the homepage, the label pages, the searches and the 404 page: the blog title. A theme that wants a distinct title for each kind of page tests the [page flags](../data/page-types.mdx):
+
+<CodeTabs>
+
+```xml title="A title for every page" {14}
+<b:if cond='data:view.isHomepage'>
+  <title><data:blog.title/></title>
+<b:elseif cond='data:view.isLabelSearch'/>
+  <title><b:eval expr='data:view.search.label.escaped + " - " + data:blog.title'/></title>
+<b:elseif cond='data:view.isSearch and data:view.search.query'/>
+  <title><b:eval expr='data:messages.search.escaped + ": " + data:view.search.query.escaped + " - " + data:blog.title'/></title>
+<b:elseif cond='data:view.isSearch'/>
+  <title><b:eval expr='"All posts - " + data:blog.title'/></title>
+<b:elseif cond='data:view.isArchive'/>
+  <title><b:eval expr='data:blog.pageName.escaped + " - " + data:blog.title'/></title>
+<b:elseif cond='data:view.isError'/>
+  <title><b:eval expr='"Page not found - " + data:blog.title'/></title>
+<b:else/>
+  <title><b:eval expr='(data:view.title + data:blog.title).length > 57 ? data:view.title.escaped : data:view.title.escaped + " - " + data:blog.title'/></title>
+</b:if>
+```
+
+```html title="Rendered"
+<!-- /search/label/Garden -->
+<title>Garden - Field Notes</title>
+<!-- /search?q=frost -->
+<title>Search: frost - Field Notes</title>
+<!-- /2026/03/ -->
+<title>March 2026 - Field Notes</title>
+<!-- a post with a long title -->
+<title>What the first frost of the year did to the tomatoes</title>
+```
+
+</CodeTabs>
+
+- The order matters. `isSearch` is true on label pages too, so `isLabelSearch` is tested first, and the search with a query before the bare `/search` list. <BloggerSource kind="observed" />
+- The last branch drops the blog title when the whole title would pass 57 characters, so the post title is not cut in search results. <BloggerSource kind="observed" />
+- `<b:eval>` does not escape its result, so every piece the author or a visitor typed takes `.escaped`, except `data:blog.title`, which already holds `&` as `&amp;`. Which title field escapes what is on [Titles](../data/blog.mdx#titles).
+- `data:blog.pageName` holds the label, the archive name (`March 2026`) or the post title, translated; `data:blog.pageTitle` is the blog title, a colon and `pageName`. See [data:blog](../data/blog.mdx).
+
+### Letting the blog owner edit the titles
+
+A theme can read its title formats from a LinkList widget, so the owner changes them in the Layout editor without touching the XML. Each link is a page type (`home`, `label`, `post`…) and its URL is the format. When the widget is removed, the fallback chain above applies:
+
+```xml
+<b:if cond='!data:widgets.LinkList71'>
+  <!-- the titles above -->
+</b:if>
+```
+
+`data:widgets.LinkList71` is empty when that widget does not exist, which makes it a switch the owner controls. The pattern is described in [Widgets as configuration](./widgets-as-configuration.mdx).
+
+## Meta description
+
+`data:view.description` is a description for every page: the search description written in the dashboard when search descriptions are enabled, otherwise the blog description on lists and an excerpt on posts. An item without a search description of its own gets the blog's. <BloggerSource kind="observed" /> See [`data:view.description`](../data/view.mdx#dataviewdescription).
+
+```xml
+<meta expr:content='data:view.description.escaped' name='description'/>
+```
+
+A theme that wants a fallback of its own builds a chain with the ternary operator. This one uses the search description, then an excerpt of the post, then the page name, then the blog title:
+
+```xml title="A description with fallbacks"
+<b:with value='data:blog.metaDescription ? data:blog.metaDescription : (data:view.isSingleItem and data:post.snippet ? snippet(data:post.snippet, { ellipsis: false, length: 147, linebreaks: false, links: false }) : (data:blog.pageName ? data:blog.pageName : data:blog.title))' var='description'>
+  <meta expr:content='data:description' name='description'/>
+</b:with>
+```
+
+- `data:blog.metaDescription` is the search description of the post on items, and of the blog elsewhere. It is missing, not empty, when there is none, see [`data:blog.metaDescription`](../data/blog.mdx#datablogmetadescription).
+- The chain uses ternaries, not `?:`: `?:` only replaces missing data and keeps an empty string, and `data:blog.pageName` is empty on the homepage and on 404 pages. See [Elvis](../expressions/operators.mdx#elvis).
+- The value is printed without `.escaped`: `data:blog.title` and the result of `snippet` already hold `&` as `&amp;`. <BloggerSource kind="observed" />
+- In the head, `data:post` is the post of the page on items. <BloggerSource kind="observed" />
+- `snippet` with `links: false` and `linebreaks: false` gives plain text on one line, safe in an attribute once escaped. 147 characters leave room for the three dots search engines add. See [`snippet`](../expressions/functions.mdx#snippet).
+
+## Canonical URL
+
+The canonical URL tells search engines which address of a page is the real one: Blogger serves the same page with `?m=1`, `?hl=`, `?view=` and other parameters. `.canonical` removes `?m=1`, and replaces a country domain of blogspot.com with `blogspot.com`; whether it removes `?q=` is not confirmed. See [`data:view.url`](../data/view.mdx#dataviewurl).
+
+```xml
+<b:if cond='!data:view.isError'>
+  <link expr:href='data:view.url.canonical' rel='canonical'/>
+</b:if>
+```
+
+- `data:view.url` and `data:blog.url` hold the same URL; both have `.canonical`. See [URL properties](../expressions/properties.mdx).
+- The test leaves the canonical link out of 404 pages, which have no real address. Their URL has a double slash after the host, `https://example.blogspot.com//missing`. <BloggerSource kind="observed" />
+- Older pages of a list, `/search?updated-max=…&max-results=7`, are `/search` pages: whether their canonical URL keeps the parameters is not confirmed. If those pages should not be indexed at all, use [robots](#robots) rather than the canonical link.
+
+## Robots
+
+Blogger has its own robots settings, in Settings > Crawlers and indexing: a `robots.txt`, and custom robots header tags for three groups of pages, the homepage, the archive and search pages, and the posts and pages. Blogger applies them itself, whatever the theme says. <BloggerSource kind="observed" /> Two limits make a theme rule useful:
+
+- archives and searches are one group in the settings: a blog can not keep its label pages indexed and its date archives out;
+- the settings can not tell the first page of a list from its older pages.
+
+A `robots` meta tag in the theme fills the gap:
+
+```xml title="Keep archives, searches and older pages out of the index" {3}
+<b:if cond='data:view.isArchive or (data:view.isSearch and !data:view.isLabelSearch)'>
+  <meta content='noindex, follow' name='robots'/>
+<b:elseif cond='data:view.isLabelSearch and (data:blog.url + "") contains "updated-max="'/>
+  <meta content='noindex, follow' name='robots'/>
+</b:if>
+```
+
+- `noindex, follow` keeps the page out of results but lets crawlers follow its links to the posts.
+- `isSearch and !isLabelSearch` covers `/search`, its older pages and the searches with a query. Label pages are kept, except their older pages, whose URL carries `updated-max=`.
+- `data:blog.url + ""` turns the URL into plain text before `contains`, as production themes do with values that are not plain strings. <BloggerSource kind="observed" />
+- Blogger's default `robots.txt` already disallows `/search`, so crawlers that obey it never fetch those pages. The meta tag matters for pages reached another way, and when the owner writes a custom `robots.txt`. <BloggerSource kind="observed" />
+- When a theme rule and a dashboard rule disagree, search engines apply the most restrictive one.
+
+## Open Graph
+
+Open Graph tags give the title, description and image shown when a page is shared on Facebook, LinkedIn, messaging apps and most social networks. `all-head-content` writes four of them. A theme that writes its own sets the type and the image size too.
+
+A theme can keep the default share image in an Image widget placed in the head, so the owner uploads it in the Layout editor. The section must not be written directly in `<head>`, which Blogger refuses, see [Widgets in the head](#widgets-in-the-head). On items with an image, the image of the post wins:
+
+```xml title="Open Graph from an Image widget"
+<b:widget cond='!data:view.isError' id='Image72' locked='true' title='Share image' type='Image' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='displayUrl'>https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj/s1600/share.png</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:with value='data:widgets.Blog.first.posts.first.featuredImage' var='postImage'>
+      <b:with value='resizeImage((data:view.isSingleItem and data:postImage ? data:postImage : data:sourceUrl), 1200, "1200:630")' var='image'>
+        <meta expr:content='data:blog.locale.language' property='og:locale'/>
+        <meta expr:content='data:blog.title' property='og:site_name'/>
+        <meta expr:content='data:view.title.escaped' property='og:title'/>
+        <meta expr:content='data:view.description.escaped' property='og:description'/>
+        <meta expr:content='data:view.url.canonical' property='og:url'/>
+        <meta expr:content='data:view.isPost ? "article" : "website"' property='og:type'/>
+        <meta expr:content='data:image.escaped' property='og:image'/>
+        <b:if cond='data:image.height'>
+          <meta expr:content='data:image.width' property='og:image:width'/>
+          <meta expr:content='data:image.height' property='og:image:height'/>
+        </b:if>
+      </b:with>
+    </b:with>
+  </b:includable>
+</b:widget>
+```
+
+- `data:widgets.Blog.first.posts.first` is the post of the page, read from the Blog widget by another widget. Its `featuredImage` is the first image of the post, or the thumbnail of its first YouTube video. An image of another site and a video thumbnail come through Blogger's image proxy, `lh3.googleusercontent.com/blogger_img_proxy/…`, and can be resized. <BloggerSource kind="observed" /> See [data:widgets](../data/widgets.mdx).
+- `resizeImage` crops the image to 1200 × 630, the size most networks show. The size tags are conditional because `.width` and `.height` are only there when Blogger could resize the image with a ratio, see [`resizeImage`](../expressions/functions.mdx#resizeimage).
+- The widget sits in a head section, see [Widgets in the head](#widgets-in-the-head).
+
+## Twitter cards
+
+X reads Open Graph tags as a fallback, but only `twitter:card` chooses the large image layout. Blogger writes no `twitter:` tag. <BloggerSource kind="observed" /> The same values as Open Graph do:
+
+```xml
+<meta content='summary_large_image' name='twitter:card'/>
+<meta expr:content='data:view.title.escaped' name='twitter:title'/>
+<meta expr:content='data:view.description.escaped' name='twitter:description'/>
+<meta expr:content='data:image.escaped' name='twitter:image'/>
+<meta expr:content='data:view.title.escaped' name='twitter:image:alt'/>
+```
+
+Twitter tags use `name`, Open Graph tags `property`. `summary_large_image` wants an image of at least 300 × 157; `summary` shows a small square instead.
+
+## Structured data
+
+Structured data describes the page to search engines as JSON-LD, a `<script type='application/ld+json'>`. Inside it every value goes through `.jsonEscaped`, which escapes quotes, backslashes and the characters that could close the script. See [jsonEscaped](../expressions/properties.mdx).
+
+### Posts
+
+The Blog widget knows the post, so the JSON-LD of a post goes there, in the includable that renders a single post. Blogger's own themes do the same with their built-in `postMetadataJSON`; a theme that writes its own replaces that includable with an empty one so the data is not there twice. <BloggerSource kind="observed" />
+
+```xml title="BlogPosting, in the Blog widget" {1,11}
+<b:includable id='postMetadataJSON'/>
+<b:includable id='post-jsonld' var='post'>
+  <script type='application/ld+json'>{
+  "@context": "https://schema.org",
+  "@type": "<b:if cond='data:view.isPage'>WebPage<b:else/>BlogPosting</b:if>",
+  "mainEntityOfPage": "<data:post.url.canonical.jsonEscaped/>",
+  "headline": "<data:post.title.jsonEscaped/>",
+  "description": "<b:eval expr='snippet(data:post.snippets.long, { length: 160, links: false }).jsonEscaped'/>",
+  "datePublished": "<data:post.date.iso8601.jsonEscaped/>",
+  "dateModified": "<data:post.lastUpdated.iso8601.jsonEscaped/>",
+  <b:if cond='data:post.featuredImage'><b:with value='resizeImage(data:post.featuredImage, 1280, "16:9")' var='image'>"image": { "@type": "ImageObject", "url": "<data:image.jsonEscaped/>", "width": <b:eval expr='data:image.width ?: 1280'/>, "height": <b:eval expr='data:image.height ?: 720'/> },</b:with></b:if>
+  "author": { "@type": "Person", "name": "<data:post.author.name.jsonEscaped/>", "url": "<b:eval expr='(data:post.author.profileUrl ?: data:blog.homepageUrl.canonical).jsonEscaped'/>" },
+  "publisher": { "@type": "Organization", "name": "<data:blog.title.jsonEscaped/>" }
+}</script>
+</b:includable>
+```
+
+Call it from the loop of posts, only on items:
+
+```xml
+<b:loop values='data:posts' var='post'>
+  <b:include cond='data:view.isSingleItem' data='post' name='post-jsonld'/>
+</b:loop>
+```
+
+- `data:post.date.iso8601` is the date in the format JSON-LD expects, `2026-03-14T07:30:00-08:00`. The plain `data:post.date` is formatted for readers. See [post dates](../data/post.mdx).
+- The image block ends with its own comma, so the object stays valid JSON when the post has no image.
+- `data:image.width ?: 1280` writes a number even when Blogger can not resize the image, because `.width` is then missing.
+- `data:blog.title` already holds `&` as `&amp;`, which `.jsonEscaped` keeps: a blog named `A&B` reaches the JSON as `A&amp;B` in `publisher.name`. On a post, no data holds the blog title with a plain `&`: `data:view.title` is then the post title. Avoid `&` in the blog title, or accept the `&amp;`. `data:post.title` holds a plain `&`. <BloggerSource kind="observed" />
+- A theme can also choose `NewsArticle` for posts with a `News` label: `data:post.labels any (l => l.name == "News")`.
+
+### The blog
+
+On the homepage, a `WebSite` object names the blog:
+
+```xml
+<b:if cond='data:view.isHomepage'>
+  <script type='application/ld+json'>{"@context": "https://schema.org", "@type": "WebSite", "name": "<data:view.title.jsonEscaped/>", "url": "<data:blog.homepageUrl.canonical.jsonEscaped/>"}</script>
+</b:if>
+```
+
+On the homepage, `data:view.title` is the blog title with a plain `&` and no tags, so it suits JSON better than `data:blog.title`, which holds `&amp;`. <BloggerSource kind="observed" />
+
+Google retired the sitelinks search box in November 2024, so a `potentialAction` with a `SearchAction` no longer shows anything. <BloggerSource kind="observed" />
+
+### Breadcrumbs
+
+A breadcrumb trail, Home › Label › Post, can be marked up for search engines in two ways: microdata on the visible links, or JSON-LD. Both use the first label of the post as the middle step.
+
+<CodeTabs>
+
+```xml title="Microdata on the visible trail"
+<nav aria-label='Breadcrumb' itemscope='itemscope' itemtype='https://schema.org/BreadcrumbList'>
+  <span itemprop='itemListElement' itemscope='itemscope' itemtype='https://schema.org/ListItem'>
+    <a expr:href='data:blog.homepageUrl.canonical' itemprop='item'><span itemprop='name'><data:messages.home/></span></a>
+    <meta content='1' itemprop='position'/>
+  </span>
+  <b:with value='data:post.labels.first' var='label'>
+    <b:if cond='data:label'>
+      <span itemprop='itemListElement' itemscope='itemscope' itemtype='https://schema.org/ListItem'>
+        <a expr:href='data:label.url.canonical' itemprop='item'><span itemprop='name'><data:label.name/></span></a>
+        <meta content='2' itemprop='position'/>
+      </span>
+    </b:if>
+  </b:with>
+</nav>
+```
+
+```xml title="The same trail as JSON-LD"
+<script type='application/ld+json'>{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "<data:messages.home.jsonEscaped/>", "item": "<data:blog.homepageUrl.canonical.jsonEscaped/>" },
+    <b:if cond='data:post.labels.first'>{ "@type": "ListItem", "position": 2, "name": "<data:post.labels.first.name.jsonEscaped/>", "item": "<data:post.labels.first.url.canonical.jsonEscaped/>" },</b:if>
+    { "@type": "ListItem", "position": <b:eval expr='data:post.labels.first ? 3 : 2'/>, "name": "<data:post.title.jsonEscaped/>" }
+  ]
+}</script>
+```
+
+</CodeTabs>
+
+- `itemscope` needs a value in the XML, `itemscope='itemscope'` or `itemscope=''`. Both render as a valid HTML attribute.
+- The last step of a trail is the page itself: it has no `item` URL.
+- `data:post.labels` is sorted by name, so the first label is the first in alphabetical order, not the one the author typed first. <BloggerSource kind="observed" /> See [labels](../data/post.mdx).
+- A label name is HTML text: `a&b` is `a&amp;b`, and `.jsonEscaped` keeps the `&amp;` in the JSON. <BloggerSource kind="observed" />
+- A theme can show its visible trail on posts and its JSON-LD next to it; static pages have no labels, so their trail is Home › Page.
+
+## Favicon
+
+The favicon of a blog is uploaded in the Layout editor, and Blogger serves it at `/favicon.ico`, the URL in `data:blog.blogspotFaviconUrl`. It is one icon, at one size. <BloggerSource kind="observed" />
+
+```xml
+<link expr:href='data:blog.blogspotFaviconUrl' rel='icon' type='image/x-icon'/>
+```
+
+A set of icons for every device needs a larger source. Themes commonly take it from an [Image](../widget-types/image.mdx) widget in the head, which lets the owner replace the favicon without editing the theme, and resize it to each size; when the image can not be resized, they link it once with a type taken from its extension:
+
+```xml title="Icons from an Image widget"
+<b:with value='resizeImage(data:sourceUrl, 512, "1:1")' var='icon'>
+  <b:if cond='data:icon.isResizable'>
+    <link expr:href='resizeImage(data:icon, 32, "1:1")' rel='icon' sizes='32x32' type='image/png'/>
+    <link expr:href='resizeImage(data:icon, 192, "1:1")' rel='icon' sizes='192x192' type='image/png'/>
+    <link expr:href='resizeImage(data:icon, 180, "1:1")' rel='apple-touch-icon' sizes='180x180'/>
+    <meta expr:content='resizeImage(data:icon, 144, "1:1")' name='msapplication-TileImage'/>
+  <b:else/>
+    <link expr:href='data:sourceUrl' expr:type='data:sourceUrl contains ".svg" ? "image/svg+xml" : (data:sourceUrl contains ".ico" ? "image/x-icon" : "image/png")' rel='icon'/>
+  </b:if>
+</b:with>
+```
+
+And outside the widget, the fallback for a theme whose icon widget was removed:
+
+```xml
+<b:if cond='!data:widgets.Image71'>
+  <link expr:href='data:blog.blogspotFaviconUrl' rel='icon' type='image/x-icon'/>
+</b:if>
+```
+
+The `displayUrl` that Blogger stores for an Image widget can start with `//`, without a scheme. A theme adds `https:` before resizing it. See [Images](./images.mdx#protocol-relative-urls).
+
+## Widgets in the head
+
+A widget in the head would let the owner configure head tags from the Layout editor, as the share image and the icons above do. A `<b:section>` written directly in `<head>` is refused when saving; production themes keep their head sections in a Common includable and include it from `<head>`, but whether that saves is not confirmed. See [Content and placement](../layout/sections.mdx#content-and-placement). Without it, the head can still read the few fields that [`data:widgets`](../data/widgets.mdx) gives, such as the image of the post from the Blog widget.
+
+Blogger wraps a section and each widget in a `<div>`, and a `<div>` in `<head>` ends the head for the browser, so production themes hide the wrappers inside an HTML comment, as in [Sections that render no wrapper](../layout/sections.mdx#sections-that-render-no-wrapper): <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="A head section whose wrappers are commented out, in a Common includable included from the head" {6-8}
+<b:if cond='data:view.isLayoutMode or data:widgets any (w => w.sectionId == "head_tags")'>
+  <b:eval expr='"&lt;!--"'/>
+  <b:section id='head_tags' maxwidgets='3' name='Head tags' showaddelement='false'>
+    <b:widget id='Image71' locked='true' title='Icons' type='Image' version='2' visible='true'>
+      <b:includable id='main'>
+        <b:attr name='id' value=''/>
+        <b:attr name='class' value=''/>
+        <b:attr name='data-version' value=''/>
+        <b:eval expr='"--&gt;"'/>
+        <link expr:href='resizeImage(data:sourceUrl, 32, "1:1")' rel='icon' sizes='32x32' type='image/png'/>
+        <b:eval expr='"&lt;!--"'/>
+      </b:includable>
+    </b:widget>
+  </b:section>
+  <b:eval expr='"--&gt;"'/>
+</b:if>
+```
+
+```html title="Rendered"
+<!--<div class='section' id='head_tags' name='Head tags'><div>-->
+<link href='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEk/w32-h32-p-k-no-nu/icon.png' rel='icon' sizes='32x32' type='image/png'/>
+<!--</div></div>-->
+```
+
+</CodeTabs>
+
+- The empty `b:attr` remove the `id`, `class` and `data-version` Blogger puts on the widget wrapper, which shortens the commented-out markup. See [Changing the element of the widget](../layout/widgets.mdx#changing-the-element-of-the-widget).
+- In the Layout editor the head sections can be rendered inside `<body>`, so the section shows as a box like any other, see [Detecting the editor](./layout-editor.mdx#detecting-the-editor).
+
+## Checklist
+
+| Tag                 | Homepage                 | Lists                                                    | Posts and pages                              | 404              |
+| ------------------- | ------------------------ | -------------------------------------------------------- | -------------------------------------------- | ---------------- |
+| `<title>`           | blog title               | label, query or period, then the blog title              | item title, with the blog title when short   | "Page not found" |
+| Description         | blog                     | blog                                                     | search description or excerpt                | blog             |
+| Canonical           | yes                      | yes                                                      | yes                                          | no               |
+| `robots`            |                          | `noindex, follow` for archives, searches and older pages |                                              |                  |
+| Open Graph, Twitter | `website`, default image | `website`, default image                                 | `article`, post image                        | no               |
+| JSON-LD             | `WebSite`                |                                                          | `BlogPosting` or `WebPage`, `BreadcrumbList` |                  |

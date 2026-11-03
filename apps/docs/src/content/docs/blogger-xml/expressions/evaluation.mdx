@@ -1,0 +1,310 @@
+---
+title: Evaluation
+description: How Blogger evaluates expressions, truthiness, equality, comparison, conversions, missing data, errors, the size limit and the order of evaluation.
+level: advanced
+prerequisites:
+  - blogger-xml/expressions/values
+  - blogger-xml/expressions/operators
+published: 2026-10-26
+---
+
+Blogger evaluates the expressions of a theme on its servers, each time it renders a page. This page gives the rules the operators follow: which values are true, which are equal, how values convert, and what happens when data is missing or a value is of the wrong kind.
+
+Google documents none of these rules. They come from testing. <BloggerSource kind="observed" /> Where the result matters, write the test you mean in full: `data:x != ""`, `data:list.notEmpty`, `data:n > 0`.
+
+## Two moments
+
+**When the theme is saved**, Blogger checks the XML only. A raw `<` in an attribute is refused, with the message of the XML parser. The expressions are not checked: a theme with `1e5`, `null`, an unknown function or a wrong number of arguments in an expression is saved. <BloggerSource kind="observed" />
+
+**When a page renders**, Blogger reads an expression only when the rendering reaches it. An expression in a `<b:if>` that is false, in an `<b:elseif>` or `<b:else>` after a true branch, in another `<b:case>`, or in the content of an empty loop is never read, so its errors never show. <BloggerSource kind="observed" /> A reached expression is read whole, then its values are computed. A path that does not exist reads nothing, and the page renders on. The cases that fail are listed in [Errors](#errors).
+
+Check every kind of page after editing a theme: an error inside `<b:if cond='data:view.isPost'>` shows only on posts.
+
+## Truthiness
+
+`cond` of the tags takes any value, and counts it as true or false: <BloggerSource kind="observed" />
+
+| Value                                                            | Counts as                               |
+| ---------------------------------------------------------------- | --------------------------------------- |
+| `false`                                                          | false <BloggerSource kind="official" /> |
+| `no`                                                             | false                                   |
+| missing data                                                     | false                                   |
+| `""`                                                             | false                                   |
+| the strings `"false"` and `"no"`, in any case                    | false                                   |
+| `true`                                                           | true <BloggerSource kind="official" />  |
+| `yes`                                                            | true                                    |
+| any number, `0`, `0.0` and negative ones included                | true                                    |
+| any other string, `"0"`, `" "`, `"true"` and `" false"` included | true                                    |
+| a list, even empty                                               | true                                    |
+| a map                                                            | true                                    |
+
+```xml
+<b:if cond='data:blog.metaDescription'>
+  <meta expr:content='data:blog.metaDescription.escaped' name='description'/>
+</b:if>
+```
+
+An empty list is true, so test a list with its [properties](./properties.mdx#lists), `data:posts.notEmpty`, `data:posts.any` or `data:posts.empty`, rather than with `cond='data:posts'`. `0` is true too, so test a number with a comparison: `data:post.numberOfComments > 0`.
+
+A string is true when it has characters, unless it is `false` or `no`. Theme Designer toggles are often stored as lengths, `"1px"` and `"2px"`, so a theme compares them instead of testing them: `data:skin.vars.show_feeds == "2px"`.
+
+### Conditions inside an expression
+
+The condition of a ternary, the operands of `and`, `or`, `!` and `not`, and the body of `filter`, `any`, `all`, `none`, `count` and `first` are stricter than `cond`: <BloggerSource kind="observed" />
+
+- **A value read from data** counts by truthiness: a data path, a lambda parameter, a member such as `.length` or `.first`, an index, the result of `take`, `skip` or `snippet`. `data:n ? "a" : "b"` is `"a"` when `data:n` holds `0`.
+- **A value made in the expression** must be a boolean, a map, or a string that reads as a boolean: `"true"`, `"false"`, `"yes"`, `"no"` in any case, or `""`. Anything else is an error: a number, `5 ? 1 : 2` or `(data:n + 1) ? 1 : 2`; another string, `"x" and true` or `(data:s + "") ? 1 : 2`; a list, `[] ? 1 : 2` or the result of `filter` or `map`; the result of a function such as `path`.
+- **`?:` and the ternary** give the value they pick, so `(data:s ?: "y") ? 1 : 2` works when `data:s` exists, and is an error when the literal `"y"` is used.
+
+To test a computed value, compare it: `(data:n + 1) > 0`, `(data:list filter (x => x.enabled)).size > 0`.
+
+## Equality and comparison
+
+### `==` and `!=`
+
+| Expression                     | Result  | Why                                                |
+| ------------------------------ | ------- | -------------------------------------------------- |
+| `5 == "5"`                     | `true`  | a number equals a string holding its text          |
+| `5 == 5.0`                     | `false` | numbers compare by their text                      |
+| `007 == 7`                     | `false` | a number literal keeps the text it is written with |
+| `0.5 + 0.5 == 1`               | `false` | the sum is `1.0`                                   |
+| `1 * 007 == 7`                 | `true`  | a computed number has its computed text            |
+| `"007" == 7`                   | `false` | the text of `7` is `"7"`                           |
+| `true == 1`                    | `false` | a boolean is not a number                          |
+| `true == "true"`               | `true`  | a boolean compares with a string as its text       |
+| `"false" == false`             | `true`  |                                                    |
+| `"yes" == true`                | `false` | the text of `true` is `"true"`                     |
+| `data:missing == ""`           | `true`  | missing data equals the empty string               |
+| `data:missing == false`        | `false` |                                                    |
+| `data:missing == data:missing` | `true`  |                                                    |
+| `[1, 2] == [1, 2]`             | `true`  | lists compare item by item                         |
+| `[1, 2] == "[1,2]"`            | `true`  | with a string, a list compares as it prints        |
+| `{ a: 1 } == { a: 1 }`         | `true`  | maps compare key by key                            |
+| `"News" == "news"`             | `false` | strings compare case by case                       |
+
+All these rules are observed. <BloggerSource kind="observed" />
+
+Blogger gives post ids as numbers, and a number equals a string of its digits, so `data:post.id == data:view.postId` and `data:post.id == "12345"` both work. Dates compare as their text, in the format set for the blog: `data:post.lastUpdated != data:post.date` is false for two dates that print the same, so with a format that shows only the day, an edit on the day of publishing is not seen. See [Dates](#dates).
+
+To test whether data exists, test it alone, `cond='data:post.link'`, or compare with `!= false` when only `false` must fail: `data:input.protocol != false` is true when the data is missing. <BloggerSource kind="observed" />
+
+`<b:case value>` of [`<b:switch>`](../tags/conditionals.mdx) is text, compared with the text of `var`: `<b:case value='2px'/>`.
+
+### `<`, `<=`, `>`, `>=`
+
+| Expression           | Result   | Why                                             |
+| -------------------- | -------- | ----------------------------------------------- |
+| `3 < 10`             | `true`   | two numbers                                     |
+| `"2" < "10"`         | `true`   | two strings of digits compare as numbers        |
+| `"10" < "9"`         | `false`  |                                                 |
+| `"10" < 9`           | `false`  | a string of digits and a number                 |
+| `1.0 <= 1.00`        | `true`   | the values are compared, not their text         |
+| `"apple" < "banana"` | an error | strings that are not numbers can not be ordered |
+| `"b" < 1`            | an error |                                                 |
+| `true > 0`           | an error | booleans can not be ordered                     |
+| `data:missing < 1`   | an error | missing data can not be ordered, on either side |
+| `1 < 2 < 3`          | an error | `(1 < 2) < 3` orders a boolean                  |
+
+Both sides must be numbers or strings of digits. <BloggerSource kind="observed" /> Use these operators on numbers: lengths, counts, indexes, the number of comments. `data:post.title.length > 60`, `data:post.numberOfComments > 0`. Give missing data a default first: `(data:count ?: 0) > 1`.
+
+### `in` and `contains`
+
+A list is searched with `==`, so `5 in ["5"]` is true, and a string is searched as text, so `5 in "12345"` is true. Missing data is searched like `""`, and a map, a number or a boolean can not be searched. <BloggerSource kind="observed" /> The full rules are in [Membership](./operators.mdx#membership).
+
+## Conversions
+
+Each operator accepts some kinds of values, and converts them: <BloggerSource kind="observed" />
+
+| Operator                     | Accepts                                                                                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `+`                          | any values when one of the chain is a string or missing data: all of them are joined as text. Otherwise only numbers, which are added |
+| `-`, `*`, `/`, `%`           | numbers and strings of digits. Anything else is an error, booleans, `""` and missing data included                                    |
+| `<`, `>`, `<=`, `>=`         | the same as `-`. Two strings of digits compare as numbers                                                                             |
+| `==`, `!=`                   | anything. With a string on one side, both compare as text. Numbers compare by their text, lists and maps by content                   |
+| `in`, `contains`             | a list or a string to search, see [`in` and `contains`](#in-and-contains)                                                             |
+| `and`, `or`, `!`, conditions | by [truthiness](#truthiness), strictly inside an expression                                                                           |
+
+| Expression                 | Result                            |
+| -------------------------- | --------------------------------- |
+| `"Page " + 2`              | `Page 2`                          |
+| `"10" + 10`                | `1010`                            |
+| `20 + 25 + ""`             | `2025`: the whole chain is joined |
+| `(20 + 25) + ""`           | `45`                              |
+| `"5" * 2`                  | `10`                              |
+| `" 5" - 1`                 | an error: a space makes it text   |
+| `"a" * 2`                  | an error                          |
+| `true + 1`                 | an error                          |
+| `data:missing + 1`         | `1`: missing data joins as `""`   |
+| `data:missing + 1 + 1`     | `11`                              |
+| `data:missing * 2`         | an error                          |
+| `"Total: " + data:missing` | `Total: `                         |
+
+To get a number from a string of digits, multiply by one: `data:x * 1`. To get text, join with an empty string where the value is used: `data:x + ""`, or use [`snippet`](./functions.mdx#snippet) with one argument for Theme Designer values.
+
+### Strings read from data
+
+A string is converted when it is read: from a variable of `<b:with>`, `<b:loop>` or `<b:include>`, out of a list or a map with `.first`, `.last`, `.key` or an index, as a lambda parameter, or as the result of an escape property such as `.escaped`: <BloggerSource kind="observed" />
+
+- a string written like a number literal, `"9999"`, `"007"`, `"-5"`, `".5"`, `"1.50"`, becomes a number. `"+5"`, `"1e5"`, `"1,000"` and `" 5"` stay strings;
+- `"true"`, `"false"`, `"yes"` and `"no"`, in any case, become booleans.
+
+So when `data:x` holds `"10"`, `10 + data:x` is `20`, and `data:x contains "1"` is an error. A list stored with `<b:with value='["false", "x"]' var='l'>` prints `[false,"x"]`. Strings written in the expression stay strings: `"9999" + 1` is `99991`.
+
+Blogger's own text follows the same rule. A post titled `2024` gives `data:post.title + 1` = `2025`, and a label named `yes` reads as `true`. Post ids are numbers. <BloggerSource kind="observed" />
+
+A converted value keeps its text for `.length`, `.size` and the escapes: `"yes"` read from data has a `.length` of `3`, and prints, joins and compares as `true`. To use it as text, join it with `""` where it is used: `(data:post.title + "") contains "20"`. Storing that result with `<b:with>` converts it again.
+
+### Dates
+
+A date joins, compares and prints as its text in the Timestamp format of the blog (Settings, Formatting), in the time zone of the blog: `"x" + data:post.date` is `xAugust 08, 2026` with the default format. `==`, `!=` and `in` work on that text, and `<` or `-` on a date are errors. <BloggerSource kind="observed" />
+
+`format` and `.iso8601` do not depend on that setting. `format` writes the time in UTC, and `.iso8601` in the time zone of the blog. The members `.year`, `.month`, `.day`, `.dayOfWeek` and `.dayOfYear` are numbers. See [Dates](./properties.mdx#dates) and [`format`](./functions.mdx#format).
+
+### What is written
+
+`<b:eval>` and `expr:` attributes write the result as text: <BloggerSource kind="observed" />
+
+- a string as it is, without escaping: use [`.escaped`](./properties.mdx#strings) for text in markup;
+- a number literal as it is written: `.5`, `1.50`, `007` and `-0` stay so. A computed number keeps the decimal places of its operands: `1.50 + 0` is `1.50`, `.5 * 2` is `1.0`, `0.1 + 0.2` is `0.3`. Large integers are exact, with no exponent;
+- a quotient in full when it is exact, `1 / 8` is `0.125`, and otherwise rounded half up to 4 decimals: `7 / 3` is `2.3333`, `2 / 3` is `0.6667`;
+- a boolean as `true` or `false`, `yes` and `no` included;
+- a list in brackets, items separated by `,` with no space: `[1,"a"]`. Strings keep their quotes and are not escaped, so `["a\"b"]` prints `["a"b"]`, missing data prints `""`, and an empty list prints `]` alone. It looks like JSON, but `JSON.parse` can read it only when it is not empty and its strings have no `"` or `\`;
+- a map as `[Object]`;
+- a date as its text, see [Dates](#dates);
+- an empty string, and missing data, as a line break.
+
+A [data tag](../tags/output.mdx) prints neither a list nor a map: it prints `<!--Substitution is not a singleton for tag [l]-->` instead, so use `<b:eval>` for them. Missing data in a data tag prints a comment too, see [Missing data](#missing-data). <BloggerSource kind="observed" />
+
+For a boolean in JSON or in a script, write the text explicitly, as themes do: `<b:eval expr='data:blog.isPrivate ? "true" : "false"'/>`.
+
+## Missing data
+
+A path that does not exist gives nothing. Its members are nothing too, so `data:post.notAField.name` is empty as well: <BloggerSource kind="observed" />
+
+```xml
+<b:eval expr='data:post.notAField'/>
+<b:eval expr='"Hello " + data:notAField'/>
+<b:eval expr='data:post.notAField ?: "fallback"'/>
+<b:if cond='data:view.search.query'>
+```
+
+The lines render nothing, `Hello `, and `fallback`, and the condition is false outside a search.
+
+An index past the end of a list, a negative index, a decimal index, a word, or an index on a map reads nothing in the same way. The rest of the expression, and of the includable, goes on. <BloggerSource kind="observed" />
+
+Missing is not empty. `""`, `0`, `false` and an empty list are values: <BloggerSource kind="observed" />
+
+| Value         | As a condition | Replaced by `?:` | In `+` with a string | In `+ 1`            |
+| ------------- | -------------- | ---------------- | -------------------- | ------------------- |
+| missing data  | false          | yes              | `""`                 | `1`, joined as text |
+| `""`          | false          | no               | `""`                 | `1`, joined as text |
+| `0`           | true           | no               | `0`                  | `1`                 |
+| `false`       | false          | no               | `false`              | an error            |
+| an empty list | true           | no               | `]`                  | an error            |
+
+`""` and missing data are equal with `==`, false in conditions, and print `""` in a list. They differ elsewhere: <BloggerSource kind="observed" />
+
+| Expression   | `""`         | missing data                                 |
+| ------------ | ------------ | -------------------------------------------- |
+| `x.length`   | `0`          | nothing                                      |
+| `x ?: "y"`   | `""`         | `y`                                          |
+| `<data:x/>`  | a line break | `<!--Can't find substitution for tag [x]-->` |
+| `x in "abc"` | `true`       | `false`                                      |
+| `x map (…)`  | an error     | an empty list                                |
+
+Some data exists and is empty: `data:view.description` on the homepage of a blog without a description is `""`, while `data:blog.metaDescription` of the same blog is missing. <BloggerSource kind="observed" /> `?:` keeps an empty string, so use a ternary for a fallback that also covers empty strings: `data:view.description ? data:view.description : data:blog.title`. See [Elvis](./operators.mdx#elvis).
+
+## Errors
+
+An error in an expression does not stop the theme from saving. It shows when a page renders the expression: <BloggerSource kind="observed" />
+
+- **Outside a widget**, the whole page fails with a 500 error, `Invalid expression '…'`. `<b:loop values>` and `<b:with value>` have their own messages.
+- **Inside a widget**, only that widget fails. The page renders, with an HTML comment in place of the widget: `<!--Failed to render gadget 'HTML1'. The expression '…' is not valid. -->`. An error in `values` of `<b:loop>` or `value` of `<b:with>` gives a [markup error](../basics/saving.mdx#markup-errors) instead, whose comment ends `There was an error processing the markup.`
+
+So test a doubtful expression inside an HTML widget: the source of the page names the expression that failed.
+
+### Read errors
+
+A reached expression is read whole. These errors fail as soon as it is reached, even in a branch that does not run, or in the body of a lambda on an empty list: <BloggerSource kind="observed" />
+
+- a token that does not exist: `5-3`, `1e5`, `null`, `"a\"`, `{a:1}`;
+- a bare word, `title`, or `data: title`;
+- an unknown operator word or function: `ne`, `lower("x")`;
+- an index on a literal, `[1][0]`, or a member of a number literal, `42.length`;
+- the parameter of an outer lambda written as a bare word, and `not` as a parameter;
+- a bare lambda in the first branch of a ternary, whose body takes the `:`.
+
+### Evaluation errors
+
+Other errors fail only when Blogger computes the part that holds them. `true ? 1 : path("a", "b", "c")` renders `1`: <BloggerSource kind="observed" />
+
+| Cause                                                   | Example                                                                         |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| a wrong number of arguments                             | `path(data:url)`, `resizeImage(data:image)`                                     |
+| a literal argument of the wrong kind                    | `resizeImage(data:image, 640, "wide")`, `format("2026-01-05", "y")`             |
+| a division by zero                                      | `1 / 0`, `0 / 0`, `data:a / data:n` when `data:n` is `0`                        |
+| arithmetic or ordering on a value that is not a number  | `"a" * 2`, `true + 1`, `"a" < "b"`, `data:missing < 1`                          |
+| a value made in the expression, used as a condition     | `5 ? 1 : 2`, `"x" and true`, `!0`                                               |
+| `in` a map, a number or a boolean                       | `"a" in { a: 1 }`, `1 in 5`                                                     |
+| a lambda on a string, `""`, a number or a map           | `data:post.title any (c => c == "a")`                                           |
+| `take` or `skip` with a wrong count, or on missing data | `data:posts take 0`, `data:missing take 2`                                      |
+| `.` right after a lambda                                | `data:posts filter (p => p.featuredImage).size`                                 |
+| a URL function on `""` or missing data                  | `path(data:missing, "search")`                                                  |
+| `format` on a value that is not a date                  | `format(data:post.date.iso8601, "yyyy")`                                        |
+| a width or a ratio from data that `resizeImage` refuses | `resizeImage(data:image, data:width)` with `data:width` holding `"wide"`        |
+| an expression built at render time that is not valid    | `<b:with expr:value='data:text' var='x'>` when `data:text` is not an expression |
+
+### Crashes
+
+A few expressions crash the page: they show Blogger's generic error page (`Whoops, that's an error.`) for the whole page, even inside a widget: <BloggerSource kind="observed" />
+
+- a remainder by zero: `5 % 0`;
+- a member of missing data in parentheses, as a function argument or a list item: `snippet(((data:a).b))`, `[1, ((data:a).b)]`, when `data:a` is missing;
+- `resizeImage` with a negative width and a ratio: `resizeImage(data:image, -5, "16:9")`;
+- an operator function with too few values: `-()`, `*()`, `/()`, `%()`, `==()`, `==(1)`, `!=(1)`.
+
+### Not errors
+
+- missing data, and members of missing data;
+- an index past the end of a list, a negative or decimal index, a word as an index, an index on a map;
+- a property a value does not have, such as `.first` on a string;
+- a lambda on missing data, which acts on an empty list.
+
+Mistakes in the XML come before all of this. A raw `<` or `&&` in an attribute, or a quote of the same kind as the attribute's, makes the theme invalid XML, and it can not be saved. See [Writing an expression inside XML](./index.mdx#writing-an-expression-inside-xml).
+
+Guard what can fail with a tag around it. Its content is only read when the condition is true:
+
+```xml
+<b:if cond='data:total and data:total != 0'>
+  <b:eval expr='data:done * 100 / data:total'/>%
+</b:if>
+```
+
+`data:total` alone tests that the data exists, and `!= 0` is needed because `0` is true.
+
+## Size limit
+
+An expression has at most 40 nodes. A larger one is an error, `Invalid expression`, even when it is valid otherwise: inside a widget, `The expression '…' is not valid.`, and a markup error in `values` of `<b:loop>` and `value` of `<b:with>`. Characters do not count: a string of 50,000 characters is one node. <BloggerSource kind="observed" /> The limit applies to every attribute that holds an expression, `cond`, `expr`, `values`, `value`, `data`, `var` of `<b:switch>`, `reverse` and the `expr:` attributes.
+
+| Part                                                                | Nodes                             |
+| ------------------------------------------------------------------- | --------------------------------- |
+| a literal, `1`, `"a"`, `yes`, `-5`                                  | 1                                 |
+| a data path or a lambda parameter, with all its members and indexes | 1                                 |
+| parentheses, `!`, `not`                                             | 1, plus what they hold            |
+| a binary operator, `+`, `==`, `in`, `and`, `?:`, `not in`           | 1, plus its two sides             |
+| a list, in brackets or braces, or a map                             | 1, plus its values: keys are free |
+| a function call or an operator function, `path(…)`, `+(…)`          | 1, plus its arguments             |
+| members after a value that is not a data path, `(…).first.target`   | 1 for all of them                 |
+| the ternary                                                         | 2, plus its three parts           |
+| a lambda                                                            | 3, plus its list and its body     |
+| a minus before `(`                                                  | free                              |
+
+The expression inside an index has a limit of its own, and does not count in the path. So `1 + 1 + … + 1` fits 20 numbers, 39 nodes, and fails with 21, and a list literal holds 39 items. `+(1, 1, …)` is one node for all its values, and fits 39. Split a long expression into steps with [`<b:with>`](../tags/variables.mdx). See [Limits](../reference/limits.mdx).
+
+## Order of evaluation
+
+- **Left to right** at the same [precedence](./operators.mdx#precedence). A chain of `+` is one operation over all its values: `20 + 25 + ""` is `2025`, `1 + 1 + data:blog.title` is `11` followed by the title, and `(20 + 25) + ""` is `45`. <BloggerSource kind="observed" />
+- **`and` and `or` stop early.** The right side is evaluated only when the left one does not decide: `data:total != 0 and data:done / data:total > 0.5` never divides by zero. <BloggerSource kind="observed" />
+- **The ternary and `?:`** evaluate only the branch they return. <BloggerSource kind="observed" />
+- **A lambda** evaluates its body once per item, in the order of the list, and never on an empty list. `filter` and `map` keep that order, and `first` returns the earliest match.
+- **`<b:with>`** evaluates its value once, for all its content. Store a result there rather than writing the same expression twice.

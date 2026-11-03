@@ -1,0 +1,117 @@
+---
+title: Attribution
+description: The read-only footer widget that credits Blogger, the photographer of the theme images and the blog's own copyright line.
+published: 2026-10-26
+---
+
+`Attribution` is the credits line at the bottom of a blog. It says "Powered by Blogger", names the author of the theme's background image when the theme has one, and adds a copyright text the owner types in the Layout editor. Blogger puts it in the footer of its themes, locks it, and keeps its markup to itself: the includable is read only, and only the copyright text is up to the owner.
+
+## Quick example
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:section class='footer' id='footer' name='Footer' showaddelement='false'>
+  <b:widget id='Attribution1' locked='true' title='' type='Attribution' version='2' visible='true'>
+    <b:widget-settings>
+      <b:widget-setting name='copyright'>© 2026 Garden Notes</b:widget-setting>
+    </b:widget-settings>
+  </b:widget>
+</b:section>
+```
+
+```html title="Rendered, on a theme without a background image"
+<div class='widget Attribution' data-version='2' id='Attribution1'>
+<div class='widget-content'>
+<div class='blogger'>
+<a href='https://www.blogger.com' rel='nofollow'>
+<svg class='svg-icon-24'>…</svg>
+Powered by Blogger
+</a>
+</div>
+<div class='copyright'>© 2026 Garden Notes</div>
+</div>
+</div>
+```
+
+</CodeTabs>
+
+The `main` includable is left out of the example: it is Blogger's, and edits to it are not kept. The widget has no title, and the editor offers no "show this widget" switch.
+
+## Placement and limits
+
+| Property                 | Value                                                                                                                                                 | Source                            |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `Attribution`                                                                                                                                         | <BloggerSource kind="official" /> |
+| Per blog                 | 1. A second one is refused when saving, see [Widgets per type](../reference/limits.mdx#widgets-per-type)                                              | <BloggerSource kind="observed" /> |
+| Suggested width          | 300px                                                                                                                                                 | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | The footer of classic and 2017 themes. Dynamic Views add it to their footer on their own                                                              | <BloggerSource kind="observed" /> |
+| Locked                   | Added locked by Designer 2010, Mobile Default 2010, Contempo, Essential, Emporio, Notable and Soho (`locked='true'` in 15 of the 16 official exports) | <BloggerSource kind="observed" /> |
+| Markup                   | **Read only**: changes to `main` are not kept                                                                                                         | <BloggerSource kind="observed" /> |
+| Title                    | None. The texts are automatic and localized                                                                                                           | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Shown unless disabled                                                                                                                                 | <BloggerSource kind="official" /> |
+| Available in             | Every theme, Mobile Default 2010 and Dynamic Views included                                                                                           | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting     | Values                               | Read as                              | Meaning                             | Source                            |
+| ----------- | ------------------------------------ | ------------------------------------ | ----------------------------------- | --------------------------------- |
+| `copyright` | text, up to 200 characters, or empty | `attribution` (v1), `copyright` (v2) | The "Copyright" field of the editor | <BloggerSource kind="observed" /> |
+
+The setting stays editable in the theme code even though the includable is not. An empty value is saved as `<b:widget-setting name='copyright'/>`, and an Attribution widget written with no settings gets that empty `copyright`. A value of 201 characters is refused "Must be at most 200 characters", and markup in it, such as `<b>x</b>`, is stored as an empty value. <BloggerSource kind="observed" />
+
+## Widget data
+
+| Field              | v1  | v2  | Type   | Content                                                                                                                         | Source                            |
+| ------------------ | --- | --- | ------ | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `attribution`      | Yes | No  | string | The whole line as one string: the copyright (up to 200 characters), the image credit and "Powered by Blogger", with their links | <BloggerSource kind="observed" /> |
+| `copyright`        | No  | Yes | string | The copyright text, up to 200 characters                                                                                        | <BloggerSource kind="observed" /> |
+| `bloggerUrl`       | No  | Yes | string | `https://www.blogger.com/`, the same as `data:blog.bloggerUrl`                                                                  | <BloggerSource kind="observed" /> |
+| `imageAuthor`      | No  | Yes | object | The author of the theme's background image. Missing when there is none                                                          | <BloggerSource kind="observed" /> |
+| `imageAuthor.name` | No  | Yes | string | The author's name                                                                                                               | <BloggerSource kind="observed" /> |
+| `imageAuthor.url`  | No  | Yes | string | A link to the author or the image                                                                                               | <BloggerSource kind="observed" /> |
+
+Version 2 builds its texts from three [messages](../data/messages.mdx):
+
+| Message                         | Parameters             | English text                            |
+| ------------------------------- | ---------------------- | --------------------------------------- |
+| `messages.poweredByBlogger`     | none                   | "Powered by Blogger"                    |
+| `messages.templateImagesBy`     | the name               | "Theme images by NAME"                  |
+| `messages.templateImagesByLink` | the URL, then the name | "Theme images by NAME", the name linked |
+
+## Built-in includables
+
+| Includable | v1  | v2                | What it renders      | Source                            |
+| ---------- | --- | ----------------- | -------------------- | --------------------------------- |
+| `main`     | Yes | Yes, `var='this'` | Read only. See below | <BloggerSource kind="observed" /> |
+
+Version 1 prints `attribution` in a centred `div.widget-content` when it is not empty, then `quickedit`.
+
+Version 2 writes a `div.widget-content` with up to three blocks:
+
+| Block                   | When                     | Content                                                                                                                                   |
+| ----------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `div.blogger`           | Always                   | A `nofollow` link to `bloggerUrl` with the Blogger logo (the Common includable `flatBloggerIcon`, an SVG) and `messages.poweredByBlogger` |
+| `div.image-attribution` | `imageAuthor` is set     | `messages.templateImagesByLink` with the URL and the name, or `messages.templateImagesBy` with the name when there is no URL              |
+| `div.copyright`         | `copyright` is not empty | The copyright text                                                                                                                        |
+
+Its `<b:message>` elements pass the parameters as `<b:param>` with a `value` and no `name`: Blogger fills the message placeholders by position. See [b:message](../tags/messages.mdx).
+
+## Styling it
+
+The markup is fixed, so the classes above are the hooks:
+
+```css
+.Attribution .widget-content { display: flex; flex-wrap: wrap; gap: .25rem 1rem; justify-content: center; font-size: .85rem; }
+.Attribution .blogger a { display: inline-flex; align-items: center; gap: .25rem; color: inherit; }
+.Attribution .svg-icon-24 { width: 18px; height: 18px; fill: currentColor; }
+```
+
+A theme that wants its own credits line can write it with [HTML](./html.mdx) or plain markup next to the widget, and keep the Attribution widget for the copyright the owner sets.
+
+## Things to know
+
+- **Not required.** A custom theme with no Attribution widget saves. <BloggerSource kind="observed" /> Blogger's themes always ship one, locked. A second one is refused when the theme is saved.
+- **Hiding it by condition.** One export carries `cond='not data:features.hideAttribution'` on the `<b:widget>`. `data:features` appears nowhere else.
+- **Version 1 in one string.** In classic themes the copyright, the credit and "Powered by Blogger" come as a single `attribution` string; the parts can not be styled separately.
+- **`quickedit`** in the version 1 `main` no longer does anything.

@@ -39,6 +39,8 @@ build/
 
 # Cache
 .turbo/
+.wrangler/
 
 # Generated project files
 .tailwind-classes.json
+.astro/

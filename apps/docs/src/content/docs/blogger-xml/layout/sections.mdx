@@ -1,0 +1,342 @@
+---
+title: b:section
+description: Mark the areas of a theme that hold widgets, set how they behave in the Layout editor, and control where and when they render.
+level: beginner
+published: 2026-10-26
+---
+
+A section is a container for widgets. The theme decides where the sections go and what HTML surrounds them; the blog owner decides which widgets go in each one, in the Layout editor (the Layout tab of the dashboard opens it). Every widget of a blog lives in exactly one section. <BloggerSource kind="official" />
+
+Here is the search area of a header, with room for one widget and no "Add a Gadget" link:
+
+<CodeTabs>
+
+```xml title="A header search area"
+<div class='header-end'>
+  <b:section class='header-search' id='theme_section_header_search' maxwidgets='1' name='Header Search' showaddelement='false'>
+    <b:widget id='BlogSearch01' locked='true' title='Search this blog' type='BlogSearch' version='2' visible='true'>
+      <b:includable id='main'>
+        <form expr:action='data:blog.searchUrl'>
+          <input expr:placeholder='data:title' name='q' type='search'/>
+        </form>
+      </b:includable>
+    </b:widget>
+  </b:section>
+</div>
+```
+
+```html title="Rendered"
+<div class='header-end'>
+  <div class='header-search section' id='theme_section_header_search' name='Header Search'><div class='widget BlogSearch' data-version='2' id='BlogSearch01'>
+    <form action='https://example.blogspot.com/search'>
+      <input name='q' placeholder='Search this blog' type='search'/>
+    </form>
+  </div></div>
+</div>
+```
+
+</CodeTabs>
+
+The section became a `div` with its id, its classes followed by `section`, and its name. The widget inside it became a `div` of its own, described in [b:widget](./widgets.mdx).
+
+## How sections work
+
+Blogger reads the sections when the theme is saved. It records which widgets each section holds, in which order, and keeps that list in the XML: moving a widget in the Layout editor moves its `<b:widget>` element from one section to another. <BloggerSource kind="official" />
+
+When a page is served, a section renders where it is written, as an element that wraps the output of its widgets. In the Layout editor it renders as a box titled with its `name`, with the boxes of its widgets and, unless it is turned off, an "Add a Gadget" link. <BloggerSource kind="official" />
+
+A section holds no markup of its own. Whatever HTML must appear around the widgets, a heading, a wrapper, a separator, goes outside the section, in the theme.
+
+## Attributes
+
+| Attribute        | Required | Value                             | Default    | Description                                                    | Source                              |
+| ---------------- | -------- | --------------------------------- | ---------- | -------------------------------------------------------------- | ----------------------------------- |
+| `id`             | Yes      | a name, unique among the sections |            | Identifies the section, and becomes the `id` of the element    | <BloggerSource kind="official" />   |
+| `class`          | No       | class names                       |            | Classes of the element, before `section`                       | <BloggerSource kind="official" />   |
+| `name`           | No       | text                              | the `id`   | The title of the section in the Layout editor                  | <BloggerSource kind="observed" />   |
+| `showaddelement` | No       | `yes`, `no`, `true` or `false`    | `yes`      | Whether the Layout editor offers "Add a Gadget" in the section | <BloggerSource kind="official" />   |
+| `maxwidgets`     | No       | a whole number                    | no limit   | How many widgets the Layout editor lets the section hold       | <BloggerSource kind="official" />   |
+| `preferred`      | No       | `yes`, `no`, `true` or `false`    |            | Marks the main section of the theme                            | <BloggerSource kind="observed" />   |
+| `cond`           | No       | expression                        |            | Renders the section only when the expression is true           | <BloggerSource kind="observed" />   |
+| `tag`            | No       | an element name                   | `div`      | The element the section renders as                             | <BloggerSource kind="observed" />   |
+| `ads`            | No       | `true` or `false`                 |            | Marks a section meant for AdSense widgets                      | <BloggerSource kind="observed" />   |
+| `growth`         | No       | `vertical` or `horizontal`        | `vertical` | How the Layout editor arranged the widgets                     | <BloggerSource kind="deprecated" /> |
+| any other        | No       | any value                         |            | Kept when saved, not rendered                                  | <BloggerSource kind="observed" />   |
+
+`id` is read when the theme is saved, and the plain `id` is always needed: a section with only `expr:id` is refused as missing its id. `expr:id` next to `id` saves, and is read again when the page renders, where it wins over `id`: when no section has the computed id, every page fails with a 500 error, `Could not find section s2`. Do not write `expr:id` on a section. <BloggerSource kind="observed" />
+
+`expr:name` and `expr:tag` work, and win over `name` and `tag`. `expr:class` and `expr:title` save, but render nothing. `cond` is an expression already. <BloggerSource kind="observed" />
+
+### `id`
+
+The id names the section for Blogger, for the theme and for the page:
+
+- It is the `id` of the rendered element, so CSS can select `#theme_section_header_search`.
+- It is `data:widget.sectionId` inside the widgets of the section, and the `sectionId` of their entries in [`data:widgets`](../data/widgets.mdx).
+- It is how Blogger knows which widgets belong where. Every condition, selector and script that names a section depends on its id, so choose ids once and keep them.
+
+Google asks for letters and numbers. <BloggerSource kind="official" /> Underscores and hyphens work too: Blogger's own themes use ids like `page_body` and `sidebar-right-1`, and production themes ids like `theme_section_header_title`. <BloggerSource kind="observed" />
+
+The id is required, unique, case-sensitive and compared after character references are decoded; the full rules and messages are in [Section ids](../basics/saving.mdx#section-ids). <BloggerSource kind="observed" />
+
+A theme that names its sections by area, `theme_section_header`, `theme_section_sidebar`, `theme_section_footer`, keeps them easy to find in the XML and in CSS.
+
+### `class`
+
+Plain class names, added to the rendered element before the class `section`, which Blogger always adds. Google suggests the names `navbar`, `header`, `main`, `sidebar` and `footer`, and says they help Blogger place the widgets when a blog switches themes. <BloggerSource kind="official" />
+
+`expr:class` saves, but its value does not reach the rendered element. <BloggerSource kind="observed" /> To give the area a class that depends on the page, put a [`<b:class>`](../tags/attributes.mdx#bclass) on an element around the section.
+
+The same classes are on the section in the Layout editor, which makes them useful as hooks for the editor's CSS: a section with the class `no-desc` can hide the descriptions of its widget boxes, see [Section options as classes](../guides/layout-editor.mdx#section-options-as-classes).
+
+### `name`
+
+The title of the section's box in the Layout editor. Without `name`, the box shows the `id`. The name is also output as a `name` attribute on the rendered element; without it, there is no `name` attribute. <BloggerSource kind="observed" />
+
+For the names Blogger's own themes use, such as `Header`, Blogger shows and renders a translation in the language of the blog. Other names are output exactly as written. <BloggerSource kind="observed" />
+
+### `showaddelement`
+
+Whether the Layout editor shows the "Add a Gadget" link in the section. `yes`, the default, shows it; `no` hides it. <BloggerSource kind="official" /> `true` and `false` mean the same. <BloggerSource kind="observed" />
+
+It only removes the link: the widgets the section holds stay editable and movable. Turn the link off for areas built for one specific widget, such as the header title or a search box.
+
+### `maxwidgets`
+
+The most widgets the section can hold. When the count is reached, the Layout editor hides "Add a Gadget" and refuses widgets dragged into the section. Without it, the number is not limited. <BloggerSource kind="official" />
+
+The limit is a Layout editor rule only. Widgets written in the XML are not counted when the theme is saved: a carousel section can have `maxwidgets='1'` and ship ten Image widgets, one per slide, so the blog owner can edit the slides but can not add an eleventh. Any value saves, `0`, `-1` and `x` included, and Blogger's layouts version 3 themes do not use the attribute. <BloggerSource kind="observed" />
+
+A theme needs at least one section without `maxwidgets`. When every section of the theme has the attribute, the Layout editor shows no widgets at all. <BloggerSource kind="observed" /> Leave it off the main section, which usually holds the Blog widget:
+
+```xml
+<b:section id='header' maxwidgets='1'/>
+<b:section id='sidebar' maxwidgets='2'/>
+<b:section id='main'/>
+```
+
+```xml
+<b:section class='slider' id='theme_section_carousel' maxwidgets='1' name='Carousel' showaddelement='false'>
+  <b:widget id='Image01' locked='true' title='Slide 1' type='Image' version='2' visible='true'>…</b:widget>
+  <b:widget id='Image02' locked='true' title='Slide 2' type='Image' version='2' visible='true'>…</b:widget>
+  <b:widget id='Image03' locked='true' title='Slide 3' type='Image' version='2' visible='false'>…</b:widget>
+</b:section>
+```
+
+### `preferred`
+
+Marks one section as the main section of the theme. Every one of Blogger's own themes marks one section `preferred='yes'`, usually the main sidebar rather than the section of the Blog widget. <BloggerSource kind="observed" />
+
+What Blogger does with it, and whether a theme needs a preferred section, or a section at all, is not confirmed. Marking the section where new widgets belong costs nothing, so themes usually keep one.
+
+### `cond`
+
+An [expression](../expressions/index.mdx). When it is false, nothing of the section is rendered: neither its element nor its widgets. <BloggerSource kind="observed" />
+
+```xml
+<b:section class='mobile-menu' cond='data:blog.isMobileRequest' id='theme_section_mobile_menu' maxwidgets='1' name='Mobile Menu' showaddelement='false'>…</b:section>
+<b:section cond='!data:blog.isPrivateBlog and !data:view.isPreview and !data:view.isPage' id='theme_section_horizontal_ad' maxwidgets='3' name='Horizontal Ad'>…</b:section>
+```
+
+The condition sees the global data, `data:blog`, `data:view` and `data:widgets`, and the names of the tags around the section. It is also evaluated in the Layout editor, so a section whose condition is false there disappears from the editor too. See [Showing a section on some pages](#showing-a-section-on-some-pages).
+
+### `tag`
+
+The element the section renders as. Without it, a section is a `div`. <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:section class='site-footer' id='theme_section_footer' name='Footer' tag='footer'>…</b:section>
+```
+
+```html title="Rendered"
+<footer class='site-footer section' id='theme_section_footer' name='Footer'>…</footer>
+```
+
+</CodeTabs>
+
+Use it when the section is itself the landmark of the page: `header`, `nav`, `main`, `aside` or `footer`. In the Layout editor the section stays a `div`. <BloggerSource kind="observed" />
+
+### `ads`
+
+Marks a section meant for AdSense ads. Blogger's own themes set `ads='true'` on the section that holds their AdSense widgets. <BloggerSource kind="observed" /> What it changes is not confirmed.
+
+### `growth`
+
+Google documents `growth` to lay the widgets of the section out side by side in the Layout editor, with `horizontal`, or stacked, with `vertical`, the default. <BloggerSource kind="official" /> The current Layout editor ignores it and only copies it onto the box as an attribute. Lay the boxes out with CSS in `<b:template-skin>` instead. <BloggerSource kind="deprecated" />
+
+### Other attributes
+
+Blogger keeps any other attribute when it saves the theme, sorted with the others, but does not render it. Only `id`, `class`, `name` and `tag` reach the page: `style`, `data-*`, `title`, `aria-label`, `hidden`, an unknown `foo`, `expr:title` and `expr:class` are all dropped. <BloggerSource kind="observed" />
+
+To give a section an accessible name, or hide one that only holds data for scripts, put the attribute on an element around it:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<div aria-label='Gallery' class='slider-wrapper'>
+  <b:section class='slider' id='theme_section_carousel' maxwidgets='1' name='Carousel' showaddelement='false'>…</b:section>
+</div>
+<div hidden=''>
+  <b:section id='theme_section_internals' name='Internal Widgets' showaddelement='false'>…</b:section>
+</div>
+```
+
+```html title="Rendered"
+<div aria-label='Gallery' class='slider-wrapper'>
+  <div class='slider section' id='theme_section_carousel' name='Carousel'>…</div>
+</div>
+<div hidden=''>
+  <div class='section' id='theme_section_internals' name='Internal Widgets'>…</div>
+</div>
+```
+
+</CodeTabs>
+
+## Content and placement
+
+A section contains widgets and nothing else: anything else written in it, text, comments or other elements, is deleted when the theme is saved, see [Layout nesting](../basics/saving.mdx#layout-nesting). <BloggerSource kind="observed" />
+
+```xml
+<b:section id='theme_section_sidebar' name='Sidebar'>
+  <b:widget id='Label01' locked='false' title='Labels' type='Label' version='2' visible='true'>…</b:widget>
+  <b:widget id='HTML01' locked='false' title='About' type='HTML' version='2' visible='true'>…</b:widget>
+</b:section>
+```
+
+To put markup between two widgets, end the section, write the markup, and start a second section. <BloggerSource kind="official" />
+
+A section with no widget can be written self-closed. Blogger saves an empty section that way: <BloggerSource kind="observed" />
+
+```xml
+<b:section id='theme_section_after_post' name='After the post' showaddelement='true'/>
+```
+
+Where a section can go: <BloggerSource kind="observed" />
+
+- Anywhere markup is rendered: inside HTML elements, inside `<b:if>`, `<b:with>` and the other logic tags.
+- Inside the includable of a Common [default markup](./default-markups.mdx#common). The section then renders wherever the includable is included. A theme can keep its whole page in includables such as `theme:head` and `theme:body`, sections included.
+- Never inside another section: `Sections may not be nested`. Never inside a widget either: a section in a widget's includable saves, but the widget then fails with `The tag 'section' is not a known Blogger tag.`
+- Never in `<head>`: Blogger refuses the theme with `b:section should not appear inside of head`.
+
+Blogger's own themes write every section inside `<body>`. Whether a section in a Common includable that is included in `<head>` saves is not confirmed.
+
+## Rendered output
+
+On the blog a section is one element: a `div`, or the element of `tag`. It has: <BloggerSource kind="observed" />
+
+- `id`: the id of the section;
+- `class`: the classes of the section, then `no-items` when no widget of the section is shown, then `section`;
+- `name`: the name, when the section has one;
+- nothing else: other attributes are not rendered.
+
+The id is output as written, not escaped: only `'` becomes `&#39;`. <BloggerSource kind="observed" />
+
+The first widget follows the opening tag directly, and the closing tag follows the last widget. A section whose widgets are all hidden, or that has none, is still output, empty:
+
+```html
+<div class='no-items section' id='theme_section_after_post' name='After the post'></div>
+```
+
+A widget with `visible='false'` counts as not shown: its section gets `no-items`, and the widget is not in [`data:widgets`](../data/widgets.mdx). <BloggerSource kind="observed" />
+
+Select it with `.section.no-items`, which works whatever the order of the classes. Google only says that sections are replaced by `div` elements with their ids. <BloggerSource kind="official" />
+
+## Data around a section
+
+A section does not start a new scope. The names set by [`<b:with>`](../tags/variables.mdx) and [`<b:loop>`](../tags/loops.mdx) around it reach its `cond` and the includables of its widgets. <BloggerSource kind="observed" /> A theme can compute the list of slides once, use it to build the controls of a carousel, and let the Image widgets of the section read it again:
+
+```xml
+<b:with value='data:widgets filter (w => w.sectionId == "theme_section_carousel")' var='slides'>
+  <b:if cond='data:view.isHomepage and data:slides.notEmpty'>
+    <div class='slider-wrapper'>
+      <b:section class='slider' id='theme_section_carousel' maxwidgets='1' name='Carousel' showaddelement='false'>
+        <b:widget id='Image01' locked='true' title='Slide 1' type='Image' version='2' visible='true'>
+          <b:includable id='main'>
+            <b:include data='slides' name='slide'/>
+          </b:includable>
+          …
+        </b:widget>
+      </b:section>
+    </div>
+  </b:if>
+</b:with>
+```
+
+## Showing a section on some pages
+
+A section can be kept off some pages with `cond` on the section, with a `<b:if>` around the section and its wrapper, or with CSS on the empty section, `.section.no-items`. The three, and when to use each, are in [Three ways to hide a section](../guides/page-layouts.mdx#three-ways-to-hide-a-section). Start every condition that hides a section with `data:view.isLayoutMode or`, or the section disappears from the Layout editor with its widgets, see [Detecting the editor](../guides/layout-editor.mdx#detecting-the-editor).
+
+```xml
+<b:if cond='data:view.isLayoutMode or data:widgets any (w => w.sectionId == "theme_section_sidebar")'>
+  <aside class='sidebar'>
+    <b:section id='theme_section_sidebar' name='Sidebar' showaddelement='true'>…</b:section>
+  </aside>
+</b:if>
+```
+
+The test on `data:widgets` only counts visible widgets. A section whose widgets are all turned off is hidden on the blog, and comes back as soon as one of them is turned on in the Layout editor. A theme can use this for a maintenance notice: its section only renders when its widget, shipped with `visible='false'`, is switched on.
+
+```xml
+<b:section cond='data:widgets any (w => w.sectionId == "theme_section_maintenance")' id='theme_section_maintenance' maxwidgets='1' name='Maintenance' showaddelement='false'>
+  <b:widget cond='!data:view.isPreview' id='LinkList01' locked='true' title='Website under Maintenance' type='LinkList' version='2' visible='false'>…</b:widget>
+</b:section>
+```
+
+## Sections that render no wrapper
+
+A section always renders its element, and every widget its `div`. Where those wrappers can not appear, around JSON for scripts or tags meant for the head, a theme can hide them inside an HTML comment. The section is wrapped in `<!--` and `-->`, and each widget closes the comment before its own output and opens it again after: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:if cond='data:view.isLayoutMode or data:widgets any (w => w.sectionId == "theme_section_head")'>
+  <b:eval expr='"&lt;!--"'/>
+  <b:section id='theme_section_head' maxwidgets='1' name='Head Tags' showaddelement='false'>
+    <b:widget id='LinkList71' locked='true' title='Page Title' type='LinkList' version='2' visible='true'>
+      <b:includable id='main'>
+        <b:eval expr='"--&gt;"'/>
+        <title><data:view.title.escaped/></title>
+        <b:eval expr='"&lt;!--"'/>
+      </b:includable>
+    </b:widget>
+  </b:section>
+  <b:eval expr='"--&gt;"'/>
+</b:if>
+```
+
+```html title="Rendered"
+<!--<div class='section' id='theme_section_head' name='Head Tags'><div class='widget LinkList' data-version='2' id='LinkList71'>-->
+<title>My first post</title>
+<!--</div></div>-->
+```
+
+</CodeTabs>
+
+A section written directly in `<head>` is refused when saving, so this example has to sit in `<body>`, or in a Common includable that builds the head. Whether the second way saves is not confirmed. In `<body>`, the wrappers are commented out and the widget's output stays visible. <BloggerSource kind="observed" />
+
+The comment markers are printed with [`<b:eval>`](../tags/output.mdx#beval), as text. A real comment around the section would hide it from Blogger itself, and a lone `<!--` is not well-formed XML. The pattern only works when no widget of the section prints `--` outside its own output.
+
+## In the Layout editor
+
+In the Layout editor every section is a box with a heading, its `name`, the boxes of its widgets in order, and the "Add a Gadget" link unless `showaddelement` is off or `maxwidgets` is reached. Widgets are dragged between the boxes. <BloggerSource kind="official" />
+
+The box is a `div` with the classes of the section, and its Layout attributes are copied onto it: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:section class='header-title' id='theme_section_header_title' maxwidgets='1' name='Header Title' showaddelement='false' tag='header'>…</b:section>
+```
+
+```html title="In the Layout editor (browser DOM)"
+<div class="header-title section" id="theme_section_header_title" maxwidgets="1" name="Header Title" showaddelement="false">
+  <h4>Header Title</h4>
+  …
+</div>
+```
+
+</CodeTabs>
+
+The editor's page is `<body id='layout'>`, styled in [`<b:template-skin>`](../styles/skin.mdx#btemplate-skin) with selectors that start with `body#layout`. The elements and selectors, the properties that need `!important`, and examples are in [Styling the editor](../guides/layout-editor.mdx#styling-the-editor).

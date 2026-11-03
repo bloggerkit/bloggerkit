@@ -1,0 +1,508 @@
+---
+title: b:includable and b:include
+description: Split markup into named blocks, render them with data where they are needed, and reuse the includables Blogger provides.
+level: intermediate
+prerequisites:
+  - blogger-xml/layout/widgets
+published: 2026-10-26
+---
+
+An includable is a named block of markup. It renders nothing by itself: an include renders it, where the include is written, with the data the include gives it. Every widget has an includable named `main`, which Blogger renders for the widget; the others render when they are included, as often as they are included. <BloggerSource kind="official" />
+
+A Blog widget that renders each post of the page with the same card:
+
+<CodeTabs>
+
+```xml title="One includable per post"
+<b:widget id='Blog01' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'>
+  <b:includable id='main' var='this'>
+    <div class='post-list'>
+      <b:loop values='data:posts' var='post'>
+        <b:include data='post' name='postCard'/>
+      </b:loop>
+    </div>
+  </b:includable>
+  <b:includable id='postCard' var='post'>
+    <article class='post-card'>
+      <h2><a expr:href='data:post.url'><data:post.title/></a></h2>
+      <b:include cond='data:post.labels' data='post' name='postLabels'/>
+    </article>
+  </b:includable>
+  <b:includable id='postLabels' var='post'>
+    <p class='labels'>
+      <b:loop values='data:post.labels' var='label'>
+        <a expr:href='data:label.url'><data:label.name/></a>
+      </b:loop>
+    </p>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget Blog' data-version='2' id='Blog01'>
+  <div class='post-list'>
+    <article class='post-card'>
+      <h2><a href='https://example.blogspot.com/2026/05/lemon-tart.html'>Lemon tart</a></h2>
+      <p class='labels'>
+        <a href='https://example.blogspot.com/search/label/Recipes'>Recipes</a>
+      </p>
+    </article>
+    <article class='post-card'>
+      <h2><a href='https://example.blogspot.com/2026/04/lisbon.html'>Three days in Lisbon</a></h2>
+    </article>
+  </div>
+</div>
+```
+
+</CodeTabs>
+
+`main` loops over the posts and includes `postCard` once per post, passing the post of the loop. `postCard` receives it under the name of its `var`, `post`, and includes `postLabels` only for posts that have labels. The ids of the includables appear nowhere in the output.
+
+## How includables work
+
+The includables of a widget form its markup. Blogger renders `main`; everything else is reached from it by includes. An include can call:
+
+- another includable of the same widget;
+- an includable of the theme's Common [default markups](./default-markups.mdx#common), from any widget or from outside widgets;
+- an includable built into Blogger, such as `all-head-content` or `widget-title`;
+- with `super.`, Blogger's original version of an includable the theme has replaced.
+
+An includable sees the data of the place it is included from, plus the value its include passes. That makes small includables cheap to write: a card, an image, an icon, a list of attributes, written once and included wherever they are needed.
+
+## `<b:includable>`
+
+| Attribute | Required | Value  | Default | Description                                        | Source                            |
+| --------- | -------- | ------ | ------- | -------------------------------------------------- | --------------------------------- |
+| `id`      | Yes      | a name |         | The name `<b:include name>` refers to              | <BloggerSource kind="official" /> |
+| `var`     | No       | a name |         | The name of the value passed by `<b:include data>` | <BloggerSource kind="official" /> |
+
+### `id`
+
+The name of the includable. Google asks for letters and numbers. <BloggerSource kind="official" /> Blogger accepts more: Blogger's own ids use `-` (`widget-title`, `all-head-content`), and production themes use `.`, `:` and `@` to group their includables by purpose, such as `theme:head`, `LinkList.main`, `svg.search` and `@image`. <BloggerSource kind="observed" />
+
+- The id is read when the theme is saved, and the plain `id` is always needed. An `expr:id` next to it saves and is kept; its effect is not confirmed. <BloggerSource kind="observed" />
+- The id is unique among the includables of a widget, and among the includables of one default markup. The same id can be used in different widgets. <BloggerSource kind="observed" />
+- Ids are case-sensitive: `main` and `Main` are two includables. Blogger compares them after decoding character references, so `main` and `m&#97;in` are refused: `The widget with id "HTML1" contains at least two b:includable elements with the same id: "main". …` <BloggerSource kind="observed" />
+- Ids equal only once trimmed, with tabs and line breaks read as spaces, such as `a` and `a `, or `a b` and `a&#9;b`, save without an error, and Blogger keeps one of them: one includable, with the id trimmed and the content of one of the two. Avoid whitespace at the ends of ids. <BloggerSource kind="observed" />
+- An id that is empty or only spaces is refused as missing: `The widget with id "HTML5" contains a b:includable element which has no id attribute. …` <BloggerSource kind="observed" />
+- `main` is the includable Blogger renders for the widget. Every widget has one. <BloggerSource kind="official" />
+- A Common includable with the id of a universal includable, such as `all-head-content`, saves, but is ignored: `<b:include data='blog' name='all-head-content'/>` still renders Blogger's. <BloggerSource kind="observed" />
+
+A naming scheme avoids clashes with the ids of Blogger's built-in includables, which are camel case: a theme can prefix its Common includables with the type they are for, `HTML.main` or `LinkList.json`, or start its shared components with `@`. <BloggerSource kind="observed" />
+
+### `var`
+
+The name under which the includable receives the value of `<b:include data>`. With `var='post'`, the value is `data:post` inside the includable. <BloggerSource kind="official" /> Without `var`, a value passed as a map still arrives: its keys become names of their own, see [Passing data](#passing-data).
+
+The name stays visible in the includables included from this one. That is why Blogger's markup writes `var='this'` on `main`: the data of the widget is then `data:this` in every includable of the widget, whatever data they receive. <BloggerSource kind="observed" />
+
+The names in Blogger's own markup tell what each includable expects: `this` for the widget data, `post`, `posts`, `comment`, `comments`, `byline`, `regionItems`, `links`, `interval` and `intervals` for archive data. <BloggerSource kind="observed" /> A theme can choose any name, such as `props` for the options of its components.
+
+### Placement and content
+
+- An includable is directly in a [`<b:widget>`](./widgets.mdx) or directly in a [`<b:defaultmarkup>`](./default-markups.mdx). Blogger does not refuse one written elsewhere, but it does not work there. In `<body>`, the theme saves, and every page that reaches it fails with a 500 error, `Unknown runtime binding: includable in widget`. Inside another includable, it saves, and the widget fails with `The tag 'includable' is not a known Blogger tag.` Directly in `<b:defaultmarkups>`, it saves; whether it is usable is not confirmed. <BloggerSource kind="observed" />
+- Includables are never nested in each other. <BloggerSource kind="observed" />
+- Their order does not matter: an includable can include one defined after it. Blogger stores `main` first, then the others sorted by character code, case-sensitive: digits, uppercase letters, `_`, then lowercase letters, so `1a`, `A`, `B2`, `_x`, `a-b`, `aa`. <BloggerSource kind="observed" />
+- An includable can contain any markup: HTML, logic tags, includes. Through Common includables, even [sections](./sections.mdx#content-and-placement).
+
+An includable can be empty. Where a theme does not want a part of Blogger's built-in markup, an empty includable with the same id replaces it. All three forms work: <BloggerSource kind="observed" />
+
+```xml
+<b:includable id='userGoogleProfile'/>
+<b:includable id='postShareButtons'></b:includable>
+<b:includable id='postLocation'><!-- not shown in this theme --></b:includable>
+```
+
+## The main includable
+
+Blogger renders `main` for every widget of the page. Its output is all the widget shows inside the `div` Blogger adds. <BloggerSource kind="official" />
+
+`main` receives the data of the widget by name, `data:title`, `data:posts`, `data:labels`, according to its [type](../widget-types/index.mdx), and also as `data:this` when it has `var='this'`.
+
+```xml title="A search box"
+<b:includable id='main'>
+  <b:class name='search-widget'/>
+  <b:include name='content'/>
+</b:includable>
+<b:includable id='content'>
+  <form class='search-form' expr:action='data:blog.searchUrl'>
+    <b:include name='urlParamsAsFormInput'/>
+    <input expr:aria-label='data:messages.searchThisBlog' expr:placeholder='data:title' name='q' required='' type='search'/>
+  </form>
+</b:includable>
+```
+
+`<b:class>` and `<b:attr>` written directly in `main`, outside any element, apply to the widget's own `div`. See [Changing the element of the widget](./widgets.mdx#changing-the-element-of-the-widget).
+
+## `<b:include>`
+
+| Attribute | Required | Value                                             | Default | Description                                             | Source                            |
+| --------- | -------- | ------------------------------------------------- | ------- | ------------------------------------------------------- | --------------------------------- |
+| `name`    | Yes      | an includable id                                  |         | The includable to render                                | <BloggerSource kind="official" /> |
+| `data`    | No       | a name, a path, a map literal or a list in braces |         | The value given to the includable                       | <BloggerSource kind="official" /> |
+| `cond`    | No       | expression                                        |         | Renders the includable only when the expression is true | <BloggerSource kind="official" /> |
+
+`<b:include>` is always empty: written self-closed, `<b:include name='content'/>`. Spaces and line breaks between an opening and a closing tag are fine. Any other content saves, but makes the include a [markup error](../basics/saving.mdx#markup-errors) when it renders. <BloggerSource kind="observed" />
+
+It can be written anywhere markup renders: in includables, and in the `<head>` and `<body>` of the theme for the includables that do not need a widget. All three attributes can be written with `expr:`. <BloggerSource kind="observed" />
+
+### `name`
+
+The id of the includable to render. Google documents the includables of the same widget. <BloggerSource kind="official" /> The name can also be a Common includable of the theme, one of Blogger's built-in includables, or `super.` followed by an id. <BloggerSource kind="observed" />
+
+When a widget includes a name, Blogger looks for it in this order: the widget's own includables, then the default markup of the widget's type, then the Common default markup. Outside widgets, only Common includables are reachable: including an includable of another type's default markup there makes every page fail with a 500 error, `Error during evaluation of NAME`. <BloggerSource kind="observed" />
+
+A name that matches no includable is a markup error when the include is reached, and nothing when it is not. `<b:include name='main'/>` inside `main` is a markup error too. <BloggerSource kind="observed" />
+
+`expr:name` computes the name, for example to pick the icon of each share platform from its key. Blogger's own markup does it with `expr:name='data:platform.key + "Icon"'`. <BloggerSource kind="observed" /> A [`<b:switch>`](../tags/conditionals.mdx) does the same with the names written out, which keeps them visible in the theme:
+
+```xml
+<b:switch var='data:item'>
+  <b:case value='Search'/>
+  <b:include name='searchButton'/>
+  <b:case value='Mode'/>
+  <b:include name='themeToggle'/>
+</b:switch>
+```
+
+### `data`
+
+The value given to the includable. See [Passing data](#passing-data).
+
+### `cond`
+
+An [expression](../expressions/index.mdx). When it is false, the include renders nothing, exactly like a [`<b:if>`](../tags/conditionals.mdx) around it. <BloggerSource kind="official" />
+
+```xml
+<b:include cond='data:posts.empty' name='noContentPlaceholder'/>
+<b:include cond='data:title not contains "[NoTitle]"' name='widget-title'/>
+<b:include cond='data:view.isPreview or data:vars.lazyMode == "1px"' name='theme:lazy'/>
+```
+
+## Passing data
+
+The `data` attribute of an include takes four kinds of values: a name, a `data:` path, a map literal, or a list written in braces. <BloggerSource kind="observed" />
+
+**A name or a path, without `data:`.** The most common form. The value of that name reaches the includable:
+
+```xml
+<b:include data='post' name='postCard'/>
+<b:include data='post.labels' name='labelList'/>
+<b:include data='blog' name='all-head-content'/>
+```
+
+A bare name or a dotted path, such as `post` or `blog.title`, is read as `data:` followed by it. <BloggerSource kind="official" /> Spaces around it are ignored. Not every name works: `_blog` and `blog.title-x` are markup errors. `data='post title'` saves, and is a markup error when it renders. <BloggerSource kind="observed" />
+
+**A `data:` path.** `data='post'` and `data='data:post'` give the same value. A path works whatever its value: a number, a string, a list or a map. <BloggerSource kind="observed" />
+
+```xml
+<b:include data='data:reply' name='commentBlock'/>
+```
+
+**A list in braces.** A list literal works when it is written in braces, see [Lists in braces](../expressions/values.mdx#lists-in-braces), not in brackets: `data='{1, 2, 3}'` passes the list, and `data='[1, 2, 3]'` fails. The includable reads it as any list. <BloggerSource kind="observed" />
+
+```xml
+<b:include data='{"index", "archive"}' name='pageTypeList'/>
+<b:include data='{["role", "presentation"], ["aria-hidden", "true"]}' name='attrs'/>
+```
+
+Nothing else works at the top level of `data`: a number, a string, a list in brackets, and any expression with an operator, a lambda or a function call fail when the include renders, even in parentheses. Outside widgets the page fails with a 500 error, `Error during evaluation of NAME`; in a widget, the widget is not rendered. To pass a computed value, set it with [`<b:with>`](../tags/variables.mdx) and pass its name, or put it in a map, in parentheses: `data='(data:title + "x")'` fails, `data='{ text: (data:title + "x") }'` works. <BloggerSource kind="observed" />
+
+```xml
+<b:with value='data:posts filter (p => p.id != data:view.postId)' var='others'>
+  <b:include data='others' name='postList'/>
+</b:with>
+```
+
+**A map.** Several values at once, with names. The keys and values are written as a [map](../expressions/values.mdx#maps). A value can be a literal, a `data:` path, `!` or `not` before a value, a function call or an operator function such as `+(1, 2)`. Any other operator, `+`, `==`, `and`, `?:`, `take`, a lambda, or a property of a literal or a call, makes the include fail unless the value is in parentheses: <BloggerSource kind="observed" />
+
+```xml
+<b:include data='{ input: data:values[0], default: data:blog.title }' name='pageTitle'/>
+```
+
+How the includable receives a map depends on `var`: <BloggerSource kind="observed" />
+
+- Without `var`, every key becomes a name of its own: `data:input` and `data:default`.
+- With `var`, the whole map is under that name: with `var='options'`, `data:options.input` and `data:options.default`.
+
+```xml
+<b:includable id='pageTitle'>
+  <b:if cond='data:input'>
+    <title><data:input.escaped/></title>
+  <b:else/>
+    <title><data:default/></title>
+  </b:if>
+</b:includable>
+```
+
+What the includable sees: <BloggerSource kind="observed" />
+
+- Everything visible where it is included: the global data, the data of the widget, the names of the loops, [`<b:with>`](../tags/variables.mdx) and includes around the include.
+- The name its include gives it, which hides the same name from further out. An includable with `var='post'` sees the value passed, not the `data:post` of the loop around the include.
+- Without `data`, the includable still sees all the names of its caller. An includable with `var` included without `data` receives the widget's data under that name. Outside widgets there is no widget data, and every page fails with a 500 error, `Error during evaluation of NAME`.
+
+A key that the include does not pass reads nothing, and so does an index past the end of a list: the includable goes on rendering, and conditions on the missing value are false. That is what makes options optional, see [Includables as components](#includables-as-components).
+
+## Calling between includables
+
+Any includable can include any other of its widget, and any Common includable. One includable can be included many times, with different data each time. <BloggerSource kind="official" />
+
+An includable can include itself. Blogger gives the comments of a post as a flat list, where a reply has the id of its parent in `inReplyTo`. A theme can first turn the list into a tree, then render every comment, and every reply, with one includable that includes itself: <BloggerSource kind="observed" />
+
+```xml
+<b:with value='data:post.comments filter (c => !c.inReplyTo) map (c => { info: data:c, children: (data:post.comments filter (r => r.inReplyTo == data:c.id) map (r => { info: data:r, children: [] })) })' var='threads'>
+  <b:loop values='data:threads' var='thread'>
+    <b:include data='thread' name='commentBlock'/>
+  </b:loop>
+</b:with>
+```
+
+```xml {5}
+<b:includable id='commentBlock' var='cm'>
+  <article class='comment' expr:id='"c" + data:cm.info.id'>
+    <p class='comment-author'><data:cm.info.author/></p>
+    <div class='comment-body'><data:cm.info.body/></div>
+    <b:if cond='data:cm.children.length != 0'>
+      <div class='comment-replies'>
+        <b:loop values='data:cm.children' var='reply'>
+          <b:include data='data:reply' name='commentBlock'/>
+        </b:loop>
+      </div>
+    </b:if>
+  </article>
+</b:includable>
+```
+
+The test is on `length`, because an empty list counts as true in a condition. The recursion ends because the data ends: a reply has no children, and includes nothing. A recursive include works 40 levels deep, and fails at 42; the `<b:loop>` and `<b:with>` of the nested calls also count towards the limit on nested variable scopes. <BloggerSource kind="observed" /> See [Nesting depth](../reference/limits.mdx#nesting-depth).
+
+## Includables as components
+
+With a map as data and `var` to hold it, an includable works like a component with props: the caller passes what it needs, and the includable falls back to defaults with `?:` for the rest. A theme can build its icons, attributes and breadcrumbs this way, all in a Common default markup so any widget can use them. <BloggerSource kind="observed" />
+
+### Attributes from a list
+
+`<b:class>` and `<b:attr>` apply to the element they are in. In an includable, when they are outside any element, they apply to the element around the include. An includable can then add attributes to the element it is included in. Here, `@attrs` takes a list of name and value pairs, under the key `entries`. A list can not be passed as `data` directly, so it goes in a map; without `var`, the key `entries` becomes a name of its own:
+
+```xml
+<b:includable id='@attrs'>
+  <b:loop values='data:entries' var='entry'>
+    <b:if cond='data:entry[0] == "class" and data:entry[1]'>
+      <b:class expr:name='data:entry[1]'/>
+    <b:elseif cond='data:entry[0]'/>
+      <b:attr expr:name='data:entry[0]' expr:value='data:entry[1]'/>
+    </b:if>
+  </b:loop>
+</b:includable>
+```
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<span>
+  <b:include data='{ entries: [["role", "link"], ["aria-disabled", "true"], ["aria-current", "page"]] }' name='@attrs'/>
+  Page
+</span>
+```
+
+```html title="Rendered"
+<span aria-current='page' aria-disabled='true' role='link'>
+  Page
+</span>
+```
+
+</CodeTabs>
+
+A `class` entry adds a class instead of replacing the attribute, and an entry with an empty name is skipped. A missing second item, as in `["hidden"]`, reads nothing: the includable goes on, and `<b:attr>` with no value adds nothing. Write `["hidden", "hidden"]` for a boolean attribute.
+
+### An icon with options
+
+`@lucide` draws an icon by name. Every option has a default, and `attrs` is handed on to `@attrs`:
+
+```xml {3}
+<b:includable id='@lucide' var='props'>
+  <svg expr:height='data:props.size ?: 24' expr:stroke='data:props.stroke ?: "currentColor"' expr:width='data:props.size ?: 24' fill='none' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'>
+    <b:include cond='data:props.attrs' data='{ entries: data:props.attrs }' name='@attrs'/>
+    <b:switch var='data:props.name'>
+      <b:case value='chevron-right'/>
+      <path d='m9 18 6-6-6-6'/>
+      <b:case value='house'/>
+      <path d='M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8'/>
+    </b:switch>
+  </svg>
+</b:includable>
+```
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:include data='{ name: "chevron-right", size: 16, attrs: [["class", "icon"]] }' name='@lucide'/>
+```
+
+```html title="Rendered"
+<svg class='icon' fill='none' height='16' stroke='currentColor' viewBox='0 0 24 24' width='16' xmlns='http://www.w3.org/2000/svg'>
+  <path d='m9 18 6-6-6-6'/>
+</svg>
+```
+
+</CodeTabs>
+
+### Breadcrumbs from a list of items
+
+`@breadcrumbs` takes a list of items. Each item has a `label`, and optionally a `link` and an `icon`; the last item is the current page. It loops over the items, renders a link or a plain `span` with [`<b:tag>`](../tags/dynamic-tags.mdx), and puts a separator icon between two items:
+
+```xml {13}
+<b:includable id='@breadcrumbs' var='props'>
+  <nav aria-label='breadcrumb'>
+    <ol class='breadcrumbs'>
+      <b:loop index='i' values='data:props.items' var='item'>
+        <li>
+          <b:tag expr:name='data:item.link ? "a" : "span"'>
+            <b:attr cond='data:item.link' expr:value='data:item.link' name='href'/>
+            <b:attr cond='!data:item.link' name='aria-current' value='page'/>
+            <b:include cond='data:item.icon' data='{ name: data:item.icon, size: 16 }' name='@lucide'/>
+            <data:item.label/>
+          </b:tag>
+        </li>
+        <b:if cond='data:i &lt; data:props.items.length - 1'>
+          <li aria-hidden='true'>
+            <b:include data='{ name: (data:props.separator ?: "chevron-right"), size: 14 }' name='@lucide'/>
+          </li>
+        </b:if>
+      </b:loop>
+    </ol>
+  </nav>
+</b:includable>
+```
+
+```xml
+<b:include data='{ items: [{ icon: "house", label: "Home", link: data:blog.canonicalHomepageUrl }, { label: data:view.title }] }' name='@breadcrumbs'/>
+```
+
+The `<` of the comparison is written `&lt;` because it is in an attribute.
+
+## Built-in includables
+
+Blogger has includables of its own. Their markup is not in the theme, but a theme includes them by name. There are three kinds: <BloggerSource kind="observed" />
+
+| Kind      | Where it can be included                                              | Can the theme replace it                    | `super.` |
+| --------- | --------------------------------------------------------------------- | ------------------------------------------- | -------- |
+| Universal | Anywhere in the theme                                                 | No                                          | No       |
+| Common    | In any widget, and outside widgets for those that need no widget data | Yes, in `<b:defaultmarkup type='Common'>`   | Yes      |
+| Widget    | In widgets of the types that have it                                  | Yes, in the widget or in its default markup | Yes      |
+
+### Universal includables
+
+#### `all-head-content`
+
+The tags of the `<head>` that Blogger manages: the charset, the canonical URL, the feed links, the Open Graph tags and more. It is universal, and is included once, in `<head>`, with `data='blog'`: <BloggerSource kind="observed" />
+
+```xml
+<head>
+  <title><data:view.title.escaped/></title>
+  <b:include data='blog' name='all-head-content'/>
+</head>
+```
+
+What it writes, and how to write the head without it, is in [What `all-head-content` writes](../guides/head-and-seo.mdx#what-all-head-content-writes).
+
+#### `google-analytics`
+
+The Google Analytics script for the measurement id set in the blog's settings, `data:blog.analyticsAccountNumber`, and nothing when no id is set. It is included with `data='blog'`. <BloggerSource kind="official" /> It renders the script for the kind of id the blog has. <BloggerSource kind="observed" />
+
+```xml
+<b:include data='blog' name='google-analytics'/>
+```
+
+#### Others
+
+| Name                   | What it renders                                                                                                        | Source                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `urlParamsAsFormInput` | Hidden inputs that keep the parameters of the page's URL in a search form, used inside the form of a BlogSearch widget | <BloggerSource kind="observed" />   |
+| `quickedit`            | The edit link shown to the blog's admin on a widget, in Google's examples and classic widgets                          | <BloggerSource kind="official" />   |
+| `googlePlusBootstrap`  | The Google+ script                                                                                                     | <BloggerSource kind="deprecated" /> |
+
+### Common includables
+
+Common includables render pieces shared by many widgets. They are included with `<b:include name='…'/>` from any widget, or from outside widgets for those that need no widget data. A theme replaces one by defining an includable of the same id in its [Common default markup](./default-markups.mdx#common). <BloggerSource kind="observed" />
+
+| Name                                                                                                                                                                                                                                                                            | What it renders                                                            | Data it reads                                                                         | Source                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------- |
+| `widget-title`                                                                                                                                                                                                                                                                  | The title of the widget, an `<h3 class='title'>` in version 3 themes       | `defaultTitle`, `title`, `renderAsDetails`                                            | <BloggerSource kind="observed" />   |
+| `widgetNotAvailableInPreview`                                                                                                                                                                                                                                                   | A notice in place of the widget in the dashboard's preview                 |                                                                                       | <BloggerSource kind="observed" />   |
+| `skipNavigation`                                                                                                                                                                                                                                                                | A "skip to main content" link for keyboard and screen reader users         |                                                                                       | <BloggerSource kind="observed" />   |
+| `reportAbuse`                                                                                                                                                                                                                                                                   | The report abuse link                                                      |                                                                                       | <BloggerSource kind="observed" />   |
+| `noContentPlaceholder`                                                                                                                                                                                                                                                          | A message on a page that has no posts                                      |                                                                                       | <BloggerSource kind="observed" />   |
+| `responsiveImage`                                                                                                                                                                                                                                                               | An `<img>` with a `srcset`, for an image hosted by Blogger                 | `image`, `imageSizes`, `imageRatio`, `sourceSizes`, `imageClass`, `enhancedSourceset` | <BloggerSource kind="observed" />   |
+| `responsiveImageStyle`                                                                                                                                                                                                                                                          | CSS for a responsive background image                                      | `image`, `selector`, `imageSizes`, `maxSize`                                          | <BloggerSource kind="observed" />   |
+| `extendableItems`                                                                                                                                                                                                                                                               | A list that shows its first items, and a "Show more" button for the others | `items`, `itemSet`, `itemsMarkup`, `limit`, `buttonClass`                             | <BloggerSource kind="observed" />   |
+| `postSnippet`                                                                                                                                                                                                                                                                   | A summary of a post                                                        |                                                                                       | <BloggerSource kind="observed" />   |
+| `postMetadataJSON`                                                                                                                                                                                                                                                              | The JSON-LD structured data of a post                                      |                                                                                       | <BloggerSource kind="observed" />   |
+| `openGraphMetaData`                                                                                                                                                                                                                                                             | The Open Graph tags, included by `all-head-content`                        |                                                                                       | <BloggerSource kind="observed" />   |
+| `maybeAddShareButtons`                                                                                                                                                                                                                                                          | Share buttons in a byline region                                           | `shareButtonClass`, `overridden`                                                      | <BloggerSource kind="observed" />   |
+| `headerBylineOverride`, `footerBylinesOverride`                                                                                                                                                                                                                                 | The byline items of a post's header or footer, in a chosen order           | `items`                                                                               | <BloggerSource kind="observed" />   |
+| `svgIcon`, `svgIconButton`                                                                                                                                                                                                                                                      | An icon from an SVG sprite, alone or in a button                           |                                                                                       | <BloggerSource kind="observed" />   |
+| `backArrowIcon`, `forwardArrowIcon`, `chevronDownIcon`, `chevronUpIcon`, `closeIcon`, `menuIcon`, `searchIcon`, `shareIcon`, `linkIcon`, `emailIcon`, `commentIcon`, `defaultAvatarIcon`, `verticalMoreIcon`, `flatBloggerIcon`, `facebookIcon`, `twitterIcon`, `pinterestIcon` | Inline SVG icons                                                           | `button`, `iconClass`                                                                 | <BloggerSource kind="observed" />   |
+| `googlePlusIcon`                                                                                                                                                                                                                                                                | The Google+ icon                                                           |                                                                                       | <BloggerSource kind="deprecated" /> |
+
+The options are passed as a map, or set with `<b:with>` around the include:
+
+```xml
+<b:include cond='data:image' data='{ image: data:image, selector: ".Header" }' name='responsiveImageStyle'/>
+<b:include data='{ iconClass: "icon search-icon" }' name='searchIcon'/>
+```
+
+Google publishes the markup of none of them. The options in the table are the names Blogger's own themes pass.
+
+### Widget includables
+
+Each widget type also has built-in includables, used by its built-in `main`, and only available in widgets of that type: `headerByline`, `postLabels` or `commentPicker` for a Blog widget, `content` and `list` for a Label widget. They are listed on the page of each type in [Widget types](../widget-types/index.mdx). <BloggerSource kind="observed" />
+
+A theme that writes its own `main` can still include them, or replace them with includables of the same id. Replacing the ones it no longer uses with empty includables keeps Blogger's markup out of the widget:
+
+```xml
+<b:includable id='main' var='this'>
+  …
+</b:includable>
+<b:includable id='cloud'/>
+<b:includable id='content'/>
+<b:includable id='list'/>
+```
+
+## `super.` includes
+
+`super.NAME` includes Blogger's original version of the includable `NAME`, even when the widget, or the theme's default markup, defines its own `NAME`. A theme uses it to put markup around Blogger's, or to set options for it, without copying it. <BloggerSource kind="observed" />
+
+```xml title="Blogger's Label markup in a box"
+<b:includable id='main' var='this'>
+  <div class='widget-box'>
+    <b:include name='super.main'/>
+  </div>
+</b:includable>
+```
+
+Names set with [`<b:with>`](../tags/variables.mdx) around the include reach Blogger's markup, which reads some of them as options. The built-in ad unit of AdSense and Blog widgets writes an inline style from `data:style`; a theme whose CSS does the styling can replace it with a comment, and the value must not be empty for that to work: <BloggerSource kind="observed" />
+
+```xml
+<b:includable id='Group.defaultAdUnit'>
+  <b:with value='"/* Styled in the theme CSS */"' var='style'>
+    <b:include name='super.defaultAdUnit'/>
+  </b:with>
+</b:includable>
+```
+
+Rules: <BloggerSource kind="observed" />
+
+- The widget has its own includable of that id: one that calls `super`, an empty one, or a self-closed one. A plain include of a built-in includable of the widget's type does not need this: the widget can include it without declaring it, see [Widget includables](#widget-includables). Whether `super.` also works without the widget's own includable is not confirmed.
+- `super.NAME` is not limited to the includable `NAME` itself. A theme can call `super.defaultAdUnit` from a Common includable, `Group.defaultAdUnit`, included in AdSense widgets whose own `defaultAdUnit` is empty.
+- `super.` works for Common and widget includables, not for universal ones.
+- For a Common includable the theme has replaced, `<b:include name='widget-title'/>` renders the theme's version and `<b:include name='super.widget-title'/>` Blogger's.
+
+`super.` names can also be given as text, to the built-in includables that take the name of another one: `itemsMarkup: "super.cloud"` tells `extendableItems` to render each label with Blogger's `cloud` markup. <BloggerSource kind="observed" />
+
+## Patterns
+
+**One includable per part.** Split a post into a title, a body and a footer, each its own includable with `var='post'`, so a part can be changed, or emptied, without touching the others.
+
+**Components in Common.** Put markup used by several widgets, icons, images, cards, in a [Common default markup](./default-markups.mdx#common), with a map as options. A theme's responsive image includable can test whether Blogger can resize the image, and choose between a `srcset` and the plain URL, in one place. See [Images](../guides/images.mdx).
+
+**Wrap rather than copy.** To change a detail of Blogger's markup, wrap it with `super.` and set options with `<b:with>`, instead of copying its markup into the theme, where it would no longer follow Blogger's changes.

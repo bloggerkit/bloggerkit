@@ -1,0 +1,114 @@
+---
+import ChevronRight from '@lucide/astro/icons/chevron-right';
+import IconTile from '@/components/ui/IconTile.astro';
+import LevelBadge from '@/components/ui/LevelBadge.astro';
+import { getPages } from '@/lib/content/pages';
+import { countPages, type Folder } from '@/lib/content/sections';
+import { plural } from '@/lib/format';
+import { getPageUrl } from '@/lib/routes';
+import type { Level } from '@/lib/ui/levels';
+import type { IconName } from '@/lib/ui/lucide';
+
+interface Props {
+	folder: Folder;
+}
+
+/** A folder overview: its pages, subfolders and links as cards, grouped by `---Title---` separators. */
+const { folder } = Astro.props;
+const pages = await getPages();
+
+interface Card {
+	title: string;
+	description?: string;
+	url: string;
+	/** Folders only: number of pages inside. */
+	count?: number;
+	/** Folders and links only: Lucide icon name. */
+	icon?: IconName;
+	/** Pages only. */
+	level?: Level;
+}
+interface Group {
+	name?: string;
+	cards: Card[];
+}
+
+// Each separator starts a new group
+const groups: Group[] = [{ cards: [] }];
+for (const node of folder.children) {
+	const { cards } = groups[groups.length - 1];
+	if (node.type === 'separator') {
+		groups.push({ name: node.name, cards: [] });
+	} else if (node.type === 'page') {
+		const page = pages.get(node.slug)?.data;
+		if (page) {
+			cards.push({
+				title: page.title,
+				description: page.description,
+				url: getPageUrl(node.slug),
+				level: page.level,
+			});
+		}
+	} else if (node.type === 'folder') {
+		cards.push({
+			title: node.name,
+			description: node.description,
+			url: getPageUrl(node.slug),
+			count: countPages(node),
+			icon: node.icon,
+		});
+	} else {
+		cards.push({ title: node.name, url: node.url, icon: node.icon });
+	}
+}
+---
+
+<div class="not-content flex flex-col gap-10">
+	{
+		groups
+			.filter((group) => group.cards.length > 0)
+			.map((group) => {
+				// Pages before the first separator form an unnamed group, not a `<section>`
+				const Group = group.name ? 'section' : 'div';
+				return (
+					<Group class="flex flex-col gap-3">
+						{group.name && (
+							<h2 class="m-0 text-sm font-medium tracking-wide text-muted-foreground uppercase">{group.name}</h2>
+						)}
+						<div class="grid gap-3 sm:grid-cols-2">
+							{group.cards.map((card) => (
+								<a
+									href={card.url}
+									class="group flex flex-col gap-1.5 rounded-xl border border-border bg-card p-4 no-underline transition-colors hover:bg-accent"
+								>
+									{/* Block elements, so the search index doesn't join the title and description */}
+									<div class="flex items-center gap-2 font-medium text-foreground">
+										{card.icon && <IconTile name={card.icon} variant="folder" />}
+										{card.title}
+										{card.count !== undefined && (
+											<span class="text-meta font-normal text-muted-foreground">
+												{plural(card.count, 'page')}
+											</span>
+										)}
+										<ChevronRight
+											size={16}
+											class="ms-auto text-muted-foreground transition-transform group-hover:translate-x-0.5"
+											aria-hidden="true"
+										/>
+									</div>
+									{card.description && (
+										<div class="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{card.description}</div>
+									)}
+									{card.level && (
+										<div class="mt-auto pt-1" data-pagefind-ignore>
+											<LevelBadge level={card.level} />
+										</div>
+									)}
+								</a>
+							))}
+						</div>
+					</Group>
+				);
+			})
+	}
+</div>

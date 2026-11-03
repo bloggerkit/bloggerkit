@@ -1,0 +1,190 @@
+---
+title: BlogList
+description: The Blog List widget, a blogroll of other blogs and sites, each with its icon and its most recent post.
+published: 2026-10-26
+---
+
+`BlogList` ("Blog List" in the Layout editor) is a blogroll. The owner enters the addresses of other blogs or sites with a feed, and Blogger shows each one with its icon, its name and its latest post, either most recently updated first or by name. Blogger reads the feeds of those sites on its side: the theme receives the result as data, already sorted.
+
+## Quick example
+
+A compact blogroll that shows the latest post of each site under its name:
+
+<CodeTabs>
+
+```xml title="theme.xml" {14}
+<b:widget id='BlogList1' locked='false' title='Blogs I read' type='BlogList' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='numItemsToShow'>5</b:widget-setting>
+    <b:widget-setting name='showIcon'>true</b:widget-setting>
+    <b:widget-setting name='showItemSnippet'>false</b:widget-setting>
+    <b:widget-setting name='showItemThumbnail'>false</b:widget-setting>
+    <b:widget-setting name='showItemTitle'>true</b:widget-setting>
+    <b:widget-setting name='showTimePeriodSinceLastUpdate'>true</b:widget-setting>
+    <b:widget-setting name='sortType'>LAST_UPDATE_DESCENDING</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:include name='widget-title'/>
+    <ul class='blogroll'>
+      <b:loop values='data:items' var='site'>
+        <li>
+          <a class='blogroll-site' expr:href='data:site.blogUrl' rel='noopener' target='_blank'>
+            <b:if cond='data:showIcon'>
+              <img alt='' expr:src='data:site.blogIconUrl' height='16' loading='lazy' width='16'/>
+            </b:if>
+            <data:site.blogTitle/>
+          </a>
+          <b:if cond='data:showItemTitle and data:site.itemUrl != ""'>
+            <a class='blogroll-post' expr:href='data:site.itemUrl'><data:site.itemTitle/></a>
+          </b:if>
+          <b:if cond='data:showTimePeriodSinceLastUpdate'>
+            <span class='blogroll-age'><data:site.timePeriodSinceLastUpdate/></span>
+          </b:if>
+        </li>
+      </b:loop>
+    </ul>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget BlogList' data-version='2' id='BlogList1'>
+<h3 class='title'>
+Blogs I read
+</h3>
+<ul class='blogroll'>
+<li>
+<a class='blogroll-site' href='https://another-example.blogspot.com/' rel='noopener' target='_blank'>
+<img alt='' height='16' loading='lazy' src='https://another-example.blogspot.com/favicon.ico' width='16'/>
+Garden Notes
+</a>
+<a class='blogroll-post' href='https://another-example.blogspot.com/2026/10/late-tomatoes.html'>Late tomatoes</a>
+<span class='blogroll-age'>3 hours ago</span>
+</li>
+</ul>
+</div>
+```
+
+</CodeTabs>
+
+The loop variable is named `site`, not `blog`: a variable called `blog` would hide `data:blog` inside the loop.
+
+## Placement and limits
+
+| Property                 | Value                                                                                                           | Source                            |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `BlogList`                                                                                                      | <BloggerSource kind="official" /> |
+| Per blog                 | At least 2; a higher maximum is not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Suggested width          | 300px                                                                                                           | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | Any section. The 2017 themes do not style it                                                                    | <BloggerSource kind="observed" /> |
+| Locked                   | Not by default                                                                                                  | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                                                        | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                                                           | <BloggerSource kind="official" /> |
+| Not available in         | Mobile Default 2010, Dynamic Views on mobile                                                                    | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting                         | Values                                   | Read as                         | Meaning                                                                                                                                             | Source                            |
+| ------------------------------- | ---------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `sortType`                      | `LAST_UPDATE_DESCENDING`, `ALPHABETICAL` | `sortType`                      | Latest update first, or by name                                                                                                                     | <BloggerSource kind="observed" /> |
+| `numItemsToShow`                | `0` or more                              | `numItemsToShow`                | How many sites are visible before the "Show All" link. Any value from `0` up is kept, `1000000` too; a negative one is refused "Must be at least 0" | <BloggerSource kind="observed" /> |
+| `showIcon`                      | `true`, `false`                          | `showIcon`                      | Show the icon of each site                                                                                                                          | <BloggerSource kind="observed" /> |
+| `showItemTitle`                 | `true`, `false`                          | `showItemTitle`                 | Show the title of the latest post                                                                                                                   | <BloggerSource kind="observed" /> |
+| `showItemSnippet`               | `true`, `false`                          | `showItemSnippet`               | Show an excerpt of the latest post                                                                                                                  | <BloggerSource kind="observed" /> |
+| `showItemThumbnail`             | `true`, `false`                          | `showItemThumbnail`             | Show the image of the latest post                                                                                                                   | <BloggerSource kind="observed" /> |
+| `showTimePeriodSinceLastUpdate` | `true`, `false`                          | `showTimePeriodSinceLastUpdate` | Show how long ago the site was updated                                                                                                              | <BloggerSource kind="observed" /> |
+
+A BlogList widget written with no settings gets `showItemThumbnail` `false`, `sortType` `LAST_UPDATE_DESCENDING`, `numItemsToShow` `0`, `showTimePeriodSinceLastUpdate` `false`, `showIcon` `true`, `showItemTitle` `true` and `showItemSnippet` `false`, with an empty title. `sortType` is case-sensitive. <BloggerSource kind="observed" />
+
+The list of sites is not among the settings. Exported themes carry only the settings above; the addresses stay in the blog, and where Blogger keeps them is not confirmed.
+
+## Widget data
+
+The data is the same in both widget versions.
+
+### The widget
+
+| Field                                                                                                | Type    | Content                                                        | Source                              |
+| ---------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------- | ----------------------------------- |
+| `title`                                                                                              | string  | Widget title, up to 100 characters                             | <BloggerSource kind="observed" />   |
+| `showIcon`, `showItemTitle`, `showItemSnippet`, `showItemThumbnail`, `showTimePeriodSinceLastUpdate` | boolean | The settings of the same name                                  | <BloggerSource kind="observed" />   |
+| `sortType`                                                                                           | string  | `LAST_UPDATE_DESCENDING` or `ALPHABETICAL`                     | <BloggerSource kind="observed" />   |
+| `numItemsToShow`                                                                                     | number  | The `numItemsToShow` setting                                   | <BloggerSource kind="observed" />   |
+| `totalItems`                                                                                         | number  | How many sites the list holds, 0 or more                       | <BloggerSource kind="observed" />   |
+| `showNText`                                                                                          | string  | Localized "Show N" link text                                   | <BloggerSource kind="observed" />   |
+| `showAllText`                                                                                        | string  | Localized "Show All", the same text as `data:messages.showAll` | <BloggerSource kind="observed" />   |
+| `items`                                                                                              | list    | One entry per site, 10 at most                                 | <BloggerSource kind="observed" />   |
+| `linkColor`, `textColor`                                                                             | string  | Hex colors left over from a rating feature removed in 2013     | <BloggerSource kind="deprecated" /> |
+
+### Each item
+
+| Field                                         | Type   | Content                                                      | Source                            |
+| --------------------------------------------- | ------ | ------------------------------------------------------------ | --------------------------------- |
+| `blogTitle`                                   | string | Name of the site                                             | <BloggerSource kind="observed" /> |
+| `blogUrl`                                     | string | Address of the site                                          | <BloggerSource kind="observed" /> |
+| `blogIconUrl`                                 | string | Icon of the site                                             | <BloggerSource kind="observed" /> |
+| `itemTitle`                                   | string | Title of its latest post                                     | <BloggerSource kind="observed" /> |
+| `itemUrl`                                     | string | Address of its latest post. Can be empty                     | <BloggerSource kind="observed" /> |
+| `itemSnippet`                                 | string | Excerpt of the latest post, up to 160 characters             | <BloggerSource kind="observed" /> |
+| `itemThumbnail`                               | object | Image of the latest post. Missing when the post has no image | <BloggerSource kind="observed" /> |
+| `itemThumbnail.url`                           | string | Address of the image                                         | <BloggerSource kind="observed" /> |
+| `itemThumbnail.width`, `itemThumbnail.height` | number | Always `72`                                                  | <BloggerSource kind="observed" /> |
+| `timePeriodSinceLastUpdate`                   | string | Localized age of the last update, such as "2 days ago"       | <BloggerSource kind="observed" /> |
+| `displayStyle`                                | string | Always `display: block;`                                     | <BloggerSource kind="observed" /> |
+
+`totalItems` can be larger than the number of entries in `items`: the editor accepts more sites than the widget renders, and `items` stops at 10.
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders                                                                 | Source                            |
+| ---------- | --- | --- | ------------------------------------------------------------------------------- | --------------------------------- |
+| `main`     | Yes | Yes | v1: an `h2.title`, the list and `quickedit`. v2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`  | No  | Yes | The list, the same markup as version 1 without the title                        | <BloggerSource kind="observed" /> |
+
+The default list is built like this:
+
+| Element                                      | Holds                                                                                                                                                                 |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `div.blog-list-container`, id `ID_container` | The whole list                                                                                                                                                        |
+| `ul`, id `ID_blogs`                          | One `li` per item, with `style` from `displayStyle`                                                                                                                   |
+| `div.blog-icon`                              | The icon, written as `data-lateloadsrc` instead of `src`                                                                                                              |
+| `div.blog-content > div.blog-title`          | The linked site name                                                                                                                                                  |
+| `div.item-content`                           | The thumbnail (`div.item-thumbnail`), the post title (`span.item-title`) and the excerpt (`span.item-snippet`), the excerpt preceded by " - " when the title is shown |
+| `div.item-time`                              | `timePeriodSinceLastUpdate`                                                                                                                                           |
+| `div.show-option`                            | Two links, `ID_show-n` (hidden at first) and `ID_show-all`, written only when `numItemsToShow` is not `0` and `totalItems` is larger                                  |
+
+`ID` is `data:widget.instanceId`. The icons have no `src` and the "Show" links only `return false`: the page relies on Blogger's widget script to load the icons and to fold the list. That the script finds the elements by these ids is not confirmed.
+
+## Writing your own markup
+
+### Load the icons yourself
+
+Custom markup does not depend on Blogger's script. Write the icon in `src` directly, as in the quick example, and add `loading='lazy'` if the list is long.
+
+### Cap the list without the script
+
+To show only the first `numItemsToShow` sites, test the loop index. `0` keeps them all, as the default markup does:
+
+```xml {2}
+<b:loop index='i' values='data:items' var='site'>
+  <b:if cond='data:numItemsToShow == 0 or data:i &lt; data:numItemsToShow'>
+    <li><a expr:href='data:site.blogUrl'><data:site.blogTitle/></a></li>
+  </b:if>
+</b:loop>
+```
+
+### Thumbnails
+
+`itemThumbnail` is missing for posts without an image, so test it before reading `.url`:
+
+```xml {1}
+<b:if cond='data:showItemThumbnail and data:site.itemThumbnail'>
+  <img alt='' expr:src='data:site.itemThumbnail.url' height='72' loading='lazy' width='72'/>
+</b:if>
+```
+
+## Things to know
+
+- **The order is Blogger's.** Dragging the sites in the editor only reorders the editor. The blog follows `sortType`.
+- **At most 10 rendered.** Whatever `numItemsToShow` says, `items` never holds more than 10 sites.
+- **Retired parts.** `linkColor` and `textColor` no longer mean anything, and `quickedit` in the version 1 `main` does nothing.

@@ -1,0 +1,81 @@
+---
+title: Sources
+description: What this guide is built on, Google's documentation and years of building Blogger themes, what each status badge means, and mistakes in Google's examples.
+published: 2026-10-26
+---
+
+Google has never published a specification of the theme language. This guide brings together two kinds of knowledge: what Google documents, and what is known from developing, saving and testing themes on Blogger. Each fact carries a badge that says which one it is.
+
+## Status badges
+
+<BloggerSourceLegend />
+
+- <BloggerSource kind="official" /> Google documents it, in the Blogger Help Center or on a Blogger blog. These pages are the most authoritative source, but they are old, short, and some of their examples are wrong.
+- <BloggerSource kind="observed" /> Google does not document it. It is known from theme development: it is in the themes Blogger ships, in the pages Blogger renders, or it was found by testing. It works today, in the way shown.
+- <BloggerSource kind="deprecated" /> Documented once, or still accepted, but no longer used by Blogger or marked as abandoned.
+
+When Google's documentation and Blogger's behavior differ, the page says both: what Google writes, then what Blogger does. When something is not known, the page says it is not confirmed.
+
+## Google
+
+### Blogger Help Center
+
+| Page                                                                              | Covers                                                                                                                                                               |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Page elements tags for layouts](https://support.google.com/blogger/answer/46888) | `<b:section>` and `<b:widget>`: `id`, `class`, `maxwidgets`, `showaddelement`, `growth`, `type`, `locked`, `title`, `pageType`, `mobile`; sections hold only widgets |
+| [Widget Tags for Layouts](https://support.google.com/blogger/answer/46995)        | `<b:includable>`, `<b:include>`, `<data:x/>`, `<b:if>`, `<b:elseif>`, `<b:else>`, `<b:switch>`, `<b:loop>` and its `to` ranges, `<b:with>`, `<b:eval>`, `expr:`      |
+| [Layouts Data Tags](https://support.google.com/blogger/answer/47270)              | `data:blog` and the data of the version 1 widgets                                                                                                                    |
+| [Customize CSS tags for layouts](https://support.google.com/blogger/answer/46871) | `<b:skin>`, `<Variable>` of the `font` and `color` types, `$name`                                                                                                    |
+| [Change the design of your blog](https://support.google.com/blogger/answer/46870) | The dashboard: Layout, Theme, Edit HTML, Customize, Add CSS                                                                                                          |
+
+These pages date from the first layouts themes. They say nothing of `<b:attr>`, `<b:class>`, `<b:tag>`, `<b:message>`, `<b:defaultmarkups>`, `<b:template-script>`, the `<html>` settings, `data:view`, `data:skin`, `data:widgets`, most operators and functions, and the skin types other than `font` and `color`. They still describe features that are gone, such as `growth`, `pageType` and the widget types `HeaderView` and `ListView`.
+
+### Blogger blogs
+
+| Post                                                                                                                                 | Date          | Covers                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------- | -------------------------------------------------------------------------------- |
+| [Template Change: Analytics Section](https://blogger-developers.googleblog.com/2011/10/today-we-have-made-change-to-layouts.html)    | October 2011  | The `google-analytics` includable                                                |
+| [Introducing custom mobile templates](https://blogger-developers.googleblog.com/2011/11/introducing-custom-mobile-templates.html)    | November 2011 | The `mobile` attribute of widgets, `data:blog.isMobile`, `data:blog.mobileClass` |
+| [Customising Threaded Comments](https://blogger-developers.googleblog.com/2012/01/customising-threaded-comments.html)                | January 2012  | The comment data of the Blog widget, `threaded_comments`                         |
+| [Adding new expressions to Blogger](https://blogger.googleblog.com/2015/05/adding-new-expressions-to-blogger.html)                   | May 2015      | `!` and `not`, the ternary, `in` and `contains`, `and`, `or`, parentheses        |
+| [Even more expansions to the Blogger template language](https://blogger.googleblog.com/2015/06/even-more-expansions-to-blogger.html) | June 2015     | `<b:elseif>`, `<b:switch>`, `<b:eval>`, `<b:with>`                               |
+| [More custom template flexibility](https://blogger.googleblog.com/2016/05/more-custom-template-flexibility.html)                     | May 2016      | Lambdas, `any`                                                                   |
+
+The posts date the features and show the intended syntax. The May 2015 post links to a "full specification of the new operators" in the Help Center that no longer exists: the address now serves a page of widget tag examples.
+
+### Mistakes in Google's examples
+
+Several examples of Google do not work as written. This guide uses the corrected form:
+
+| Where                               | Mistake                                                                                                      | Correct form                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| More custom template flexibility    | A `<b:if>` closed with `<b:if/>`                                                                             | `</b:if>`                                                                          |
+| Widget Tags for Layouts, `<b:with>` | The syntax line shows a self-closed `<b:with … />`, while the example wraps content                          | `<b:with value='…' var='…'>…</b:with>`                                             |
+| Widget Tags for Layouts, `<b:with>` | A `+` is missing before the closing string of `"background-image: url(" + data:sourceUrl ");"`               | `"background-image: url(" + data:sourceUrl + ");"`                                 |
+| Widget Tags for Layouts, `<b:eval>` | The ternary example misses a closing quote                                                                   | A closed string                                                                    |
+| Widget Tags for Layouts             | `<data.photo.width />`, with a dot                                                                           | `<data:photo.width/>`                                                              |
+| Widget Tags for Layouts             | `<b:include name>` "must match an includable of the same widget", while its own examples include `quickedit` | Built-in includables and `Common` includables can be included anywhere             |
+| Customize CSS tags for layouts      | A `<style>` element inside `<b:skin>`                                                                        | CSS directly in a CDATA section of `<b:skin>`; Blogger refuses the element         |
+| Customize CSS tags for layouts      | `type` is `"Font"` or `"color"`                                                                              | `font` and `color`; the case does not matter, `Color` saves                        |
+| Layouts Data Tags                   | `data:blog.pageType` is `item`, `archive` or `index`                                                         | Also `static_page`, which Google's own `<b:switch>` example uses, and `error_page` |
+| Page elements tags for layouts      | Widget ids such as `header` and `myList`, types `HeaderView` and `ListView`                                  | `Header1`, type `Header`: an id is the type followed by digits                     |
+
+Inside an attribute, `<` is escaped: Google's `cond='data:index &lt; 10'` is right, and `cond='data:index < 10'` is not valid XML.
+
+## Theme development
+
+Everything Google does not document comes from developing themes for Blogger, from small test themes to production themes used on many blogs. The work behind each <BloggerSource kind="observed" /> fact is one of these:
+
+- **Saving.** Writing a tag, an attribute, an expression or a skin declaration into a theme, and saving it in Edit HTML. Blogger refuses a theme it can not read, so saving tells what the language accepts, and the saved file shows how Blogger rewrites what it accepts. Saving does not check expressions or the attributes of logic tags, so each of those was also rendered.
+- **Rendering.** Opening the blog on every kind of page, home, post, static page, label, search, archive and error, with and without `?m=1`, and reading the HTML Blogger sends. Every page also carries a JSON copy of its data, `_WidgetManager._SetDataContext([…])`, with `data:blog`, `data:template`, `data:view` and `data:widgets`, which shows the values of the page flags.
+- **The dashboard.** Using the Layout editor, the Theme Designer and the previews on a theme under development, to see what each attribute and variable changes there.
+- **Blogger's own themes.** Installing the themes Blogger ships, Contempo, Soho, Emporio, Notable, Essential, the classic themes and Dynamic Views, and reading their XML. Blogger wrote these files and serves them to many blogs, so a tag or an operator that they use works. Their built-in includables, such as `all-head-content` and `widget-title`, are called but not defined in the file, so their output is known from the rendered pages.
+- **Production use.** Running themes on live blogs over the years, through Blogger's changes, shows which patterns hold up: configuration kept in widgets and skin variables, length sliders used as switches, a separate document for the Layout editor, and expressions with `snippet`, `params` and `format`.
+
+This covers what Google never documented: `<b:attr>`, `<b:class>`, `<b:tag>`, `<b:message>`, `<b:defaultmarkups>`, the `<html>` settings, the operators, functions and property suffixes, `data:view`, `data:skin` and `data:widgets`, the data of every widget in both widget versions, the built-in includables, the Theme Designer types, and the rules Blogger applies when it saves a theme.
+
+## Limits of this knowledge
+
+- Blogger changes without notice. A fact is true of Blogger as it was tested.
+- Some parts of Blogger can only be seen signed in, such as the Layout editor, the Theme Designer and the previews. What they render is described from use, not from published HTML.
+- Where testing gave no clear answer, the page says "not confirmed" instead of guessing.

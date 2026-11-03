@@ -1,0 +1,244 @@
+---
+title: Feeds
+description: The feed URLs of a Blogger blog, their parameters and JSON, and how scripts use them for recent posts, label blocks, search, numbered pages and sitemaps.
+level: advanced
+prerequisites:
+  - blogger-xml/data/blog
+published: 2026-10-26
+---
+
+Every Blogger blog publishes feeds of its posts, its static pages and its comments. Feed readers use them, and so do themes: a theme can not ask for other posts while Blogger renders a page, but its scripts can read any list of posts from a feed once the page is loaded.
+
+```js title="The five newest posts, as JSON" {1}
+fetch('/feeds/posts/summary?alt=json&max-results=5')
+  .then((response) => response.json())
+  .then(({ feed }) => {
+    for (const entry of feed.entry || []) {
+      const url = entry.link.find((link) => link.rel === 'alternate').href;
+      console.log(entry.title.$t, url);
+    }
+  });
+```
+
+The URL is relative, so the request goes to the blog's own address and needs no permission. From another site, use [JSONP](#from-another-site).
+
+## Feed URLs
+
+| Feed                  | URL                                                            |
+| --------------------- | -------------------------------------------------------------- |
+| Posts                 | `/feeds/posts/default`                                         |
+| Posts, summaries only | `/feeds/posts/summary`                                         |
+| Posts with a label    | `/feeds/posts/default/-/LABEL`, `/feeds/posts/summary/-/LABEL` |
+| One post              | `/feeds/posts/default/POST_ID`                                 |
+| Static pages          | `/feeds/pages/default`, `/feeds/pages/summary`                 |
+| One static page       | `/feeds/pages/default/PAGE_ID`                                 |
+| Comments of the blog  | `/feeds/comments/default`, `/feeds/comments/summary`           |
+| Comments of a post    | `/feeds/POST_ID/comments/default`                              |
+
+<BloggerSource kind="observed" />
+
+- Every feed also exists under `https://www.blogger.com/feeds/BLOG_ID/`, with the same paths: `https://www.blogger.com/feeds/4815162342108/posts/default`. One comment, `…/POST_ID/comments/default/COMMENT_ID`, is only served there, not on the blog's address. <BloggerSource kind="observed" />
+- The label is URL-encoded: `/feeds/posts/summary/-/Garden%20notes`.
+- `default` feeds carry the content of each post, `summary` feeds a short plain-text summary. A list for a sidebar or a related-posts block only needs `summary`, which is much lighter.
+- The `default` feed follows the Site feed setting of the blog: with "Short" or "Until jump break", it holds that much of each post; with "None", the blog has no feeds at all, and `data:blog.feedLinks` is empty. <BloggerSource kind="observed" />
+- A private blog, readable only by invited readers, has no public feeds. A theme can show "not available for private blogs" in its sitemap instead of requesting them, from `data:blog.isPrivateBlog`. <BloggerSource kind="observed" />
+
+The theme writes the feed links of the head with `data:blog.feedLinks`: the Atom and RSS feeds of the posts, a `service.post` link to the posts feed on `www.blogger.com`, for the Blogger API, and on posts the comments feed of that post. <BloggerSource kind="observed" /> See [`data:blog.feedLinks`](../data/blog.mdx#datablogfeedlinks) and [What `all-head-content` writes](./head-and-seo.mdx#what-all-head-content-writes).
+
+## Parameters
+
+| Parameter                        | Value                                                 | Effect                                                                                                     | Source                            |
+| -------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `alt`                            | `atom` (the default), `rss`, `json`, `json-in-script` | The format                                                                                                 | <BloggerSource kind="official" /> |
+| `callback`                       | a function name                                       | With `alt=json`, wraps the JSON in a call to that function: JSONP. Dotted names, `window.app.onFeed`, work | <BloggerSource kind="observed" /> |
+| `max-results`                    | a number                                              | The number of entries. `0` returns the feed with no entries: the blog's title, its labels and the total    | <BloggerSource kind="observed" /> |
+| `start-index`                    | a number, from `1`                                    | The first entry, for paging                                                                                | <BloggerSource kind="official" /> |
+| `orderby`                        | `published`, `updated`, `lastmodified`, `starttime`   | The order of the entries, newest first                                                                     | <BloggerSource kind="observed" /> |
+| `published-min`, `published-max` | an ISO 8601 date                                      | Entries published at or after, or before, the date                                                         | <BloggerSource kind="official" /> |
+| `updated-min`, `updated-max`     | an ISO 8601 date                                      | Entries updated at or after, or before, the date. Google documents them for `orderby=updated`              | <BloggerSource kind="official" /> |
+| `q`                              | text                                                  | Posts matching the text, for posts feeds                                                                   | <BloggerSource kind="observed" /> |
+| `redirect`                       | `false`                                               | Serve the feed itself even when the blog redirects its feed to another address                             | <BloggerSource kind="observed" /> |
+| `sort`                           | text                                                  | Passed on by a feed client library. Its values and effect are not confirmed                                | <BloggerSource kind="observed" /> |
+
+```txt
+/feeds/posts/summary?alt=json&max-results=10&start-index=11&orderby=published
+/feeds/posts/summary/-/Garden?alt=json&max-results=4
+/feeds/posts/summary?alt=json&q=frost&max-results=5
+/feeds/posts/summary?alt=json&max-results=0
+/feeds/posts/default?alt=json&published-min=2026-01-01T00:00:00-08:00&published-max=2026-02-01T00:00:00-08:00
+```
+
+- A request returns at most 150 entries, whatever `max-results` asks. A sitemap script reads every post by pages of 150, moving `start-index` until a page comes back short. <BloggerSource kind="observed" />
+- `orderby=published` keeps the order fixed while you page: a post edited between two requests does not move.
+- Dates are ISO 8601, `2026-01-01T00:00:00-08:00`. In a URL, write the `+` of a positive offset as `%2B`.
+- `alt=json-in-script` with `callback` gives the same JSONP as `alt=json` with `callback`. <BloggerSource kind="official" />
+
+## The JSON
+
+With `alt=json`, a list feed is an object with one key, `feed`. One post or static page by its id, `/feeds/posts/default/POST_ID`, is an object with one key, `entry`, and no `feed`. <BloggerSource kind="observed" />
+
+```js title="A posts feed, shortened"
+{
+  "feed": {
+    "id": { "$t": "tag:blogger.com,1999:blog-4815162342108" },
+    "title": { "$t": "Field Notes" },
+    "category": [{ "term": "Garden" }, { "term": "Kitchen" }],
+    "openSearch$totalResults": { "$t": "86" },
+    "openSearch$startIndex": { "$t": "1" },
+    "openSearch$itemsPerPage": { "$t": "5" },
+    "link": [
+      { "rel": "alternate", "type": "text/html", "href": "https://example.blogspot.com/" },
+      { "rel": "next", "type": "application/atom+xml", "href": "https://www.blogger.com/feeds/4815162342108/posts/summary?start-index=6&max-results=5&alt=json" }
+    ],
+    "entry": [
+      {
+        "id": { "$t": "tag:blogger.com,1999:blog-4815162342108.post-7310984426" },
+        "published": { "$t": "2026-03-14T07:30:00.000-08:00" },
+        "updated": { "$t": "2026-03-15T10:02:11.481-08:00" },
+        "category": [{ "term": "Garden" }],
+        "title": { "$t": "First frost" },
+        "summary": { "$t": "The first cold night of the year came early…" },
+        "link": [
+          { "rel": "replies", "type": "text/html", "title": "3 Comments", "href": "…/first-frost.html#comment-form" },
+          { "rel": "alternate", "type": "text/html", "href": "https://example.blogspot.com/2026/03/first-frost.html" }
+        ],
+        "author": [{ "name": { "$t": "Ana" }, "gd$image": { "src": "//blogger.googleusercontent.com/img/b/…/s113/ana.jpg" } }],
+        "media$thumbnail": { "url": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh/s72-c/frost.jpg", "width": "72", "height": "72" }
+      }
+    ]
+  }
+}
+```
+
+| Value                       | Where                                                                                              |
+| --------------------------- | -------------------------------------------------------------------------------------------------- |
+| Text                        | an object with `$t`: `entry.title.$t`, `entry.summary.$t`, `entry.content.$t` (in `default` feeds) |
+| The page of a post          | the `link` with `rel` `alternate` and `type` `text/html`                                           |
+| The post id                 | the end of `entry.id.$t`, after `.post-`; static pages end with `.page-`                           |
+| Labels                      | `category[].term`: on `feed`, every label of the blog; on an entry, the labels of the post         |
+| The image                   | `media$thumbnail.url`, at `s72-c`; missing when the post has none                                  |
+| The comment count           | the `title` of the `link` with `rel` `replies` and `type` `text/html`, like `3 Comments`           |
+| The comments feed of a post | the `link` with `rel` `replies` and `type` `application/atom+xml`                                  |
+| The author photo            | `author[0].gd$image.src`; `https://img1.blogblog.com/img/b16-rounded.gif` without a photo          |
+| Paging                      | `openSearch$totalResults`, `openSearch$startIndex`, `openSearch$itemsPerPage`, as strings          |
+| Next and previous pages     | the `link`s with `rel` `next` and `previous`                                                       |
+| The blog                    | `feed.title.$t`, `feed.subtitle.$t` (the description), `feed.updated.$t`, `feed.author`            |
+| The author's profile        | `author[0].uri.$t`                                                                                 |
+| The location of a post      | `georss$featurename.$t`, `georss$point.$t`, `georss$box.$t`, when the post has a location          |
+
+<BloggerSource kind="observed" />
+
+- A feed with no entries has no `entry` key at all: write `feed.entry || []`.
+- Numbers are strings: `Number(feed['openSearch$totalResults'].$t)`.
+- The `next` and `previous` links point to `www.blogger.com`, even for a feed requested on the blog's address. A script on the blog can not `fetch` them: build the next URL with `start-index` instead. <BloggerSource kind="observed" />
+- On search feeds, with `q`, `openSearch$totalResults` is the number of entries returned, not the number of matches. A live search can ask for one entry more than it shows, to know if there are more. <BloggerSource kind="observed" />
+- `media$thumbnail.url` is a Blogger image URL: replace `s72-c` with another size, see [Images](./images.mdx).
+- Comment entries add `thr$in-reply-to`, with the URL of the post in `href` and the id of the post at the end of `ref`, after `post-`, and `gd$extendedProperty` items: `blogger.itemClass` (the class of the blog author), `blogger.displayTime` and `blogger.contentRemoved`. A reply's parent is the `link` with `rel` `related`. <BloggerSource kind="observed" />
+
+## Reading feeds from scripts
+
+### On the blog
+
+A script running on the blog can `fetch` the feeds of the blog's own address. Write the URL without a host, so it works on `blogspot.com` and on a custom domain alike:
+
+```js title="A label block"
+async function labelPosts(label, count) {
+  const url = `/feeds/posts/summary/-/${encodeURIComponent(label)}?alt=json&orderby=published&max-results=${count}`;
+  const { feed } = await (await fetch(url)).json();
+  return (feed.entry || []).map((entry) => ({
+    id: entry.id.$t.split('.post-')[1],
+    title: entry.title.$t,
+    url: entry.link.find((link) => link.rel === 'alternate').href,
+    image: entry.media$thumbnail?.url.replace('/s72-c/', '/w400-h225-p-k-no-nu/'),
+    published: entry.published.$t,
+  }));
+}
+```
+
+The theme gives the script what it needs through attributes. A theme's homepage blocks can be empty elements filled this way, one per label of a LinkList: <BloggerSource kind="observed" />
+
+```xml
+<b:loop values='data:links' var='link'>
+  <section class='label-block' data-max-results='6' expr:data-label='data:link.name'>
+    <h2><a expr:href='data:link.target'><data:link.name/></a></h2>
+  </section>
+</b:loop>
+```
+
+Feeds hold text: put titles and summaries in the page with `textContent`, not `innerHTML`, so a `<` in a title stays a character.
+
+### From another site
+
+A page on another domain can not read the JSON with `fetch`: the browser blocks it. <BloggerSource kind="observed" /> The feed supports JSONP instead: `callback` names a function, and the feed is loaded as a script that calls it.
+
+```js title="A JSONP helper"
+function readFeed(url) {
+  return new Promise((resolve, reject) => {
+    const name = `onFeed${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+    const script = document.createElement('script');
+    const done = () => { delete window[name]; script.remove(); };
+    window[name] = (data) => { done(); resolve(data); };
+    script.onerror = () => { done(); reject(new Error(`Feed failed: ${url}`)); };
+    script.src = `${url}${url.includes('?') ? '&' : '?'}alt=json&callback=${name}`;
+    document.head.append(script);
+  });
+}
+
+readFeed('https://example.blogspot.com/feeds/posts/summary?max-results=3')
+  .then(({ feed }) => console.log(feed.entry.map((entry) => entry.title.$t)));
+```
+
+A theme can read its feeds this way even on its own blog: JSONP returns objects directly, with no JSON parsing step. <BloggerSource kind="observed" />
+
+### Every post
+
+For a sitemap page or a search index, read the feed by pages of 150:
+
+```js
+async function allPosts() {
+  const posts = [];
+  for (let start = 1; ; start += 150) {
+    const response = await fetch(`/feeds/posts/summary?alt=json&orderby=published&max-results=150&start-index=${start}`);
+    const entries = (await response.json()).feed.entry || [];
+    posts.push(...entries);
+    if (entries.length < 150) return posts;
+  }
+}
+```
+
+Static pages come from `/feeds/pages/summary` the same way.
+
+### Only the totals
+
+`max-results=0` returns the feed without entries: the total number of posts, and every label of the blog in `feed.category`. A numbered pager reads its number of pages from it. See [Posts and pagination](./posts-and-pagination.mdx#numbered-pages).
+
+```js
+const { feed } = await (await fetch('/feeds/posts/summary?alt=json&max-results=0')).json();
+const total = Number(feed['openSearch$totalResults'].$t);
+const labels = (feed.category || []).map((category) => category.term);
+```
+
+## Feeds or pages
+
+A script can also fetch a page of the blog, such as a label page, and read its HTML. A theme can do both: <BloggerSource kind="observed" />
+
+| Read               | When                                                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| A feed             | the data is enough: titles, links, dates, images, counts. Fast and small                                                      |
+| A page of the blog | the markup of the theme is wanted as it is, or data the feed does not have, such as the JSON the theme prints for its scripts |
+
+Two details for pages:
+
+- Fetching the homepage counts as a visit in the blog's stats. A theme can fetch a `/search` URL instead when it only needs data the theme prints on every page. <BloggerSource kind="observed" />
+- Add `m=0` to the URL, so a request from a phone is not redirected, see [Mobile requests](../data/blog.mdx#mobile-requests).
+
+## Sitemaps
+
+Blogger also serves sitemaps for search engines, `/sitemap.xml` for the posts and `/sitemap-pages.xml` for the static pages. A theme can announce them in the head: <BloggerSource kind="observed" />
+
+```xml /path/
+<link expr:href='path(data:blog.homepageUrl.canonical, "sitemap.xml")' rel='sitemap' title='Posts' type='application/xml'/>
+<link expr:href='path(data:blog.homepageUrl.canonical, "sitemap-pages.xml")' rel='sitemap' title='Pages' type='application/xml'/>
+```
+
+`path` replaces the path of the homepage URL. See [functions](../expressions/functions.mdx).

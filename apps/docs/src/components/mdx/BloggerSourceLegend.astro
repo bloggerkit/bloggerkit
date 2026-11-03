@@ -1,0 +1,14 @@
+---
+import { BLOGGER_SOURCES } from '@/lib/ui/blogger-sources';
+import BloggerSource from './BloggerSource.astro';
+---
+
+<ul>
+	{
+		[...BLOGGER_SOURCES].map(([kind, source]) => (
+			<li>
+				<BloggerSource kind={kind} /> {source.title}.
+			</li>
+		))
+	}
+</ul>

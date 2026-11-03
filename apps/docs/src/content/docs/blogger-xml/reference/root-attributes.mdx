@@ -1,0 +1,191 @@
+---
+title: Root attributes
+description: Every attribute of the html element of a theme, the namespaces, the theme and widget versions, and the switches that change what Blogger adds to the page.
+published: 2026-10-26
+---
+
+The `<html>` element of a theme takes any attribute, like any other element of the theme. Its attributes are of three kinds: the namespace declarations of the language, the settings of the theme as `b:` attributes, and ordinary HTML attributes such as `lang`, `dir`, `class`, `style` or `data-*`. Blogger reads the settings and does not render them; on the blog, `<html>` keeps its HTML attributes and the namespace declarations as written, and `expr:` computes any HTML attribute.
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' b:templateUrl='news.xml' b:templateVersion='2.0.0' expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+```
+
+```html title="Rendered for a French blog"
+<!DOCTYPE html>
+<html dir='ltr' lang='fr' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+```
+
+</CodeTabs>
+
+Google documents none of these attributes. Everything below is known from Blogger's own themes and from developing themes. <BloggerSource kind="observed" />
+
+## Attributes
+
+| Attribute                | Required | Value                                 | Default | Description                                 | Source                              |
+| ------------------------ | -------- | ------------------------------------- | ------- | ------------------------------------------- | ----------------------------------- |
+| `xmlns`                  | No       | `http://www.w3.org/1999/xhtml`        |         | The namespace of HTML elements              | <BloggerSource kind="observed" />   |
+| `xmlns:b`                | No       | `http://www.google.com/2005/gml/b`    |         | The namespace of `b:` tags and attributes   | <BloggerSource kind="observed" />   |
+| `xmlns:data`             | No       | `http://www.google.com/2005/gml/data` |         | The namespace of `<data:x/>`                | <BloggerSource kind="observed" />   |
+| `xmlns:expr`             | No       | `http://www.google.com/2005/gml/expr` |         | The namespace of `expr:` attributes         | <BloggerSource kind="observed" />   |
+| `b:layoutsVersion`       | No       | `3`                                   |         | The version of the theme                    | <BloggerSource kind="observed" />   |
+| `b:version`              | No       | `2`                                   |         | The version of the theme, in classic themes | <BloggerSource kind="observed" />   |
+| `b:defaultwidgetversion` | No       | `1` or `2`                            | `1`     | The version of the widgets                  | <BloggerSource kind="observed" />   |
+| `b:css`                  | No       | `true` or `false`                     | `true`  | Add Blogger's stylesheets to the page       | <BloggerSource kind="observed" />   |
+| `b:js`                   | No       | `true` or `false`                     | `true`  | Add Blogger's scripts to the page           | <BloggerSource kind="observed" />   |
+| `b:responsive`           | No       | `true` or `false`                     |         | Informational: `false` changes nothing seen | <BloggerSource kind="observed" />   |
+| `b:templateUrl`          | No       | a file name                           |         | The file of the theme                       | <BloggerSource kind="observed" />   |
+| `b:templateVersion`      | No       | a version, `x.y.z`                    |         | The version of the theme                    | <BloggerSource kind="observed" />   |
+| `b:dynamicViews`         | No       | `true`                                |         | Mark a Dynamic Views theme                  | <BloggerSource kind="observed" />   |
+| `b:render`               | No       | `true` or `false`                     | `true`  | The former name of `b:dynamicViews`         | <BloggerSource kind="deprecated" /> |
+| any HTML attribute       | No       | text, or an expression with `expr:`   |         | Rendered on `<html>`, as on any element     | <BloggerSource kind="observed" />   |
+
+Blogger checks neither the names nor the values of the `b:` attributes when saving: an unknown `b:foo='1'`, `b:layoutsVersion='4'` or `b:css='maybe'` saves, and so does a root element named `<htm>`, which renders as `<htm …>`. [The root element](../basics/saving.mdx#the-root-element) lists what saves, what an unusual value is known to do, and the one check that depends on these attributes, for `<b:template-skin>`. Write the values shown in the table: `true` or `false` for the switches. <BloggerSource kind="observed" />
+
+Only literal values are known for the `b:` attributes. Whether an `expr:` form of them is read is not confirmed. `b:version` and `b:dynamicViews` are in the classic themes of Blogger, see [Classic themes](./classic-themes.mdx).
+
+## Namespaces
+
+The four `xmlns` attributes declare the namespaces of the theme language. Blogger does not need them: a theme without `xmlns`, or with `xmlns` alone and no prefixed declaration, saves, and its tags, data and `expr:` attributes work. After a theme with `xmlns` alone is saved, Edit HTML shows all four declarations. Write all four anyway: XML tools and editors need them. <BloggerSource kind="observed" />
+
+| Prefix  | URI                                   | Used for                                      |
+| ------- | ------------------------------------- | --------------------------------------------- |
+| none    | `http://www.w3.org/1999/xhtml`        | HTML elements                                 |
+| `b:`    | `http://www.google.com/2005/gml/b`    | `<b:if>`, `<b:loop>`… and the `b:` attributes |
+| `data:` | `http://www.google.com/2005/gml/data` | `<data:post.title/>`                          |
+| `expr:` | `http://www.google.com/2005/gml/expr` | `expr:href`, `expr:class`…                    |
+
+Blogger does not check that a prefix is declared. Classic themes use `macro:` and `mexpr:` with no `xmlns:macro`, and Blogger saves them. A strict XML parser rejects such a file with an "unbound prefix" error. <BloggerSource kind="observed" />
+
+### Removing the declarations from the page
+
+The declarations reach the page exactly as written in the theme: all four, the ones written, or none. A `<b:attr>` with an empty value, written directly in `<html>`, removes each of them. Some themes start with these four lines: <BloggerSource kind="observed" />
+
+```xml
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+  <b:attr name='xmlns' value=''/>
+  <b:attr name='xmlns:b' value=''/>
+  <b:attr name='xmlns:data' value=''/>
+  <b:attr name='xmlns:expr' value=''/>
+  …
+</html>
+```
+
+## Theme and widget versions
+
+### `b:layoutsVersion` and `b:version`
+
+The version of the theme. It decides what the Layout editor and the Theme Designer offer, and which features the theme has. Blogger's themes write `b:version='2'` for version 2 and `b:layoutsVersion='3'` for version 3; a theme with neither is version 1. A theme written today uses `b:layoutsVersion='3'`. <BloggerSource kind="observed" />
+
+The three generations, their themes and what each one brings are in [Versions](../basics/concepts.mdx#versions) and [Classic themes](./classic-themes.mdx).
+
+### `b:defaultwidgetversion`
+
+The version of the widgets: their default markup and their data. Without the attribute, widgets are version 1, and a version 3 theme gets version 2 widgets only with `b:defaultwidgetversion='2'`. `b:defaultwidgetversion='3'` saves, and new widgets then render `data-version='3'`. <BloggerSource kind="observed" />
+
+The version shows on the blog in the `data-version` attribute of each widget, `<div class='widget HTML' data-version='2' id='HTML1'>`, and in `data:widget.version`. The `version` attribute of a widget does not simply override it: what Blogger stores is described in [`version`](../layout/widgets.mdx#version). <BloggerSource kind="observed" />
+
+## Blogger's files
+
+### `b:css`
+
+`b:css='false'` stops Blogger from linking its stylesheets: <BloggerSource kind="observed" />
+
+- `https://www.blogger.com/static/v1/widgets/ID-css_bundle_VERSION.css`, the default styles of the widgets;
+- `https://www.blogger.com/dyn-css/authorization.css?…`, the styles of the admin controls.
+
+Every layouts version 3 theme of Blogger sets `b:css='false'`, and its pages link neither file. A classic theme, without the attribute, links both. With `b:css='true'`, the `<head>` gets `<link href='https://www.blogger.com/static/v1/widgets/…-css_bundle_v2.css' rel='stylesheet' …>`. <BloggerSource kind="observed" />
+
+It does not concern the theme's own CSS: [`<b:skin>`](../styles/skin.mdx) is rendered either way. A theme with `b:css='false'` styles every widget itself, including those it does not expect the blog owner to add.
+
+### `b:js`
+
+`b:js='false'` stops Blogger from adding its scripts to the page. The default is `true`. With `b:js='true'`, two scripts are added at the end of `<body>`. <BloggerSource kind="observed" />
+
+No theme of Blogger sets it. Some custom themes do, and replace what the scripts did with their own code: they load the comment form in an iframe, post the contact form, and load AdSense and analytics themselves. A theme that sets it should test every widget it renders: anything that relied on Blogger's scripts is gone.
+
+## Theme information
+
+### `b:responsive`
+
+`b:responsive='true'` is on every layouts version 3 theme of Blogger. It is informational; `data:template.isResponsive` tells the theme whether it is responsive. With `b:responsive='false'`, the homepage and its `?m=1` version render the same as with `true`. <BloggerSource kind="observed" />
+
+### `b:templateUrl` and `b:templateVersion`
+
+The file and the version of the theme, which let Blogger recognize its own themes and their updates. <BloggerSource kind="observed" />
+
+| Theme     | `b:templateUrl` | Name of its `<b:template-script>` |
+| --------- | --------------- | --------------------------------- |
+| Contempo  | `indie.xml`     | `indie`                           |
+| Soho      | `fancy.xml`     | `fancy`                           |
+| Emporio   | `vegeclub.xml`  | `vegeclub`                        |
+| Notable   | `rockpool.xml`  | `rockpool`                        |
+| Essential | `strm.xml`      | `strm`                            |
+
+The file name without `.xml` is also the start of the names of the variants, `indie_light`, `fancy_dark`. `b:templateVersion` changes when Blogger updates a theme: `1.0.1`, `1.3.3` and `1.4.0` are seen. Classic themes have neither attribute.
+
+Custom themes can set both to their own file and version, such as `b:templateUrl='my-theme.xml'` and `b:templateVersion='3.2.0'`.
+
+## HTML attributes
+
+Any HTML attribute can be written on `<html>`, with a literal value or with `expr:`. Blogger does not check them when saving, stores them sorted by name with the other attributes, and renders them as written, while every `b:` attribute is removed: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<html b:layoutsVersion='3' class='site' data-theme='light' expr:dir='data:blog.languageDirection' expr:title='"t" + 1' lang='en' style='color-scheme: light' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+```
+
+```html title="Rendered"
+<html class='site' data-theme='light' dir='ltr' lang='en' style='color-scheme: light' title='t1' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+```
+
+</CodeTabs>
+
+The order of the rendered attributes is not confirmed.
+
+None of them is special. Blogger's themes use two of them, computed from the settings of the blog, for the direction and the language of the page: <BloggerSource kind="observed" />
+
+```xml
+<html expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale' …>
+```
+
+`data:blog.languageDirection` is `ltr` or `rtl`, and `data:blog.locale` the language of the blog, such as `en`, `fr-CA` or `pt-BR`. `data:blog.locale.language` gives the language without the region. See [data:blog](../data/blog.mdx). Classic themes also set `class='v2'`, which stays on the blog: `<html class='v2' dir='ltr' lang='en'>`; Layouts version 3 themes of Blogger have no class on `<html>`. <BloggerSource kind="observed" />
+
+### `<b:attr>` and `<b:class>` in `<html>`
+
+`<b:attr>` and `<b:class>` written directly in `<html>` set its attributes, as in any element. They allow conditions: <BloggerSource kind="observed" />
+
+```xml
+<html …>
+  <b:attr expr:value='data:blog.locale.language' name='lang'/>
+  <b:attr expr:value='data:skin.vars.style_direction == "3px" ? "rtl" : data:blog.languageDirection' name='dir'/>
+  <b:class name='no-js'/>
+  …
+</html>
+```
+
+## Dynamic Views
+
+### `b:dynamicViews`
+
+Dynamic Views themes set `b:dynamicViews='true'` with `b:version='2'`. Their pages are built by JavaScript, and Blogger does not render the markup of their widgets. <BloggerSource kind="observed" />
+
+### `b:render`
+
+The former name of `b:dynamicViews`. It is abandoned: do not use it. <BloggerSource kind="deprecated" />
+
+## Values in Blogger's themes
+
+| Themes                                                            | Attributes                                                                                                                                                                                                         |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Contempo, Soho, Emporio, Notable, Essential                       | `b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' b:templateUrl='…' b:templateVersion='…' expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale'` and the namespaces |
+| Simple, Awesome Inc., Picture Window, Watermark, Ethereal, Travel | `b:version='2' class='v2' expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale'` and the namespaces                                                                                                  |
+| Dynamic Views                                                     | `b:dynamicViews='true' b:version='2' class='v2' expr:dir='…' expr:lang='…'` and the namespaces                                                                                                                     |
+
+<BloggerSource kind="observed" />
+
+A new theme starts from the first row, with its own `b:templateUrl` and `b:templateVersion` or none.

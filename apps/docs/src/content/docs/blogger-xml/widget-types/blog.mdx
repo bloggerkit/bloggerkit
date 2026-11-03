@@ -1,0 +1,613 @@
+---
+title: Blog
+description: The widget that renders the posts or the page being viewed, with bylines, sharing, comments, inline ads and the pager.
+published: 2026-10-26
+---
+
+The `Blog` widget carries the content of every page. On the homepage, a label page, a search or an archive it receives a list of posts; on a post or a static page it receives that one item, with its comments. Google calls it "the central part of any blog, and the most complex". <BloggerSource kind="official" />
+
+Its data is the richest of all widget types, and its built-in markup is split into dozens of small includables. A theme can keep them, override a few, or ignore them and write its own `main`.
+
+## Quick example
+
+A complete widget for a responsive theme: cards with a snippet on list pages, the full post with its labels on a post page, a pager, and a message when there is nothing to show.
+
+<CodeTabs>
+
+```xml title="theme.xml" {21}
+<b:section id='theme_section_main' name='Main' showaddelement='false'>
+  <b:widget id='Blog1' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'>
+    <b:includable id='main' var='this'>
+      <b:if cond='data:posts.empty'>
+        <p class='no-posts'><data:messages.theresNothingHere/></p>
+      </b:if>
+      <b:loop values='data:posts' var='post'>
+        <article class='entry' expr:data-id='data:post.id'>
+          <b:class cond='data:view.isSingleItem' name='entry-full'/>
+          <b:tag class='entry-title' expr:name='data:view.isSingleItem ? "h1" : "h2"'>
+            <b:tag cond='data:view.isMultipleItems' expr:href='data:post.url.canonical' name='a'>
+              <data:post.title/>
+            </b:tag>
+          </b:tag>
+          <time expr:datetime='data:post.date.iso8601'><b:eval expr='format(data:post.date, "MMM d, yyyy")'/></time>
+          <b:if cond='data:view.isSingleItem'>
+            <div class='entry-body'><data:post.body/></div>
+            <b:loop values='data:post.labels' var='label'>
+              <a expr:href='data:label.url.canonical' rel='tag'><data:label.name/></a>
+            </b:loop>
+            <b:include cond='data:post.allowComments' data='post' name='commentPicker'/>
+          <b:else/>
+            <p class='entry-snippet'><b:eval expr='snippet(data:post.body, { length: 150, links: false })'/></p>
+          </b:if>
+        </article>
+      </b:loop>
+      <b:if cond='data:view.isMultipleItems'>
+        <nav class='pager'>
+          <b:if cond='data:newerPageUrl'><a expr:href='data:newerPageUrl' rel='prev'><data:messages.newerPosts/></a></b:if>
+          <b:if cond='data:olderPageUrl'><a expr:href='data:olderPageUrl' rel='next'><data:messages.olderPosts/></a></b:if>
+        </nav>
+      </b:if>
+    </b:includable>
+  </b:widget>
+</b:section>
+```
+
+```html title="Rendered, on the homepage"
+<div class='widget Blog' data-version='2' id='Blog1'>
+  <article class='entry' data-id='4417296153873652218'>
+    <h2 class='entry-title'><a href='https://example.blogspot.com/2026/10/release-notes.html'>Release notes</a></h2>
+    <time datetime='2026-10-12T08:15:00+05:30'>Oct 12, 2026</time>
+    <p class='entry-snippet'>What changed in this release, in a few lines of plain text…</p>
+  </article>
+  <nav class='pager'>
+    <a href='https://example.blogspot.com/search?updated-max=2026-10-01T09:00:00%2B05:30&amp;max-results=7' rel='next'>Older Posts</a>
+  </nav>
+</div>
+```
+
+</CodeTabs>
+
+- `commentPicker` is not declared in this widget. Blogger renders its built-in version, and the built-in comment includables under it. <BloggerSource kind="observed" /> To restyle the comments, declare `commentPicker` and what it calls, see [Comments](#comments).
+- On the 404 page `data:posts` is empty, so only the message renders.
+
+## Placement and limits
+
+|          |                                                                                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pages    | All of them: lists of posts, posts, static pages, and the 404 page with an empty `data:posts`                                                     |
+| Section  | Its own section in Blogger's themes, with `showaddelement='false'`: `main` in classic themes, `page_body` in the responsive ones                  |
+| Id       | `Blog1` in Blogger's themes. Hand-written themes use any digits, such as `Blog01` or `Blog010`                                                    |
+| Locked   | Always, in Blogger's themes, so it can not be removed in the Layout editor, see [`locked`](../layout/widgets.mdx#locked)                          |
+| Per blog | At least 2; a higher maximum is not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) <BloggerSource kind="observed" /> |
+| Versions | 1 in classic themes, 2 in responsive themes                                                                                                       |
+| XML      | Editable, except in the classic mobile theme and Dynamic Views, whose posts are rendered by Blogger's script <BloggerSource kind="observed" />    |
+
+- **More than one, or none.** A theme can hold several Blog widgets: one in a head section that prints meta tags (see [Widgets in the head](../guides/head-and-seo.mdx#widgets-in-the-head)), one in a hidden section that prints the posts as JSON for scripts, and the visible one. <BloggerSource kind="observed" /> A theme with no Blog widget saves, see [Widgets per type](../reference/limits.mdx#widgets-per-type).
+- **Neighbors.** Blogger's responsive themes place a `FeaturedPost` widget (homepage only) and a `PopularPosts` widget (post pages only) in the same section, and the Blog widget's `main` drops the featured post from its list. See [Hiding posts from the list](#hiding-posts-from-the-list). <BloggerSource kind="observed" />
+- **Shared settings.** The Blog widget's byline settings also decide the bylines of the [FeaturedPost](./featured-post.mdx) and [PopularPosts](./popular-posts.mdx) widgets.
+
+## Attributes
+
+The attributes of `<b:widget>` are in [Widgets](../layout/widgets.mdx). The values a Blog widget takes:
+
+| Attribute | Usual value  | Notes                                                                           | Source                            |
+| --------- | ------------ | ------------------------------------------------------------------------------- | --------------------------------- |
+| `id`      | `Blog1`      | Also the `id` of the wrapper `div`                                              | <BloggerSource kind="observed" /> |
+| `type`    | `Blog`       |                                                                                 | <BloggerSource kind="official" /> |
+| `title`   | `Blog Posts` | Stored but never displayed by Blogger's markup. Some exports have it translated | <BloggerSource kind="observed" /> |
+| `locked`  | `true`       |                                                                                 | <BloggerSource kind="observed" /> |
+| `visible` | `true`       | The widget has no "show" option in the Layout editor                            | <BloggerSource kind="observed" /> |
+| `version` | `2`          | Set by Blogger from the theme                                                   | <BloggerSource kind="observed" /> |
+| `cond`    | none         | Blogger's themes always render it                                               |                                   |
+
+## Widget settings
+
+Blogger writes the settings from the "Post page options", "Arrange items" and ads options of the widget in the Layout editor.
+
+```xml
+<b:widget-settings>
+  <b:widget-setting name='authorLabel'>Published by</b:widget-setting>
+  <b:widget-setting name='commentLabel'>Comment</b:widget-setting>
+  <b:widget-setting name='postLabelsLabel'>in</b:widget-setting>
+  <b:widget-setting name='postsPerAd'>1</b:widget-setting>
+  <b:widget-setting name='showAuthor'>true</b:widget-setting>
+  <b:widget-setting name='showAuthorProfile'>true</b:widget-setting>
+  <b:widget-setting name='showCommentLink'>true</b:widget-setting>
+  <b:widget-setting name='showDateHeader'>false</b:widget-setting>
+  <b:widget-setting name='showInlineAds'>false</b:widget-setting>
+  <b:widget-setting name='showLabels'>true</b:widget-setting>
+  <b:widget-setting name='showLocation'>false</b:widget-setting>
+  <b:widget-setting name='showShareButtons'>true</b:widget-setting>
+  <b:widget-setting name='showTimestamp'>true</b:widget-setting>
+  <b:widget-setting name='style.layout'>1x1</b:widget-setting>
+  <b:widget-setting name='timestampLabel'>On</b:widget-setting>
+</b:widget-settings>
+```
+
+### Switches
+
+| Setting             | Values                                                                                                                                                                                                           | Option in the Layout editor   | What it drives                              | Source                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------- | --------------------------------- |
+| `showDateHeader`    | `true`, `false`. Stored `false` whatever is written, even `TRUE`                                                                                                                                                 | Date header                   | `data:post.dateHeader`, version 1           | <BloggerSource kind="observed" /> |
+| `showAuthor`        | `true`, `false`                                                                                                                                                                                                  | Author                        | the `author` byline item, `data:showAuthor` | <BloggerSource kind="observed" /> |
+| `showTimestamp`     | `true`, `false`                                                                                                                                                                                                  | Date                          | the `timestamp` item, `data:showTimestamp`  | <BloggerSource kind="observed" /> |
+| `showCommentLink`   | `true`, `false`                                                                                                                                                                                                  | Comment count                 | the `comments` item                         | <BloggerSource kind="observed" /> |
+| `showLabels`        | `true`, `false`                                                                                                                                                                                                  | Labels                        | the `labels` item, `data:showPostLabels`    | <BloggerSource kind="observed" /> |
+| `showLocation`      | `true`, `false`                                                                                                                                                                                                  | Location                      | the `location` item, `data:showLocation`    | <BloggerSource kind="observed" /> |
+| `showShareButtons`  | `true`, `false`                                                                                                                                                                                                  | Share buttons                 | the `share` item                            | <BloggerSource kind="observed" /> |
+| `showAuthorProfile` | `true`, `false`                                                                                                                                                                                                  | Author profile under the post | `postFooterAuthorProfile`                   | <BloggerSource kind="observed" /> |
+| `showInlineAds`     | `true`, `false`                                                                                                                                                                                                  | Ads between posts             | `data:post.includeAd`                       | <BloggerSource kind="observed" /> |
+| `postsPerAd`        | `1`, `2`, `3`, `4`, `5`, `10`. `-1`, `0` and `1000000` are stored as `1`                                                                                                                                         | Posts between two ads         | `data:post.includeAd`                       | <BloggerSource kind="observed" /> |
+| `style.layout`      | `1x1` for responsive ads, or a size: `300x250`, `336x280`, `728x90`, `160x600`, `970x250`, `970x90`, `468x60`, `234x60`, `120x600`, `120x240`, `300x600`, `300x1050`, `250x250`, `200x200`, `180x150`, `125x125` | Format of the inline ads      |                                             | <BloggerSource kind="observed" /> |
+
+### Texts
+
+The texts printed before or after a byline item. They reach the markup as the `label` of the byline item, and as data of the same name in version 1.
+
+| Setting             | English default | Printed                 | Source                            |
+| ------------------- | --------------- | ----------------------- | --------------------------------- |
+| `authorLabel`       | `By`            | before the author       | <BloggerSource kind="observed" /> |
+| `timestampLabel`    | `at`            | before the date         | <BloggerSource kind="observed" /> |
+| `commentLabel`      | `comments`      | after the comment count | <BloggerSource kind="observed" /> |
+| `postLabelsLabel`   | `Labels:`       | before the labels       | <BloggerSource kind="observed" /> |
+| `postLocationLabel` | `Location:`     | before the location     | <BloggerSource kind="observed" /> |
+
+An empty setting, `<b:widget-setting name='timestampLabel'/>`, gives an empty label. Blogger's responsive themes install some of them empty, or as `-`. A label is 50 characters at most: a longer one is refused "Must be at most 50 characters" when the theme is saved. <BloggerSource kind="observed" />
+
+### Retired settings
+
+| Setting                                                                                                        | Was                                                                       | Source                                                                |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `showBacklinks`, `backlinksLabel`                                                                              | Backlinks                                                                 | <BloggerSource kind="deprecated" />                                   |
+| `showReactions`, `reactionsLabel`                                                                              | Reactions                                                                 | <BloggerSource kind="deprecated" />                                   |
+| `style.unittype`, `style.bgcolor`, `style.bordercolor`, `style.linkcolor`, `style.textcolor`, `style.urlcolor` | Colors of text ads (`TextAndImage`, `#ffffff`…). Still written by Blogger | <BloggerSource kind="deprecated" />                                   |
+| `disableGooglePlusShare`                                                                                       | The Google+ share button. Dropped silently when the theme is saved        | <BloggerSource kind="observed" /> <BloggerSource kind="deprecated" /> |
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A Blog widget written with no settings gets the title `Blog Posts` and `showDateHeader` `false`, `showShareButtons` `false`, `showCommentLink` `true`, `showAuthor` `true`, `style.unittype` `TextAndImage`, `reactionsLabel` empty, `showAuthorProfile` `false`, `style.layout` `1x1`, `showLabels` `true`, `showLocation` `true`, `showTimestamp` `true`, `postsPerAd` `1`, `showBacklinks` `false`, `showInlineAds` `false` and `showReactions` `false`. Missing settings of a widget written with some get the same defaults.
+- An unknown setting name, such as `x` or `disableGooglePlusShare`, is dropped without a message. Every other type refuses it.
+- `style.layout` refuses `2x2` or `x` with "Unknown ad layout", and `style.unittype` a wrong value with "Unknown ad unit type", case-sensitive. An empty value gives the default.
+
+Three options of the Layout editor have no setting in the theme file: the number of posts on the main page, the text of the jump link (read as `data:blog.jumpLinkMessage`), and "Show email post links" (read through `data:post.emailPostUrl`). The order of the byline items is not a setting either; it is read through the [bylines](#bylines).
+
+## Widget data
+
+Inside the widget, the data is read as `data:name`. With `var='this'` (responsive themes) or `var='top'` (classic themes) on `main`, it can also be read as `data:this.name` from includables where a local `name` hides it: `data:this.messages.blogComment`, `data:top.showAuthor`.
+
+The global data is available too: [`data:blog`](../data/blog.mdx), [`data:view`](../data/view.mdx), [`data:messages`](../data/messages.mdx), [`data:widgets`](../data/widgets.mdx).
+
+### Version 2
+
+| Data                                                        | Type    | Description                                                                                                                                         | Source                              |
+| ----------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `posts`                                                     | list    | The posts of the page, or the post or static page, see [Posts](#posts)                                                                              | <BloggerSource kind="official" />   |
+| `newerPageUrl`                                              | URL     | The page of newer posts. On a post page, the next newer post. Missing when there is none                                                            | <BloggerSource kind="official" />   |
+| `olderPageUrl`                                              | URL     | The page of older posts. On a post page, the next older post. Missing when there is none                                                            | <BloggerSource kind="official" />   |
+| `feedLinks`                                                 | list    | The posts feed of the blog: `url`, `name` (`Posts`), `feedType` (`Atom`), `mimeType` (`application/atom+xml`). Only for a public blog with feeds on | <BloggerSource kind="official" />   |
+| `messages.blogComment`                                      | string  | The message the author shows above the comment form, up to 4,096 characters                                                                         | <BloggerSource kind="observed" />   |
+| `cmtIframeInitialHeight`                                    | string  | The first height of the comment form iframe. Read as `data:cmtIframeInitialHeight ?: "90px"`                                                        | <BloggerSource kind="observed" />   |
+| `adCode`                                                    | string  | The HTML of the inline ad, when AdSense is linked                                                                                                   | <BloggerSource kind="observed" />   |
+| `adClientId`                                                | string  | The AdSense client id, as `data:blog.adsenseClientId`                                                                                               | <BloggerSource kind="observed" />   |
+| `navMessage`                                                | string  | A status line: "No posts." on an empty blog, the result line of a search or label page, the text of the 404 page                                    | <BloggerSource kind="observed" />   |
+| `numPosts`                                                  | number  | A number of posts, see below                                                                                                                        | <BloggerSource kind="observed" />   |
+| `title`                                                     | string  | The title of the blog, up to 100 characters                                                                                                         | <BloggerSource kind="observed" />   |
+| `description`                                               | string  | The description of the blog, up to 500 characters                                                                                                   | <BloggerSource kind="observed" />   |
+| `showCmtPopup`                                              | boolean | Read by the comment includables to add `#comment-popup`. No longer active                                                                           | <BloggerSource kind="observed" />   |
+| `backgroundColor`, `linkColor`, `textColor`, `languageCode` | string  | Inputs of the star ratings removed in 2013                                                                                                          | <BloggerSource kind="deprecated" /> |
+
+- **`feedLinks`.** Google documents Atom and RSS entries, and the comment feeds on post pages. In practice the list holds the Atom feed of the posts only; the comment feed of a post is in `data:post.feedLinks`.
+- **`numPosts`.** Whether it counts the posts of the page or the posts per page is not confirmed. Use `data:posts.length` for the first.
+
+### Version 1
+
+Version 1 has the data of version 2 except `messages` and `adClientId`. Where version 2 has [bylines](#bylines) and [`data:messages`](../data/messages.mdx), version 1 has one field per text and per switch:
+
+| Data                                                                                                      | Holds                                                                            | In version 2                                  | Source                                                                |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------- |
+| `olderPageTitle`, `newerPageTitle`                                                                        | "Older Posts" and "Newer Posts", or "Older Post" and "Newer Post" on a post page | `messages.olderPosts`, `messages.newerPosts`  | <BloggerSource kind="official" />                                     |
+| `authorLabel`, `timestampLabel`, `commentLabel`, `postLabelsLabel`, `postLocationLabel`                   | The texts of the settings with the same names                                    | the `label` of each byline item               | <BloggerSource kind="official" />                                     |
+| `backlinksLabel`                                                                                          | "links to this post"                                                             | none                                          | <BloggerSource kind="official" /> <BloggerSource kind="deprecated" /> |
+| `showAuthor`, `showTimestamp`, `showPostLabels`, `showLocation`                                           | The switches of the post page options                                            | the byline items                              | <BloggerSource kind="observed" />                                     |
+| `showEmailButton`, `showBlogThisButton`, `showTwitterButton`, `showFacebookButton`, `showPinterestButton` | The share buttons, all `true`                                                    | `data:blog.sharing.platforms`                 | <BloggerSource kind="observed" />                                     |
+| `showMobileShare`                                                                                         | Share buttons in the mobile view                                                 | none                                          | <BloggerSource kind="observed" />                                     |
+| `mobile`                                                                                                  | `true` in the classic mobile view, `?m=1`                                        | `data:view.isMobile`                          | <BloggerSource kind="observed" />                                     |
+| `mobileLinkUrl`, `mobileLinkMsg`                                                                          | The link to the mobile view and "View mobile version"                            | none                                          | <BloggerSource kind="observed" />                                     |
+| `desktopLinkUrl`, `desktopLinkMsg`                                                                        | The link back and "View web version"                                             | none                                          | <BloggerSource kind="observed" />                                     |
+| `homeMsg`                                                                                                 | "Home"                                                                           | `messages.home`                               | <BloggerSource kind="observed" />                                     |
+| `postCommentMsg`                                                                                          | "Post a Comment"                                                                 | `messages.postAComment`                       | <BloggerSource kind="observed" />                                     |
+| `blogCommentMessage`                                                                                      | The message above the comment form                                               | `messages.blogComment`                        | <BloggerSource kind="observed" />                                     |
+| `blogTeamBlogMessage`                                                                                     | "Note: Only a member of this blog may post a comment."                           | `data:messages.onlyTeamMembersCanComment`     | <BloggerSource kind="observed" />                                     |
+| `feedLinksMsg`                                                                                            | "Subscribe to:"                                                                  | `messages.subscribeTo`                        | <BloggerSource kind="observed" />                                     |
+| `commentPostedByMsg`                                                                                      | "said…"                                                                          | `messages.authorSaid`                         | <BloggerSource kind="observed" />                                     |
+| `shareMsg`                                                                                                | "Share"                                                                          | `messages.share`                              | <BloggerSource kind="observed" />                                     |
+| `shareToTwitterMsg`, `shareToFacebookMsg`, `shareToPinterestMsg`, `blogThisMsg`, `emailThisMsg`           | The titles of the share buttons                                                  | `data:blog.sharing.platforms[i].shareMessage` | <BloggerSource kind="observed" />                                     |
+| `emailPostMsg`                                                                                            | "Email Post"                                                                     | `messages.emailPost`                          | <BloggerSource kind="observed" />                                     |
+| `deleteCommentMsg`                                                                                        | "Delete Comment"                                                                 | `messages.deleteComment`                      | <BloggerSource kind="observed" />                                     |
+| `editPostMsg`                                                                                             | "Edit Post", for the quick-edit pencil                                           | none                                          | <BloggerSource kind="deprecated" />                                   |
+| `commentLabelPlural`                                                                                      | The plural of `commentLabel`, replaced in 2012                                   | `data:post.commentLabelFull`                  | <BloggerSource kind="deprecated" />                                   |
+| `showPlusOne`, `showDummy`                                                                                | Google+ buttons                                                                  | none                                          | <BloggerSource kind="deprecated" />                                   |
+
+### From other widgets
+
+In responsive themes, `data:widgets.Blog` can be read from any widget, or from outside widgets: each entry has a light copy of the posts (`id`, `title`, `featuredImage`, `showInlineAds`) and the byline options, `headerByline`, `footerBylines` and `allBylineItems`. It is empty when the widget is missing, so `data:widgets.Blog.first.allBylineItems.timestamp` reads nothing rather than failing. See [Blog entries](../data/widgets.mdx#blog-entries) and [Bylines](#bylines).
+
+## Posts
+
+`data:posts` holds every post of a list page, one post on a post page, one page on a static page, and nothing on the 404 page. On a list page, `body` stops at the jump break. Which fields each version has, version 1 against version 2, is on [Versions](../data/post.mdx#versions) and [Content](../data/post.mdx#content); the comment fields are on [Comment data](../data/comments.mdx).
+
+### Hiding posts from the list
+
+`data:posts` can be redefined with [`b:with`](../tags/variables.mdx) before the loop, for example to drop from the homepage list the post a FeaturedPost widget already shows. Blogger's responsive themes do this, then call `super.main`. The pattern and its caveats are on [Do not show the post twice on the homepage](./featured-post.mdx#do-not-show-the-post-twice-on-the-homepage).
+
+## Bylines
+
+The bylines are the small items around a post: author, date, comment count, labels, location, share buttons, email link. In the Layout editor, the blog owner turns them on and arranges them in a header line and up to three footer lines. Version 2 widgets read that arrangement from `data:widgets.Blog`:
+
+| Data             | Holds                                                        |
+| ---------------- | ------------------------------------------------------------ |
+| `headerByline`   | The header line, with `regionName` and `items`               |
+| `footerBylines`  | Up to three footer lines, each with `regionName` and `items` |
+| `allBylineItems` | Every item turned on, in any line                            |
+
+Each item has a `name` and a `label`, in the order set in the Layout editor; a line and `allBylineItems` hold 7 items at most. An item can also be read by name: `allBylineItems.share` is the share item when it is on, and nothing otherwise. `labels` is the name of an item, `label` the text of any item. <BloggerSource kind="observed" /> The fields are on [Blog entries](../data/widgets.mdx#blog-entries).
+
+| `name`      | Item                | Built-in includable | Rendered when             | `label` in English |
+| ----------- | ------------------- | ------------------- | ------------------------- | ------------------ |
+| `author`    | The author          | `postAuthor`        | always                    | `By`               |
+| `timestamp` | The date            | `postTimestamp`     | not on a static page      | `at`               |
+| `comments`  | The comment link    | `postCommentsLink`  | `data:post.allowComments` | `comments`         |
+| `labels`    | The labels          | `postLabels`        | the post has labels       | `Labels:`          |
+| `location`  | The location        | `postLocation`      | the post has a location   | `Location:`        |
+| `share`     | The share buttons   | `postShareButtons`  | `data:post.shareUrl`      | empty              |
+| `icons`     | The email-post link | `emailPostIcon`     | `data:post.emailPostUrl`  | empty              |
+
+The `label` of an item is the text of its setting, `authorLabel` for `author` and so on; Blogger's 2017 themes install other defaults, such as `-` for the timestamp. <BloggerSource kind="observed" /> No `reactions` item exists: reactions are retired and `postReactions` has rendered nothing since 2021. <BloggerSource kind="observed" />
+
+### Reading the switches
+
+A theme that writes its own post markup can still honor the Layout editor by testing the items by name:
+
+```xml
+<div class='entry-info'>
+  <b:if cond='data:widgets.Blog.first.allBylineItems.author'>
+    <span class='entry-author'><data:widgets.Blog.first.allBylineItems.author.label/> <data:post.author.name/></span>
+  </b:if>
+  <b:if cond='data:widgets.Blog.first.allBylineItems.timestamp'>
+    <time expr:datetime='data:post.date.iso8601'><data:post.date/></time>
+  </b:if>
+  <b:if cond='data:widgets.Blog.first.allBylineItems.comments and data:post.allowComments'>
+    <a expr:href='data:post.url.canonical fragment "comments"'><data:post.numberOfComments/></a>
+  </b:if>
+</div>
+```
+
+### Lines and regions
+
+To keep the order of the items as well, loop over the lines and dispatch on `name`. The built-in markup does this with three includables: `headerByline` and `footerBylines` render the lines, `bylineRegion` loops over the items of a line, and `bylineByName` is a `b:switch` on `data:byline.name` that includes the item's includable. A theme can reuse them:
+
+```xml
+<b:loop index='i' values='data:widgets.Blog.first.footerBylines' var='line'>
+  <b:if cond='not data:line.items.empty'>
+    <div expr:class='"entry-footer-" + (data:i + 1)'>
+      <b:include data='line.items' name='bylineRegion'/>
+    </div>
+  </b:if>
+</b:loop>
+```
+
+- `headerByline` wraps its line in `div.post-header > div.post-header-line-1`; `footerBylines` writes one `div.post-footer-line.post-footer-line-N` per line.
+- The built-in includables set a variable `regionName` to `header-1`, or `footer-1` to `footer-3`, used in the id of the share menu. The `regionName` of the data has no hyphen: `header1`, `footer1`. <BloggerSource kind="observed" />
+- A line can come out empty when its items are on but render nothing on that page, labels hidden on list pages for example. <BloggerSource kind="observed" />
+- The item includables print the label with `<data:byline.label/>`.
+- Two Common includables force items whatever the settings: `headerBylineOverride` takes `items`, a list of names, and `footerBylinesOverride` takes `items`, a list of lines. <BloggerSource kind="observed" />
+
+```xml
+<b:include data='{ items: ["author", "timestamp"] }' name='headerBylineOverride'/>
+<b:include data='{ items: [["labels"], ["share", "comments"]] }' name='footerBylinesOverride'/>
+```
+
+### Version 1
+
+Version 1 has no byline data. Its `post` includable places every item at a fixed spot, in `post-footer-line-1` to `post-footer-line-3`, each in a `b:if` on a switch such as `data:top.showAuthor`. Moving an item in the Layout editor does not move it in a version 1 theme that was edited by hand, since the place is in the markup.
+
+## Sharing
+
+The share buttons use the global `data:blog.sharing.platforms`, in this order:
+
+| `key`       | `target`    | `name` in English |
+| ----------- | ----------- | ----------------- |
+| `link`      | empty       | Get link          |
+| `facebook`  | `facebook`  | Facebook          |
+| `blogThis`  | `blog`      | BlogThis!         |
+| `twitter`   | `twitter`   | X                 |
+| `pinterest` | `pinterest` | Pinterest         |
+| `email`     | `email`     | Email             |
+
+Each platform also has a `shareMessage`, such as "Share to Facebook". A share link is `data:post.shareUrl` followed by `&target=` and the `target` of the platform, the form Blogger's own share menu builds. With the empty target of `link`, the URL ends with `&target=`. <BloggerSource kind="observed" />
+
+```xml
+<ul class='share'>
+  <b:loop values='data:blog.sharing.platforms filter (p => p.key not in ["link", "blogThis"])' var='platform'>
+    <li>
+      <a expr:aria-label='data:platform.shareMessage' expr:href='data:post.shareUrl + "&amp;target=" + data:platform.target' rel='nofollow noopener' target='_blank'>
+        <data:platform.name/>
+      </a>
+    </li>
+  </b:loop>
+</ul>
+```
+
+### Built-in share includables
+
+| Includable             | Renders                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `postShareButtons`     | `div.byline.post-share-buttons`; builds an id like `Blog1-footer-1-POST_ID` and includes `sharingButtons`      |
+| `sharingButtons`       | `div.sharing` with a share `button`, then the menu                                                             |
+| `sharingButtonContent` | The inside of the button, an icon by default                                                                   |
+| `sharingButtonsMenu`   | `ul.share-buttons.hidden` with `role='menu'`, one item per platform except `blogThis`                          |
+| `sharingButton`        | `span.sharing-platform-button.sharing-element-KEY` with `data-href` (the share link) and `data-url` (the post) |
+| `sharingPlatformIcon`  | The icon of the platform, `linkIcon`, `facebookIcon`, `twitterIcon`, `pinterestIcon` or `emailIcon`            |
+| `otherSharingButton`   | A hidden "Share to other apps" item                                                                            |
+| `emailPostIcon`        | A link to `data:post.emailPostUrl`, the `icons` byline item                                                    |
+
+`sharingButtons` takes its input as include data: `sharingId`, `originalUrl`, `platforms`, `shareUrl` and `shareTitle`. The menu opens with Blogger's widget script, which reads `data-href`; a theme that drops Blogger's script with `b:js='false'` needs its own links, as above. <BloggerSource kind="observed" />
+
+`platformShare`, `blogThisShare`, `facebookShare`, `linkShare` and `googlePlusShare` are left from an older menu and unused. <BloggerSource kind="deprecated" />
+
+### Version 1
+
+`shareButtons` writes one link per platform, `a.share-button` with the classes `sb-email`, `sb-blog`, `sb-twitter`, `sb-facebook` and `sb-pinterest`, each to `data:post.sharePostUrl` plus the target, each behind its switch, such as `data:top.showEmailButton`. <BloggerSource kind="observed" />
+
+## Pagination
+
+### Pages of posts
+
+On a list page, `newerPageUrl` and `olderPageUrl` lead to the neighboring pages of the list. On a post page they lead to the next newer and older posts. Each is missing when there is nothing in that direction.
+
+A pager with a Home link in the middle, written with [`b:tag`](../tags/dynamic-tags.mdx) so that a missing direction renders as a disabled `div`:
+
+```xml
+<b:includable id='postPagination'>
+  <nav class='pager' id='blog-pager'>
+    <b:tag class='pager-newer' expr:name='data:newerPageUrl ? "a" : "div"'>
+      <b:class cond='not data:newerPageUrl' name='disabled'/>
+      <b:attr cond='data:newerPageUrl' expr:value='data:newerPageUrl' name='href'/>
+      <data:messages.newerPosts/>
+    </b:tag>
+    <b:if cond='data:view.url != data:blog.homepageUrl'>
+      <a class='pager-home' expr:href='data:blog.homepageUrl.canonical'><data:messages.home/></a>
+    </b:if>
+    <b:tag class='pager-older' expr:name='data:olderPageUrl ? "a" : "div"'>
+      <b:class cond='not data:olderPageUrl' name='disabled'/>
+      <b:attr cond='data:olderPageUrl' expr:value='data:olderPageUrl' name='href'/>
+      <data:messages.olderPosts/>
+    </b:tag>
+  </nav>
+</b:includable>
+```
+
+Scripts that load the next page in place need the same two URLs, printed as JSON, see [The pager for scripts](../guides/posts-and-pagination.mdx#the-pager-for-scripts).
+
+The built-in pager:
+
+| Includable         | Renders                                                                                               | Text                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `postPagination`   | `div.blog-pager#blog-pager` with the three links below. The built-in `main` includes it on list pages |                                           |
+| `previousPageLink` | `a.blog-pager-newer-link` to `data:newerPageUrl`                                                      | `data:messages.newerPosts`, "Newer Posts" |
+| `nextPageLink`     | `a.blog-pager-older-link` to `data:olderPageUrl`                                                      | `data:messages.olderPosts`, "Older Posts" |
+| `homePageLink`     | `a.home-link` to `data:blog.homepageUrl`, except on the homepage                                      | `data:messages.home`, "Home"              |
+
+Most of Blogger's responsive themes empty `previousPageLink` and `homePageLink` and turn `nextPageLink` into a single "More posts" button with `data:messages.morePosts`. `data:messages.loadMorePosts`, "Load more posts", is used by no built-in includable.
+
+In version 1, `nextprev` renders `#blog-pager` with `#blog-pager-newer-link` and `#blog-pager-older-link`, titled with `data:newerPageTitle` and `data:olderPageTitle`, an `a.home-link` with `data:homeMsg`, and the link to the mobile view. `mobile-nextprev` is the pager of the classic mobile view.
+
+### Pages of comments
+
+A post with more than 200 comments has comment pages. The built-in `comments` includable renders their pager, in both versions. The paging fields and an example are on [Comment paging](../data/comments.mdx#comment-paging).
+
+## Comments
+
+Comments render on post and static pages only. The built-in entry point is `commentPicker` (`comment_picker` in version 1). It chooses between two includables:
+
+- **`threadedComments`** when `data:post.showThreadedComments` is `true`. Blogger writes the comments as HTML, `data:post.commentHtml`, with their replies, and its script drives the reply form. Its conditions are on [Threads](../data/comments.mdx#threads).
+- **`comments`** otherwise. The theme loops over `data:post.comments` and renders each one with `commentItem`.
+
+A theme may also replace `threadedComments` with its own loop over `data:post.comments`, building the threads from `inReplyTo` and loading the form on demand: see [Threads](../guides/comments.mdx#threads) and [The comment form](../guides/comments.mdx#the-comment-form) for the how-to, and [Pages of comments](#pages-of-comments) for posts with more than 200 comments. The fields of a comment are in [Comment data](../data/comments.mdx).
+
+## Inline ads
+
+When `showInlineAds` is on, Blogger flags every `postsPerAd`-th post with `data:post.includeAd` and numbers them with `data:post.adNumber`. The ad itself is `data:adCode`, or an AdSense unit built from `data:adClientId`. In the theme preview, Blogger's markup shows a placeholder instead of a live ad:
+
+```xml {2-3}
+<b:includable id='inlineAd' var='post'>
+  <b:if cond='data:view.isPreview'>
+    <div class='inline-ad-placeholder'><data:messages.adsGoHere/></div>
+  <b:elseif cond='data:this.adCode != ""'/>
+    <div class='inline-ad'><data:this.adCode/></div>
+  <b:elseif cond='data:this.adClientId or data:blog.adsenseClientId'/>
+    <div class='inline-ad'><b:include name='defaultAdUnit'/></div>
+  </b:if>
+</b:includable>
+```
+
+`defaultAdUnit` renders `ins.adsbygoogle` for `data:adClientId ?: data:blog.adsenseClientId`, and its push script. It reads an optional `style` for the `ins` element; Blogger's themes pass a non-empty CSS comment with `b:with` to clear it, then call `super.defaultAdUnit`. It is shared with the [AdSense](./adsense.mdx) widget.
+
+## Built-in includables, version 2
+
+These are the includables of responsive themes, the markup `super.` reaches. For a page, they call each other like this:
+
+```txt
+main
+├─ postCommentsAndAd            for each post
+│  ├─ post
+│  │  ├─ postMeta → postMetadataJSON
+│  │  ├─ postTitle
+│  │  ├─ headerByline → bylineRegion → bylineByName → postAuthor, postTimestamp…
+│  │  ├─ postBody                (post pages)
+│  │  ├─ postBodySnippet, postJumpLink   (list pages)
+│  │  └─ postFooter → footerBylines, postFooterAuthorProfile → aboutPostAuthor
+│  ├─ commentPicker → threadedComments or comments   (post pages)
+│  └─ inlineAd → defaultAdUnit
+├─ postPagination → previousPageLink, nextPageLink, homePageLink   (list pages)
+└─ feedLinks → feedLinksBody
+```
+
+The built-in `main` writes `div.blog-posts.hfeed.container`, includes `postCommentsAndAd` for every post, then `postPagination` on list pages, then `feedLinks`.
+
+### Post
+
+| Includable                  | `var`  | Renders                                                                                                                                                                         | Source                            |
+| --------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `main`                      | `this` | The posts, the pager and the feed links                                                                                                                                         | <BloggerSource kind="observed" /> |
+| `postCommentsAndAd`         | `post` | `article.post-outer-container > div.post-outer` around `post`, then `commentPicker` on post pages. `inlineAd` goes inside the article on a post page and after it on list pages | <BloggerSource kind="observed" /> |
+| `post`                      | `post` | `div.post` with `postMeta`, `postTitle` and `headerByline`; then `postBody` on a post page, or `postBodySnippet` and `postJumpLink`; then `postFooter`                          | <BloggerSource kind="observed" /> |
+| `postMeta`                  | `post` | Includes `postMetadataJSON`, the `BlogPosting` JSON-LD of the post                                                                                                              | <BloggerSource kind="observed" /> |
+| `postMetadataJSONImage`     |        | The `image` of that JSON-LD: the featured image resized to 1200 by 630, or a Blogger image of 1200 by 348                                                                       | <BloggerSource kind="observed" /> |
+| `postMetadataJSONPublisher` |        | The `publisher` of that JSON-LD, "Blogger" with a 206 by 60 logo                                                                                                                | <BloggerSource kind="observed" /> |
+| `postTitle`                 | `post` | An anchor `a[name=POST_ID]`, then `h3.post-title.entry-title` when the post has a title, linked to `data:post.link ?: data:post.url` except on its own page                     | <BloggerSource kind="observed" /> |
+| `postHeader`                | `post` | Includes `headerByline`                                                                                                                                                         | <BloggerSource kind="observed" /> |
+| `postBody`                  | `post` | `div.post-body.entry-content.float-container#post-body-POST_ID` with the body                                                                                                   | <BloggerSource kind="observed" /> |
+| `postBodySnippet`           | `post` | Includes `postBody`. The usual place for a theme's snippet and thumbnail                                                                                                        | <BloggerSource kind="observed" /> |
+| `postJumpLink`              | `post` | `div.jump-link.flat-button` linking to `data:post.url fragment "more"` with `data:blog.jumpLinkMessage`, when the post has a jump break                                         | <BloggerSource kind="observed" /> |
+| `postFooter`                | `post` | `div.post-footer` with `footerBylines` and `postFooterAuthorProfile`                                                                                                            | <BloggerSource kind="observed" /> |
+| `postFooterAuthorProfile`   | `post` | `div.author-profile` with a 50-pixel photo and `aboutPostAuthor`, on post pages, when the author has an "about me"                                                              | <BloggerSource kind="observed" /> |
+| `aboutPostAuthor`           |        | `div.author-name` linking to the profile, then `data:post.author.aboutMe`                                                                                                       | <BloggerSource kind="observed" /> |
+
+### Bylines
+
+| Includable                                                                                                                   | `var`         | Renders                                                                                                                          | Source                            |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `headerByline`                                                                                                               |               | The header line, see [Lines and regions](#lines-and-regions)                                                                     | <BloggerSource kind="observed" /> |
+| `footerBylines`                                                                                                              |               | The footer lines                                                                                                                 | <BloggerSource kind="observed" /> |
+| `bylineRegion`                                                                                                               | `regionItems` | `bylineByName` for each item                                                                                                     | <BloggerSource kind="observed" /> |
+| `bylineByName`                                                                                                               | `byline`      | The includable of the item, by name                                                                                              | <BloggerSource kind="observed" /> |
+| `postAuthor`                                                                                                                 |               | `span.byline.post-author.vcard` with the label and the author, linked to the profile                                             | <BloggerSource kind="observed" /> |
+| `postTimestamp`                                                                                                              |               | `span.byline.post-timestamp` with the label, a `meta` holding `data:post.url.canonical`, and `a.timestamp-link > time.published` | <BloggerSource kind="observed" /> |
+| `postCommentsLink`                                                                                                           |               | `span.byline.post-comment-link` around `commentsLink`, on list pages                                                             | <BloggerSource kind="observed" /> |
+| `commentsLink`                                                                                                               |               | `a.comment-link` to `data:post.commentsUrl`, with the count through `messages.numberOfComments`, or "Post a Comment"             | <BloggerSource kind="observed" /> |
+| `postLabels`                                                                                                                 |               | `span.byline.post-labels` with the label and one `a[rel=tag]` per label                                                          | <BloggerSource kind="observed" /> |
+| `postLocation`                                                                                                               |               | `span.byline.post-location`, linking to `data:post.location.mapsUrl`                                                             | <BloggerSource kind="observed" /> |
+| `emailPostIcon`                                                                                                              |               | A link to `data:post.emailPostUrl` with `emailIcon`                                                                              | <BloggerSource kind="observed" /> |
+| `postShareButtons`                                                                                                           | `post`        | The share menu, see [Sharing](#sharing)                                                                                          | <BloggerSource kind="observed" /> |
+| `sharingButtons`, `sharingButtonContent`, `sharingButtonsMenu`, `sharingButton`, `sharingPlatformIcon`, `otherSharingButton` |               | The parts of the share menu                                                                                                      | <BloggerSource kind="observed" /> |
+
+### Comments
+
+| Includable             | `var`      | Renders                                                                                                                                                                                                         | Source                                                                |
+| ---------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `commentPicker`        | `post`     | `threadedComments` or `comments`                                                                                                                                                                                | <BloggerSource kind="observed" />                                     |
+| `threadedComments`     | `post`     | `section.comments.threaded#comments`: `commentsTitle`, `threadedCommentJs` when the form is embedded, `data:post.commentHtml` in `#comment-holder`, then `threadedCommentForm` or `data:post.noNewCommentsText` | <BloggerSource kind="observed" />                                     |
+| `threadedCommentForm`  | `post`     | `div.comment-form` with "Post a Comment", `data:this.messages.blogComment`, `commentFormIframeSrc`, the `#comment-editor` iframe and the script call that sizes it                                              | <BloggerSource kind="observed" />                                     |
+| `threadedCommentJs`    | `post`     | The script of threaded comments, through `<b:template-script inline='true' name='threaded_comments'/>`. Its inputs have been empty since 2018                                                                   | <BloggerSource kind="observed" />                                     |
+| `comments`             | `post`     | `section.comments#comments` with `data-num-comments`: `commentsTitle`, `commentList`, the comment pager, then `commentForm`, `data:post.noNewCommentsText` or `addComments`                                     | <BloggerSource kind="observed" />                                     |
+| `commentsTitle`        |            | `h3.title` with `data:messages.comments`                                                                                                                                                                        | <BloggerSource kind="observed" />                                     |
+| `commentList`          | `comments` | `div#comments-block`, `commentItem` for each comment                                                                                                                                                            | <BloggerSource kind="observed" />                                     |
+| `commentItem`          | `comment`  | `div.comment#cCOMMENT_ID`: `commentAuthorAvatar`, the author with `messages.authorSaid` or `messages.authorSaidWithLink`, the body, the date linking to the comment, `commentDeleteIcon`                        | <BloggerSource kind="observed" />                                     |
+| `commentAuthorAvatar`  |            | `div.avatar-image-container` with a 35-pixel `img.author-avatar`                                                                                                                                                | <BloggerSource kind="observed" />                                     |
+| `commentDeleteIcon`    | `comment`  | `span.item-control` linking to `data:comment.deleteUrl`                                                                                                                                                         | <BloggerSource kind="observed" /> <BloggerSource kind="deprecated" /> |
+| `commentForm`          | `post`     | The form of non-threaded comments, built like `threadedCommentForm`                                                                                                                                             | <BloggerSource kind="observed" />                                     |
+| `commentFormIframeSrc` | `post`     | `a#comment-editor-src` to `data:post.commentFormIframeSrc`, read by Blogger's script                                                                                                                            | <BloggerSource kind="observed" />                                     |
+| `addComments`          |            | A "Post a Comment" link to `data:post.commentsUrl`, when the form is not embedded                                                                                                                               | <BloggerSource kind="observed" />                                     |
+| `manageComments`       |            | Included by `threadedComments` when `data:post.showManageComments` is `true`. What it renders is not confirmed                                                                                                  | <BloggerSource kind="observed" />                                     |
+
+### Ads, feeds and the rest
+
+| Includable                                                           | `var`   | Renders                                                               | Source                            |
+| -------------------------------------------------------------------- | ------- | --------------------------------------------------------------------- | --------------------------------- |
+| `inlineAd`                                                           | `post`  | See [Inline ads](#inline-ads)                                         | <BloggerSource kind="observed" /> |
+| `defaultAdUnit`                                                      |         | The AdSense `ins` element and its script                              | <BloggerSource kind="observed" /> |
+| `feedLinks`                                                          |         | The feeds of the blog, or the comment feed of the post on a post page | <BloggerSource kind="observed" /> |
+| `feedLinksBody`                                                      | `links` | `div.feed-links` with "Subscribe to:" and one `a.feed-link` per feed  | <BloggerSource kind="observed" /> |
+| `postPagination`, `previousPageLink`, `nextPageLink`, `homePageLink` |         | The pager, see [Pagination](#pagination)                              | <BloggerSource kind="observed" /> |
+| `tooltipCss`                                                         |         | Styles for tooltips. Their use is not confirmed                       | <BloggerSource kind="observed" /> |
+
+### Retired
+
+Kept for old themes; they render nothing, or nothing useful. <BloggerSource kind="deprecated" />
+
+| Includable                                                                        | Was                                         |
+| --------------------------------------------------------------------------------- | ------------------------------------------- |
+| `iframeComments`                                                                  | Google+ comments, empty since 2019          |
+| `commentsLinkIframe`                                                              | The Google+ comment count, empty since 2019 |
+| `postReactions`                                                                   | Reactions, empty since 2021                 |
+| `platformShare`, `blogThisShare`, `facebookShare`, `linkShare`, `googlePlusShare` | An older share menu                         |
+
+### Common includables they call
+
+The Blog includables also call Common includables that no theme has to declare: `postMetadataJSON`, `noContentPlaceholder`, `maybeAddShareButtons`, `postSnippet`, `responsiveImage`, `headerBylineOverride`, `footerBylinesOverride`, and icons such as `commentIcon`, `shareIcon` and `emailIcon`. Some of Blogger's themes declare more in `<b:defaultmarkup type='Common'>`, such as `normalPost`, `heroPost`, `standardPostImageStyle` and `feedPostImage`. <BloggerSource kind="observed" /> `noContentPlaceholder` can be replaced too:
+
+```xml
+<b:includable id='noContentPlaceholder'>
+  <p class='no-posts'>
+    <b:eval expr='data:view.isSearch ? data:messages.noResultsFound : data:messages.theresNothingHere'/>
+  </p>
+</b:includable>
+```
+
+### Turning parts off
+
+A theme that writes its own markup can declare every built-in includable it does not use as a stub. The widget then holds none of Blogger's markup, and an include of one of those ids renders nothing instead of falling back to the built-in version:
+
+```xml
+<b:includable id='feedLinks'><!--[ removed ]--></b:includable>
+<b:includable id='postReactions'><!--[ removed ]--></b:includable>
+<b:includable id='tooltipCss'/>
+```
+
+An empty or self-closed includable renders nothing. The full list of ids to stub for a version 2 Blog widget is every id in the tables above.
+
+## Built-in includables, version 1
+
+The includables of classic themes, all declared in the widget. `main` has `var='top'`.
+
+| Includable                        | `var`              | Renders                                                                                                                                                                                                                                                                                                                                     | Version 2                           |
+| --------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `main`                            | `top`              | Outside the mobile view: `div.blog-posts.hfeed` with `status-message`, the posts grouped by day in `date-outer` and `date-posts` wrappers with their date headers, `post` and `comment_picker` in `div.post-outer`, `data:adCode` after the posts that have `includeAd`, then `nextprev` and `feedLinks`. In the mobile view, `mobile-main` | `main`                              |
+| `status-message`                  |                    | `div.status-msg-wrap` with `data:navMessage`                                                                                                                                                                                                                                                                                                | none                                |
+| `post`                            | `post`             | The post with schema.org microdata, title, body, jump link and the three footer lines                                                                                                                                                                                                                                                       | `post`                              |
+| `shareButtons`                    | `post`             | The share links                                                                                                                                                                                                                                                                                                                             | `postShareButtons`                  |
+| `comment_count_picker`            | `post`             | `a.comment-link` with `data:post.commentLabelFull`                                                                                                                                                                                                                                                                                          | `commentsLink`                      |
+| `comment_picker`                  | `post`             | `threaded_comments` or `comments`, on `data:post.showThreadedComments`                                                                                                                                                                                                                                                                      | `commentPicker`                     |
+| `threaded_comments`               | `post`             | `div.comments#comments` with `data:post.commentHtml` in `#comment-holder`, then `threaded-comment-form`                                                                                                                                                                                                                                     | `threadedComments`                  |
+| `threaded-comment-form`           | `post`             | The threaded comment form                                                                                                                                                                                                                                                                                                                   | `threadedCommentForm`               |
+| `comments`                        | `post`             | `div.comments#comments` with `dl#comments-block`, the pager and `comment-form`                                                                                                                                                                                                                                                              | `comments`                          |
+| `comment-form`                    | `post`             | The comment form, with `data:postCommentMsg`, `data:blogCommentMessage` and `data:blogTeamBlogMessage`                                                                                                                                                                                                                                      | `commentForm`                       |
+| `commentDeleteIcon`               | `comment`          | The delete icon, titled `data:top.deleteCommentMsg`                                                                                                                                                                                                                                                                                         | `commentDeleteIcon`                 |
+| `nextprev`                        |                    | The pager                                                                                                                                                                                                                                                                                                                                   | `postPagination`                    |
+| `feedLinks`                       |                    | The feeds of the blog, or the comment feeds of the post                                                                                                                                                                                                                                                                                     | `feedLinks`                         |
+| `feedLinksBody`                   | `links`            | "Subscribe to:" and a link per feed                                                                                                                                                                                                                                                                                                         | `feedLinksBody`                     |
+| `mobile-main`                     | `top`              | The posts in the classic mobile view                                                                                                                                                                                                                                                                                                        | none                                |
+| `mobile-index-post`               | `post`             | A post of the mobile list: title, thumbnail, snippet, comment count                                                                                                                                                                                                                                                                         | none                                |
+| `mobile-post`                     | `post`             | A post in the mobile view                                                                                                                                                                                                                                                                                                                   | none                                |
+| `mobile-nextprev`                 |                    | The mobile pager, with ‹ and › and a link to the web view                                                                                                                                                                                                                                                                                   | none                                |
+| `postQuickEdit`                   | `post`             | The quick-edit pencil, `data:post.editUrl`                                                                                                                                                                                                                                                                                                  | <BloggerSource kind="deprecated" /> |
+| `threaded_comment_js`             | `post`             | The threaded comment script used until 2018                                                                                                                                                                                                                                                                                                 | <BloggerSource kind="deprecated" /> |
+| `iframe_comments`                 | `post`             | Google+ comments, empty since 2019                                                                                                                                                                                                                                                                                                          | <BloggerSource kind="deprecated" /> |
+| `backlinks`, `backlinkDeleteIcon` | `post`, `backlink` | Backlinks, empty since 2016                                                                                                                                                                                                                                                                                                                 | <BloggerSource kind="deprecated" /> |
+
+The day wrappers of the version 1 `main` are opened and closed by escaped text, not by elements: `&lt;div class="date-outer"&gt;` inside a `b:if` on `data:post.isDateStart`, and `&lt;/div&gt;&lt;/div&gt;` before the next day and after the loop. Blogger prints that text as markup, which lets a wrapper span several iterations of the loop. <BloggerSource kind="observed" />
+
+## What Blogger's themes change
+
+The responsive themes override part of the built-in markup in `<b:defaultmarkups>`, and the same includables appear in their `Blog1` widget. <BloggerSource kind="observed" />
+
+| Theme               | Includables it overrides                                                                                                                                                                                                                                                                                             |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contempo, Essential | `main`, `commentsLink`, `defaultAdUnit`, `feedLinks`, `headerByline`, `homePageLink`, `inlineAd`, `nextPageLink`, `postBodySnippet`, `postFooter`, `postFooterJumpLink`, `postJumpLink`, `postLabels`, `postShareButtons`, `previousPageLink`, `snippetedPostByline`                                                 |
+| Emporio             | `main`, `commentsLink`, `defaultAdUnit`, `feedLinks`, `footerBylines`, `headerByline`, `homePageLink`, `inlineAd`, `nextPageLink`, `post`, `postBodySnippet`, `postCommentsAndAd`, `postJumpLink`, `postLabels`, `postShareButtons`, `postTitle`, `postWrapperClasses`, `previousPageLink`, `snippetedPostThumbnail` |
+| Notable             | `main`, `commentsLink`, `defaultAdUnit`, `feedLinks`, `footerBylines`, `headerByline`, `homePageLink`, `inlineAd`, `nextPageLink`, `post`, `postBodySnippet`, `postFooter`, `postJumpLink`, `postShareButtons`, `previousPageLink`, `sharingButtonContent`                                                           |
+| Soho                | `main`, `defaultAdUnit`, `emailPostIcon`, `feedLinks`, `footerBylines`, `headerByline`, `post`, `postCommentsAndAd`, `postLabels`, `sharingButtonContent`                                                                                                                                                            |
+
+What the overrides do, in short:
+
+- `main` drops the featured post from the homepage list, then calls `super.main`. Contempo also sets `maxNumAds`, `numDesktopAds` and `numMobileAds` for its `inlineAd`; Soho adds a "Latest posts" title on the homepage, Notable a "Recent posts" message.
+- `postCommentsAndAd` in Emporio and Soho skips the featured post on the homepage, or always places the ad inside the article.
+- `inlineAd` stops after three ads, using `data:post.adNumber`.
+- `defaultAdUnit` clears the ad style, then calls `super.defaultAdUnit`.
+- `feedLinks` renders nothing.
+- `previousPageLink` and `homePageLink` render nothing, and `nextPageLink` becomes a "More posts" button.
+- `postJumpLink` renders nothing in Contempo, which moves the link into its `postFooter`; Emporio shows no jump link at all.
+- `postLabels` shows the labels only on a post page of the Blog widget, then calls `super.postLabels`.
+- `postShareButtons` renders nothing in Contempo, which places the share buttons through `maybeAddShareButtons` instead.
+- `headerByline` and `footerBylines` add share buttons, or force items with the override includables.

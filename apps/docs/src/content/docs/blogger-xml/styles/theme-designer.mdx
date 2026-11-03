@@ -1,0 +1,606 @@
+---
+title: Theme Designer
+description: Declare skin variables with Variable and Group, use them in CSS with $(name), read them with data:skin.vars, and the rules Blogger applies to them.
+level: intermediate
+published: 2026-10-26
+---
+
+The Theme Designer (**Theme** › **Customize** in the dashboard) is where the blog owner changes colors, fonts, widths and the background without touching the XML. Everything it offers is declared by the theme: each editable value is a `<Variable>` written in the text of [`<b:skin>`](./skin.mdx), and the CSS of the skin uses it as `$(name)`. Not every variable gets a form: `color`, `font` and `length` do, a `background` named `body.background` gets the Background pane, `string` and `url` variables get no form and are changed only in Edit HTML, and `automatic` ones are set by Blogger, see [Types](#types). When the owner picks a new value, Blogger writes it into the `value` attribute of the variable and renders the CSS again.
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:skin><![CDATA[/*
+<Variable default="#1a73e8" description="Main Color" name="keycolor" type="color" value="#1a73e8"/>
+<Variable default="left" description="Start side in blog language" hideEditor="true" name="startSide" type="automatic"/>
+<Group description="Page Text" selector="body">
+  <Variable default="16px Lato, sans-serif" description="Font" name="body.text.font" type="font" value="16px Lato, sans-serif"/>
+  <Variable default="#202124" description="Text color" name="body.text.color" type="color" value="#202124"/>
+</Group>
+<Group description="Widths">
+  <Variable default="760px" description="Content width" max="1200px" min="560px" name="content.width" type="length" value="760px"/>
+</Group>
+*/
+body {
+  color: $(body.text.color);
+  font: $(body.text.font);
+  line-height: $(body.text.font.size * 1.5);
+}
+.page {
+  margin-$startSide: auto;
+  max-width: $(content.width);
+}
+a {
+  color: $keycolor;
+}
+]]></b:skin>
+```
+
+```css title="Rendered"
+body {
+color: #202124;
+font: 16px Lato, sans-serif;
+line-height: 24px;
+}
+.page {
+margin-left: auto;
+max-width: 760px;
+}
+a {
+color: #1a73e8;
+}
+```
+
+</CodeTabs>
+
+The Theme Designer shows a "Page Text" menu with a font picker and a color picker, a "Widths" menu with a slider from 560 to 1200 pixels, and a color picker for the main color. `startSide` gets no form: it is set by Blogger. <BloggerSource kind="observed" />
+
+## Where the declarations go
+
+The declarations go in `<b:skin>`, usually at the top, inside one CSS comment so that the browser never sees them. In layouts version 3 themes Blogger removes that comment from the rendered CSS; in classic themes it stays, as a comment. <BloggerSource kind="official" />
+
+Blogger's own layouts version 3 themes split the comment in two parts with HTML comments, `<!-- Constants -->` for hidden values and `<!-- Variable definitions -->` for the editable ones. Classic themes start it with a "Variable definitions" title. Neither is required. <BloggerSource kind="observed" />
+
+The comment is a convention, not a rule: Blogger finds the declarations anywhere in the text of the skin, inside or outside a CSS comment. Outside one, they would also reach the browser as invalid CSS. <BloggerSource kind="observed" />
+
+The Theme Designer only reads `<b:skin>`. In [`<b:template-skin>`](./skin.mdx#btemplate-skin), the same tags are plain text. <BloggerSource kind="observed" />
+
+## How Blogger reads the declarations
+
+When the theme is saved, Blogger reads the text of `<b:skin>` and looks for the `<Variable>` and `<Group>` tags in it. These rules decide whether the theme saves. <BloggerSource kind="observed" />
+
+A refused declaration is reported in a notice at the bottom of the editor, as `com.google.blogger.b2.layouts.framework.skin.InvalidVariableException: Invalid variable declaration in page skin: ` followed by the reason and the input, for example `This is not a valid name for a skin variable. Input: a-b`. The reasons are quoted below. <BloggerSource kind="observed" />
+
+### Finding the tags
+
+1. Blogger takes the text of the skin: the entities of plain text are decoded (`&lt;` becomes `<`), and the CDATA sections are taken as they are.
+2. In that text, it reads the `<Variable>` and `<Group>` tags, and only those. Every other `<` is text: `content: "<del>"`, `/* keep <b> bold */`, `<!-- <foo> -->`, `a<1` and `<br/>` all save.
+3. It reads them anywhere: inside CSS comments `/* */`, outside any comment, and inside an `<!-- -->` comment in a group.
+
+Point 1 means a tag written with entities is a tag too: `&lt;Group description="Links"&gt;` in plain text is a `<Group>`. The same group written once with entities and once inside CDATA is two groups with the same description, which is refused.
+
+Blogger copies the tags it finds into a document of its own, one per line, and parses that as XML. That is why a badly nested group is reported with the whole list: `The skin variables could not be parsed as they are not well-formed. Input: <?xml version="1.0" encoding="UTF-8" standalone="yes"?><SkinVariables>…`.
+
+### Double quotes
+
+Write the attributes of `<Variable>` and `<Group>` in double quotes. Blogger does not read single-quoted attributes on them: a `<Variable>` written with single quotes has no type for Blogger, and the theme is refused with `This is not a valid type for a variable. Input:`. <BloggerSource kind="observed" />
+
+```xml
+<Variable name="body.link.color" description="Link color" type="color" default="#0b57d0" value="#0b57d0"/>
+```
+
+Inside the CDATA of the skin, the double quotes need no escaping. Outside CDATA, `"` is still fine in the text of `<b:skin>`.
+
+### The tags must be well-formed
+
+- Every attribute has a quoted value. `name=x` is refused, `This is not a valid name for a skin variable. Input:`. `hideEditor` alone, without a value, is the exception: it saves.
+- An attribute is not repeated: `An attribute may not be repeated in the declaration. Input: name`.
+- A `<Group>` is closed, and closes what it opens. A `<Group>` closed by `</Variable>`, or never closed, is refused as not well-formed. A stray `</Group>` with no group open saves.
+
+<BloggerSource kind="observed" />
+
+### Attribute values
+
+- Entities in attribute values are decoded, after the decoding of plain text: inside CDATA, `description="Links &amp; buttons"` reads as `Links & buttons`. Write `&amp;` for `&`, and `&quot;` for a double quote in a value.
+- `name` is compared trimmed: `" a.b "` and `"a.b"` are the same name, `Variable name must not be declared twice. Input: a.b`. A name with a space at its end alone was refused with `Update failed.`. Write names without spaces.
+- A `description` of only spaces is empty, and refused.
+
+<BloggerSource kind="observed" />
+
+### Groups
+
+- A `<Group>` needs a `description` that is not empty: `This is not a valid description for a skin variable. Input:`. No other group has the same one: `Two variables must not have the same description. Input: G`.
+- A group is meant to hold only `<Variable>` tags and comments. Blogger does not check it: text, and a tag such as `<x/>`, inside a group save.
+- Tags inside a comment in a group are still read: a `<Variable>` commented out with `<!-- -->` still counts.
+- Groups can not be nested: a nested group is refused with `Update failed.` and no detail.
+- Unknown attributes on a `<Group>`, such as `foo="1"`, save.
+
+<BloggerSource kind="observed" />
+
+### Variables
+
+- A `<Variable>` needs `name`, `description`, `type` and `default`. Without one, it is refused: `This is not a valid name for a skin variable. Input:`, `This is not a valid description for a skin variable. Input:`, `This is not a valid type for a variable. Input:`. A `color` without `default` is refused with `This is not a valid color value. Input:`.
+- `name` is made of ASCII letters, digits, dots and underscores, and can start with a digit: `a_b` and `1a` save. `side-width`, `side width`, a line break and accented letters such as `café` are refused, `This is not a valid name for a skin variable. Input: a-b`. It is unique in the skin, `Variable name must not be declared twice. Input: x`, and case-sensitive: `ab` and `AB` are two variables.
+- `description` is not empty, and unique among the variables of one group, `Two variables must not have the same description. Input: A`. Variables outside any group are not checked: two of them can share a description.
+- `type` is one of `automatic`, `background`, `color`, `font`, `length`, `string` and `url`. The match ignores case: `type="Color"` saves, and is stored as written. Another word, such as `colour`, is refused, `This is not a valid type for a variable. Input: colour`.
+- A `<Variable>` has no content. Content between `<Variable>` and `</Variable>` saves, and is kept: write it self-closed.
+
+<BloggerSource kind="observed" />
+
+### Attributes per type
+
+Each type accepts its own attributes. Any other one is refused, `This attribute is not recognized as part of the variable definition. Input: min`, and so is an unknown attribute such as `foo`: <BloggerSource kind="observed" />
+
+| Type         | Accepted, beyond the common ones              | Refused                           |
+| ------------ | --------------------------------------------- | --------------------------------- |
+| `color`      | `red`, `green`, `blue`, `alpha`, `hideEditor` | `min`, `max`, `color`, `selector` |
+| `length`     | `min`, `max`                                  | `color`                           |
+| `background` | `color`                                       | `min`, `red`                      |
+| `string`     |                                               | `min`, `red`                      |
+| `font`       |                                               | `red`                             |
+| `url`        |                                               | `red`                             |
+
+The common ones are `name`, `description`, `type`, `default` and `value`. Only the combinations in the table were tested.
+
+### Default values
+
+The `default` is checked against its type when the theme is saved: <BloggerSource kind="observed" />
+
+| Type                                 | Accepted                                                                                                                                                         | Refused                                                                                                                                        |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `color`                              | `#` and 3 to 6 hexadecimal digits in any case (`#fff`, `#FFF`, `#1234`); `transparent` in lowercase; `rgb()` of integers; `rgba()` with an alpha from `0` to `1` | names such as `red`, `hsl()`, `rgb()` with percentages, an empty value, spaces around the value: `This is not a valid color value. Input: red` |
+| `length`                             | `0`, or a number with `px` or `em`: `1em`, `1.5px`, `-1px`, `.5em`                                                                                               | `10`, `auto`, `10PX`, `1 px`, `1%`, `1rem`, `1vh`, `1pt`: `Length is invalid. Input: 10`                                                       |
+| `background`                         | exactly six parts, `#ffffff url(…) repeat scroll top left`                                                                                                       | `#fff`, `none`, an empty value: `…Backgrounds must have exactly six components. Input: #fff`                                                   |
+| `url`, `font`, `string`, `automatic` | anything, an empty value too                                                                                                                                     |                                                                                                                                                |
+
+`rgb()` takes integers of any size, `rgb(300,0,0)` saves. `rgba()` needs four values: `rgba(1,2,3)` is refused, and so is an alpha of `2`. References to other variables, `$(body.link.color)`, are used as defaults by Blogger's own themes.
+
+### As Blogger saves them
+
+Blogger keeps the `<Variable>` and `<Group>` tags as written, and adds a `value`, a copy of the `default`, to every `<Variable>` that has none, except `automatic` ones; see [Theme Designer tags](../basics/saving.mdx#theme-designer-tags). <BloggerSource kind="observed" />
+
+## `<Variable>`
+
+| Attribute              | Required | Value                                  | Default   | Description                                                   | Source                            |
+| ---------------------- | -------- | -------------------------------------- | --------- | ------------------------------------------------------------- | --------------------------------- |
+| `name`                 | Yes      | letters, digits, `.` and `_`           |           | The name, in `$(name)` and in `data:skin.vars`                | <BloggerSource kind="official" /> |
+| `description`          | Yes      | text                                   |           | The label in the Theme Designer                               | <BloggerSource kind="official" /> |
+| `type`                 | Yes      | a [type](#types)                       |           | The kind of value, and the form it gets                       | <BloggerSource kind="official" /> |
+| `default`              | Yes      | a value of the type                    |           | The value of a new or reset theme                             | <BloggerSource kind="official" /> |
+| `value`                | No       | a value of the type                    | `default` | The current value, written by the Theme Designer              | <BloggerSource kind="observed" /> |
+| `hideEditor`           | No       | `true` or `false`                      | `false`   | Hide the form of the variable                                 | <BloggerSource kind="observed" /> |
+| `min`, `max`           | No       | a length                               |           | The bounds of a `length`                                      | <BloggerSource kind="observed" /> |
+| `color`                | No       | a color, or `$(name)` of a color       |           | The color of a `background`, `$(color)` in its value          | <BloggerSource kind="observed" /> |
+| `red`, `green`, `blue` | No       | `0` to `255`, or `$(name.red)`…        |           | The channels of a `color`, `$red`… in its value               | <BloggerSource kind="observed" /> |
+| `family`, `size`       | No       | a family, a size, or `$(name.family)`… |           | The parts of a `font`, `$(family)` and `$(size)` in its value | <BloggerSource kind="observed" /> |
+| `variants`             | No       | colors separated by commas             |           | Colors of the theme variants, Dynamic Views only              | <BloggerSource kind="observed" /> |
+
+`color` is read on `background` variables, `min` and `max` on `length` variables. `red`, `green`, `blue`, `family`, `size` and `variants` are used by Blogger's own themes, on the types shown. An attribute on the wrong type is refused, see [Attributes per type](#attributes-per-type).
+
+### `name`
+
+The name of the variable, used as `$(name)` in the CSS and, with `_` for every `.`, in [`data:skin.vars`](../data/skin.mdx#names-from-ab-to-dataskinvarsa_b). Letters, digits and dots, unique in the skin, and case-sensitive: `side.bgColor` and `side.bgcolor` are two variables. <BloggerSource kind="official" /> Blogger also accepts `_`, and a digit first, `1a`. <BloggerSource kind="observed" />
+
+Since `data:skin.vars` turns dots into `_`, `a.b` and `a_b` are both `data:skin.vars.a_b` there. Keep to dots, or make sure no two names differ only by `.` and `_`.
+
+Two styles are common. Dotted names go from the general to the particular, `posts.title.color`, `sidebar.link.hover.color`. Short camelCase names are used for constants that the owner does not edit, `latoBold24`, `shadowColor`. <BloggerSource kind="observed" />
+
+### `description`
+
+The label of the variable in the Theme Designer. It can contain spaces and punctuation. <BloggerSource kind="official" />
+
+Blogger translates the labels it knows into the language of the dashboard. It has a library of the descriptions of its own themes, at least 267 of them, used for both `<Variable>` and `<Group>`: <BloggerSource kind="observed" />
+
+- the match is exact and case-sensitive: `Link Color` and `Link color` are two entries, translated separately;
+- a description that is not in the library is shown as written;
+- some descriptions of Blogger's own themes are not translated either, such as `Pager`, `Link Text` and `Link Visited Color`.
+
+| Kind    | Some translated descriptions                                                                                                                                                                                                                               |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Groups  | `Backgrounds`, `Blog Title`, `Blog Description`, `Links`, `Page Text`, `Posts`, `Post Footer`, `Sidebar`, `Gadgets`, `Footer`, `Tabs Text`, `Tabs Background`, `Widths`, `Comments`, `Labels`, `Sharing`, `Popular posts`, `Author profile`, `Attribution` |
+| Colors  | `Background Color`, `Background color`, `Text Color`, `Text color`, `Link Color`, `Link color`, `Visited Link Color`, `Hover Color`, `Title Color`, `Border Color`, `Separator Color`, `Post title color`, `Post text color`, `Gadget title color`         |
+| Fonts   | `Font`, `Text Font`, `Text font`, `Title Font`, `Post Title Font`, `Post title font`, `Post text font`, `Gadget title font`, `Button font`                                                                                                                 |
+| Lengths | `Sidebar width`, `Content width`, `Content margin`, `Background height`, `Background blur`, `Post border radius`, `Post text line height`                                                                                                                  |
+
+For a label that is translated, copy one of these exactly. A theme for one language can write any label it likes.
+
+### `type`
+
+The kind of value: `color`, `font`, `length`, `background`, `url`, `string` or `automatic`, described under [Types](#types). <BloggerSource kind="observed" />
+
+Google documents only `font` and `color`, and writes `"Font"` with a capital. <BloggerSource kind="official" /> Blogger accepts any case, `type="Color"`, and stores it as written. Blogger's own themes write every type in lowercase. <BloggerSource kind="observed" />
+
+### `default`
+
+The value of the variable when the theme is installed, and the value it gets back when the owner resets the theme. <BloggerSource kind="official" />
+
+A default can reference another variable, so that one variable follows another until the owner changes it:
+
+```xml
+<Variable default="#0b57d0" description="Link color" name="body.link.color" type="color" value="#0b57d0"/>
+<Variable default="$(body.link.color)" description="Visited link color" name="body.link.visited.color" type="color" value="#0b57d0"/>
+<Variable default="$(latoNormal16)" description="Post text font" name="posts.text.font" type="font" value="16px Lato, sans-serif"/>
+```
+
+<BloggerSource kind="observed" />
+
+### `value`
+
+The current value: what the owner chose, and what the CSS gets. It is optional, and a variable without it renders its default. <BloggerSource kind="observed" />
+
+When the theme is saved in Edit HTML, the `value` Blogger adds is a copy of the `default` as written, references included. <BloggerSource kind="observed" /> In Blogger's own themes, `value` often holds the computed value of the default instead, `default="$(latoNormal16)"` with `value="16px Lato, sans-serif"` and `default="#eee"` with `value="#eeeeee"`; which step writes those values is not confirmed. A value can still contain references, `value="700 $(size) $(family)"`.
+
+### `hideEditor`
+
+`hideEditor="true"` removes the form of the variable from the Theme Designer. The variable still works in the CSS and in `data:skin.vars`, but the owner can not change it there. Blogger's own themes hide their constants, `startSide` and `endSide`, and a few colors. It matters for the types that have a form: `color`, `font` and `length`. <BloggerSource kind="observed" />
+
+### `min` and `max`
+
+The bounds of the slider of a `length` variable, in `px` or `em`. Zero needs no unit. Blogger does not check that the `default` lies between them: `default="20px"` with `max="10px"` saves. Keep the default and the value inside the bounds, where the slider can reach them. <BloggerSource kind="observed" />
+
+```xml
+<Variable default="300px" description="Sidebar width" max="480px" min="200px" name="sidebar.width" type="length" value="300px"/>
+<Variable default="0" description="Post border radius" max="24px" min="0" name="posts.border.radius" type="length" value="0"/>
+```
+
+Blogger's own themes use ranges such as `100px` to `1000px` for a sidebar, `600px` to `2400px` for the content, `0` to `50px` for a blur, and `0` to `20em`.
+
+### `color`
+
+The color of a `background` variable: a color, or a reference to a `color` variable. In the `default` and the `value` of the variable, `$(color)` stands for it: <BloggerSource kind="observed" />
+
+```xml /$(color)/
+<Variable default="#f1f3f4" description="Body background color" name="body.background.color" type="color" value="#f1f3f4"/>
+<Variable color="$(body.background.color)" default="$(color) none repeat scroll top left" description="Background" name="body.background" type="background" value="$(color) none repeat scroll top left"/>
+```
+
+### `red`, `green` and `blue`
+
+The channels of a `color` variable, from `0` to `255`, written `$red`, `$green` and `$blue` in its `default` and `value`. Blogger's own themes use them to derive a translucent color from another one: <BloggerSource kind="observed" />
+
+```xml
+<Variable default="#1a73e8" description="Label text color" name="labels.text.color" type="color" value="#1a73e8"/>
+<Variable blue="$(labels.text.color.blue)" default="rgba($red, $green, $blue, 0.08)" description="Label background color" green="$(labels.text.color.green)" name="labels.background.color" red="$(labels.text.color.red)" type="color" value="rgba(26, 115, 232, 0.08)"/>
+```
+
+### `family` and `size`
+
+The family and the size of a `font` variable, written `$(family)` and `$(size)` in its `default` and `value`. They build a variant of another font, such as a bold one: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<Variable default="16px Lato, sans-serif" description="Lato 16" hideEditor="true" name="latoNormal16" type="font" value="16px Lato, sans-serif"/>
+<Variable default="700 $(size) $(family)" description="Font" family="$(latoNormal16.family)" name="tabs.font" size="$(latoNormal16.size)" type="font" value="700 $(size) $(family)"/>
+```
+
+```css title="font: $(tabs.font), rendered"
+font: 700 16px Lato, sans-serif;
+```
+
+</CodeTabs>
+
+### `variants`
+
+Dynamic Views gives some colors a `variants` attribute: one color, or nine separated by commas. The lists match the colors of the variants of each view, but what Blogger does with them is not confirmed. No other theme of Blogger uses it. <BloggerSource kind="observed" />
+
+## Types
+
+| Type         | Value                                                 | Form in the Theme Designer                    | Source                            |
+| ------------ | ----------------------------------------------------- | --------------------------------------------- | --------------------------------- |
+| `color`      | `#rrggbb`, `#rgb`, `rgb(…)`, `rgba(…)`, `transparent` | A color picker, under Advanced                | <BloggerSource kind="official" /> |
+| `font`       | `style weight size family`, the first parts optional  | Family, size, bold and italic, under Advanced | <BloggerSource kind="official" /> |
+| `length`     | a number with `px` or `em`, no unit for `0`           | A slider, under Advanced                      | <BloggerSource kind="observed" /> |
+| `background` | `color image repeat attachment position`              | The Background pane, for `body.background`    | <BloggerSource kind="observed" /> |
+| `url`        | `url(…)`, a bare URL, or `none`                       | None                                          | <BloggerSource kind="observed" /> |
+| `string`     | any text                                              | None                                          | <BloggerSource kind="observed" /> |
+| `automatic`  | set by Blogger                                        | None                                          | <BloggerSource kind="observed" /> |
+
+### `color`
+
+A CSS color. Google gives hexadecimal, `rgb()` and `rgba()` values; Blogger's themes also use the short hexadecimal form, `transparent`, and references. Each `color` variable gets a color picker under Advanced, unless it is hidden. The values the Theme Designer writes are in long hexadecimal. <BloggerSource kind="official" />
+
+`transparent` is one of the choices of the picker, so it is a convenient "off" value: see [Transparent as off](#transparent-as-off).
+
+### `font`
+
+The value of the CSS `font` shorthand, `style weight size family`, such as `italic 700 18px Georgia, serif`. Google documents the four parts; Blogger's themes often leave out the first ones, `16px Lato, sans-serif`, `400 14px Roboto, sans-serif`. Family names with spaces are written without quotes. <BloggerSource kind="official" />
+
+The form lets the owner pick a family from a list, a size, bold and italic. The list has the classic font stacks (Arial, Courier, Georgia, Times, Trebuchet, Verdana…) and about 95 web fonts (Lato, Lora, Merriweather, Montserrat, Open Sans, Roboto, Ubuntu…). Blogger loads a web font named in a font variable with an `@font-face` style before the skin. <BloggerSource kind="observed" />
+
+### `length`
+
+A CSS length in `px` or `em`, `0` without unit, bounded by `min` and `max`. It can be used in [arithmetic](#arithmetic). In layouts version 3 themes, every visible length gets a slider under Advanced; in classic themes, only the lengths inside a `<Group>` do. <BloggerSource kind="observed" />
+
+The slider moves in steps of one unit, which makes a `length` the closest thing the Theme Designer has to a list of choices: see [Length sliders as switches](#length-sliders-as-switches).
+
+### `background`
+
+The value of the CSS `background` shorthand: `color image repeat attachment position`. The color is usually `$(color)`, from the `color` attribute, and the image `url(…)` or `none`. <BloggerSource kind="observed" />
+
+A `background` variable gets no form under Advanced. The one named `body.background` is the main background of the theme: it enables the Background pane, where the owner uploads or picks an image and sets its position, its repeat (`repeat`, `no-repeat`, `repeat-x`, `repeat-y`) and its attachment (`scroll`, `fixed`). The pane also suggests a main color from the image. The choices are saved in the `value`, which can end with a CSS comment crediting the image, kept in the output. <BloggerSource kind="observed" />
+
+### `url`
+
+An image URL, written `url(…)` or bare, rendered as `url(…)`, or `none`. Classic themes use it for gradients and borders. It gets no form. <BloggerSource kind="observed" />
+
+```xml
+<Variable default="none" description="Header pattern" name="header.pattern" type="url" value="url(https://example.com/pattern.png)"/>
+```
+
+### `string`
+
+Any text, rendered as it is. It gets no form, so it is changed in Edit HTML, in the `value` attribute. Classic themes use it for CSS fragments and selectors; other themes use it for settings, such as a font name or a tracking id. <BloggerSource kind="observed" />
+
+```xml
+<Variable default="" description="Heading font name" name="font.heading" type="string" value="Google Sans"/>
+```
+
+A skin `string` is not a string of [expressions](../expressions/values.mdx): in `data:skin.vars` it has no `.escaped` and no `.length`. Convert it first, see [Values are not plain strings](../data/skin.mdx#values-are-not-plain-strings).
+
+### `automatic`
+
+A value Blogger sets from the settings of the blog. Only reserved names are automatic: <BloggerSource kind="observed" />
+
+| Name        | Values          | Meaning                                                |
+| ----------- | --------------- | ------------------------------------------------------ |
+| `startSide` | `left`, `right` | The side where text starts in the language of the blog |
+| `endSide`   | `right`, `left` | The other side                                         |
+
+```xml
+<Variable default="left" description="Start side in blog language" hideEditor="true" name="startSide" type="automatic"/>
+<Variable default="right" description="End side in blog language" hideEditor="true" name="endSide" type="automatic"/>
+```
+
+```css
+.post-labels {
+  margin-$endSide: 8px;
+  text-align: $startSide;
+}
+```
+
+For a right-to-left blog, `$startSide` renders `right` and `$endSide` renders `left`. Every classic and layouts version 3 theme of Blogger declares both.
+
+## `<Group>`
+
+`<Group>` puts variables under one menu of the Advanced pane. <BloggerSource kind="observed" />
+
+```xml
+<Group description="Blog Title" selector=".header .title">
+  <Variable default="700 36px Lato, sans-serif" description="Font" name="blog.title.font" type="font" value="700 36px Lato, sans-serif"/>
+  <Variable default="#202124" description="Color" name="blog.title.color" type="color" value="#202124"/>
+</Group>
+```
+
+| Attribute     | Required | Value          | Description                                                      | Source                            |
+| ------------- | -------- | -------------- | ---------------------------------------------------------------- | --------------------------------- |
+| `description` | Yes      | text, unique   | The name of the menu, translated like variable descriptions      | <BloggerSource kind="observed" /> |
+| `selector`    | No       | a CSS selector | The part of the page the Theme Designer highlights for the group | <BloggerSource kind="observed" /> |
+
+- A group is optional: variables can sit at the top level, like `keycolor`, `startSide` and constants.
+- It is meant to hold only `<Variable>` tags and comments. Text inside it saves; nested groups are refused.
+- Two groups can not share a description, and the same variable description can be reused in different groups: every group can have its own `Font` and `Color`.
+
+### `selector`
+
+The element of the page that the group styles, which the Theme Designer highlights. Blogger's themes use selectors such as `body`, `div.widget.Header`, `div.widget.PageList`, `div.blog-pager`, `.widget.Label` and `body.item-page .widget.Blog`. Many of their groups have none. Write it when the group styles a distinct part of the page. <BloggerSource kind="observed" />
+
+## Using variables in the CSS
+
+In the CSS of `<b:skin>` and `<b:template-skin>`, a variable is written `$(name)`, or `$name` when its name has no dot. <BloggerSource kind="official" />
+
+- A dotted name needs the parentheses: `$(body.text.color)`. `$body.text.color` is the variable `body` followed by `.text.color`.
+- Names without a dot work both ways, `$keycolor` and `$(keycolor)`.
+- A reference works anywhere in the CSS: in a value, in a property name (`margin-$startSide`), in a selector or in a media query.
+
+```css
+@media (min-width: $(content.width + sidebar.width + 48px)) {
+  .page {
+    display: flex;
+  }
+}
+```
+
+<BloggerSource kind="observed" />
+
+### Sub-properties
+
+Some types give parts of their value with a suffix: <BloggerSource kind="observed" />
+
+| Type         | Suffix                    | Gives                                       |
+| ------------ | ------------------------- | ------------------------------------------- |
+| `color`      | `.red`, `.green`, `.blue` | A channel, `0` to `255`                     |
+| `color`      | `.transparent`            | The same color, fully transparent           |
+| `color`      | `.inverse`                | The inverted color                          |
+| `font`       | `.size`                   | The size, a length that works in arithmetic |
+| `font`       | `.family`                 | The family                                  |
+| `background` | `.color`                  | The color, with its own suffixes            |
+| `background` | `.image`                  | The image, in `data:skin.vars` only         |
+
+<CodeTabs>
+
+```css title="Skin"
+.card {
+  background: rgba($(body.text.color.red), $(body.text.color.green), $(body.text.color.blue), 0.06);
+  border-bottom: 1px solid $(blog.title.color.transparent);
+  font-family: $(body.text.font.family);
+}
+```
+
+```css title="Rendered"
+.card {
+background: rgba(32, 33, 36, 0.06);
+border-bottom: 1px solid rgba(32, 33, 36, 0);
+font-family: Lato, sans-serif;
+}
+```
+
+</CodeTabs>
+
+When a theme has both a `color` variable `body.background.color` and a `background` variable `body.background` that takes its color from it, `$(body.background.color)` names both. Blogger's themes keep the two equal, so either reading gives the same color.
+
+### Arithmetic
+
+Inside `$( … )`, lengths, font sizes and plain numbers are computed with `+`, `-`, `*` and `/`. `*` and `/` come before `+` and `-`. <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```css title="Skin"
+.post-title {
+  font-size: $(body.text.font.size * 1.5);
+  line-height: $(body.text.font.size * 1.5 + 4px);
+}
+.drawer {
+  transform: translateX($(sidebar.width * -1));
+}
+```
+
+```css title="Rendered"
+.post-title {
+font-size: 24px;
+line-height: 28px;
+}
+.drawer {
+transform: translateX(-300px);
+}
+```
+
+</CodeTabs>
+
+A negative value is written `* -1` or `0 - x`. Parentheses inside `$( … )`, the `%` operator and `%`, `rem` or `vw` operands are not confirmed to work. There are no color functions: a lighter color is another variable, or built from `.red`, `.green` and `.blue`. For the rest, use CSS `calc()` around the references, `width: calc(100% - $(sidebar.width))`.
+
+## In the theme: `data:skin.vars`
+
+The rest of the theme reads the variables through [`data:skin.vars`](../data/skin.mdx), with every `.` of the name replaced by `_` and the case kept: `body.text.font` is `data:skin.vars.body_text_font`, and the suffixes work too, `data:skin.vars.body_text_font.size`. `data:skin` is not evaluated inside the CDATA of the skin, where the CSS uses `$(…)`. <BloggerSource kind="observed" />
+
+The names, a shorter name with `<b:with>`, and the values, which are not plain strings, are described in [`data:skin`](../data/skin.mdx#names-from-ab-to-dataskinvarsa_b).
+
+## Patterns
+
+The Theme Designer has color pickers, font pickers and sliders, and nothing else: no checkbox, no list and no text field. These patterns get more out of it. <BloggerSource kind="observed" />
+
+### Length sliders as switches
+
+A `length` with `min="1px"` and `max="2px"` is a slider with two positions, `1px` and `2px`. Read as a number of choices, it becomes a switch. Write the choices in the description, so that the owner knows what each position means:
+
+```xml
+<Group description="Layout options">
+  <Variable default="1px" description="Boxed cards | (1) Off (2) On" max="2px" min="1px" name="style.boxed" type="length" value="1px"/>
+  <Variable default="1px" description="Direction | (1) Automatic (2) Left-to-right (3) Right-to-left" max="3px" min="1px" name="style.direction" type="length" value="1px"/>
+</Group>
+```
+
+In the theme, compare the value with the string of the length, unit included:
+
+```xml /"2px"/
+<body>
+  <b:class cond='data:skin.vars.style_boxed == "2px"' name='boxed'/>
+  …
+</body>
+```
+
+```xml
+<html>
+  <b:attr expr:value='data:skin.vars.style_direction == "2px" ? "ltr" : data:skin.vars.style_direction == "3px" ? "rtl" : data:blog.languageDirection' name='dir'/>
+  …
+</html>
+```
+
+A longer slider maps to a list of values with [`<b:switch>`](../tags/conditionals.mdx), here a font weight from `1px` to `4px`:
+
+```xml
+<style>
+:root {
+  --title-weight: <b:switch var='data:skin.vars.title_weight'><b:case value='1px'/>300<b:case value='3px'/>600<b:case value='4px'/>700<b:default/>400</b:switch>;
+}
+</style>
+```
+
+A theme can control its plugins this way: each one has an "Enable Script" switch and a "Load Type" slider from `1px` to `4px`, for normal, deferred, lazy, or deferred and lazy loading.
+
+### Transparent as off
+
+A `color` variable can be set to `transparent` in the picker. Treat that value as "not set" and fall back to another color:
+
+```xml
+<style>
+:root {
+  --status-bar: <b:eval expr='data:skin.vars.status_light != "transparent" ? data:skin.vars.status_light : "#ffffff"'/>;
+}
+</style>
+```
+
+The same idea builds an optional list: numbered colors, where the owner removes one by making it transparent.
+
+```xml
+<b:with value='[data:skin.vars.scheme_1, data:skin.vars.scheme_2, data:skin.vars.scheme_3] filter (c => c != "transparent")' var='schemes'>
+  <b:loop index='i' values='data:schemes' var='scheme'>
+    <button expr:data-scheme='data:i' expr:style='"background:" + data:scheme' type='button'/>
+  </b:loop>
+</b:with>
+```
+
+### String variables as settings
+
+A `string` variable gets no form, but its `value` is easy to find in Edit HTML. A theme can keep its text settings this way, outside any group: a tracking id, a default image URL, a font name, the words of its messages. Keep each value on one line, with the XML special characters escaped, and tell the owner to edit only `value`: <BloggerSource kind="observed" />
+
+```xml
+<b:skin><![CDATA[/*
+  Settings: edit only the value attribute, on one line.
+
+<Variable default="" description="Heading font name" name="font.heading" type="string" value="Google Sans"/>
+<Variable default="" description="Label for new posts" name="messages.new" type="string" value="New!"/>
+*/]]></b:skin>
+```
+
+```xml
+<style>
+:root {
+  --font-heading: <b:if cond='data:skin.vars.font_heading'>"<data:skin.vars.font_heading/>", </b:if>system-ui, sans-serif;
+}
+</style>
+```
+
+### Theme information
+
+`string` variables can also carry the name and the version of the theme, for scripts and cache keys. They get no form, so the owner does not see them in the Theme Designer:
+
+```xml
+<Variable default="" description="Theme version" name="theme.version" type="string" value="2.0.0"/>
+```
+
+```xml
+<script expr:data-version='data:skin.vars.theme_version' src='https://cdn.example.com/theme.js'/>
+```
+
+A cache key for scripts can join two of them: `data:skin.vars.template_id + "-v" + data:skin.vars.template_version`. <BloggerSource kind="observed" />
+
+## Special names
+
+| Name                    | Type         | Effect                                                                                                  | Source                            |
+| ----------------------- | ------------ | ------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `keycolor`              | `color`      | The main color of the theme, offered in the Background pane, described "Main Color" in Blogger's themes | <BloggerSource kind="observed" /> |
+| `body.background`       | `background` | The main background, edited in the Background pane                                                      | <BloggerSource kind="observed" /> |
+| `body.background.color` | `color`      | The color of the `theme-color` meta tags that `all-head-content` writes in version 3 themes             | <BloggerSource kind="observed" /> |
+| `startSide`, `endSide`  | `automatic`  | `left` and `right`, swapped for right-to-left languages                                                 | <BloggerSource kind="observed" /> |
+| `blitzview`             | `string`     | The view of a Dynamic Views theme                                                                       | <BloggerSource kind="observed" /> |
+
+### Variants and `keycolor`
+
+Each of Blogger's themes comes in variants, such as Contempo Light and Dark, or Soho Light, Dark, Neon, Pink and Red. A variant is not a different skin: two variants of one theme have the same declarations and the same defaults, and differ only in some `value` attributes, starting with `keycolor`. The variant is available as `data:template.variant`, and Blogger adds a class such as `variant-indie_light` to the `<body>` of the blog. <BloggerSource kind="observed" />
+
+The Background pane offers `keycolor` as the main color, and proposes one close to the dominant color of the background image. Every classic and layouts version 3 theme of Blogger declares it. <BloggerSource kind="observed" />
+
+## Common mistakes
+
+- **Single quotes on `<Variable>` or `<Group>`.** Blogger does not read them, and refuses the theme. Write the attributes in double quotes.
+- **A dotted name without parentheses.** Write `$(body.text.color)`, not `$body.text.color`.
+- **Dots in `data:skin.vars`.** `data:skin.vars.body.text.color` reads a member `text` of `body`. Write `data:skin.vars.body_text_color`.
+- **`-`, a space or an accented letter in a name.** Names hold ASCII letters, digits, dots and `_`.
+- **A unit Blogger does not know.** A `length` default is `0`, or a number with `px` or `em`: `10`, `1rem` and `10PX` are refused.
+- **Two groups with the same description.** Refused, even when one is written with entities and the other in CDATA.
+- **A color by name.** `red` and `hsl()` are refused as color defaults. Use hexadecimal, `rgb()`, `rgba()` or `transparent`.
+- **A default out of bounds.** Blogger saves it, but the slider can not reach it. Keep the `default` and `value` of a `length` between `min` and `max`.
+- **`.image` in the CSS.** The image of a background only exists in `data:skin.vars`. In the CSS, use the whole `$(body.background)`.
+- **Declarations in `<b:template-skin>`.** Only `<b:skin>` declares variables.
+- **Comparing a length switch with a number.** The value is the length with its unit: compare with `"2px"`, not `2`.

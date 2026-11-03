@@ -1,0 +1,117 @@
+---
+title: BlogSearch
+description: The Search This Blog widget, a form that sends a query to the search page of the blog.
+published: 2026-10-26
+---
+
+The `BlogSearch` widget, "Search This Blog" in the Layout editor, is a form that sends its query to the search page of the blog, `data:blog.searchUrl`, as the `q` parameter. It has no settings: its markup only reads the title of the widget and global data. It replaced a `CustomSearch` widget, based on Google Custom Search, in 2016.
+
+## Quick example
+
+A search field for a header. The widget title is the placeholder, the current query is kept on search pages, and a reset button clears the field.
+
+<CodeTabs>
+
+```xml title="theme.xml" {5,7}
+<b:widget id='BlogSearch1' locked='true' title='Search this blog' type='BlogSearch' version='2' visible='true'>
+  <b:includable id='main'>
+    <b:class name='header-search'/>
+    <form expr:action='data:blog.searchUrl' role='search'>
+      <b:attr cond='not data:view.isPreview' name='target' value='_top'/>
+      <b:include name='urlParamsAsFormInput'/>
+      <input autocomplete='off' expr:aria-label='data:messages.searchThisBlog' expr:placeholder='data:title' expr:value='data:view.isSearch ? data:view.search.query.escaped : ""' id='search-input' minlength='3' name='q' required='' type='search'/>
+      <button expr:aria-label='data:messages.search' type='submit'><b:include name='icon.search'/></button>
+      <button aria-label='Clear' type='reset'><b:include name='icon.close'/></button>
+    </form>
+  </b:includable>
+  <b:includable id='content'/>
+  <b:includable id='searchForm'/>
+  <b:includable id='searchSubmit'/>
+</b:widget>
+```
+
+```html title="Rendered, on a search for 'loops'"
+<div class='widget BlogSearch header-search' data-version='2' id='BlogSearch1'>
+  <form action='https://example.blogspot.com/search' role='search' target='_top'>
+    <input aria-label='Search this blog' autocomplete='off' id='search-input' minlength='3' name='q' placeholder='Search this blog' required='' type='search' value='loops'/>
+    <button aria-label='Search' type='submit'><svg class='icon'>…</svg></button>
+    <button aria-label='Clear' type='reset'><svg class='icon'>…</svg></button>
+  </form>
+</div>
+```
+
+</CodeTabs>
+
+- `.escaped` keeps a query with quotes or `<` from breaking the attribute.
+- `target='_top'` makes the results open in the whole window. Blogger's own markup leaves it out in the dashboard preview, and so does this one.
+
+## Placement and limits
+
+|                     |                                                                                                                        | Source                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                | `BlogSearch`                                                                                                           | <BloggerSource kind="official" /> |
+| Per blog            | At least 2; a higher maximum is not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type)        | <BloggerSource kind="observed" /> |
+| Width               | 300 pixels or more                                                                                                     | <BloggerSource kind="observed" /> |
+| Placement           | Blogger's responsive themes keep a header slot for it. In Emporio and Notable that slot is hidden in the Layout editor | <BloggerSource kind="observed" /> |
+| Locked              | Installed locked by Contempo, Essential, Emporio, Notable and Soho                                                     | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                                                               | <BloggerSource kind="observed" /> |
+| Classic mobile view | Hidden by default                                                                                                      | <BloggerSource kind="official" /> |
+| Compatibility       | Not Dynamic Views or Mobile Default 2010                                                                               | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+None. Blogger writes no `<b:widget-setting>` for this widget. Written with no settings, it gets the title `Search This Blog`. A theme can hold two BlogSearch widgets. <BloggerSource kind="observed" />
+
+## Widget data
+
+| Field   | V1  | V2  | Type   | Holds                                  | Source                            |
+| ------- | --- | --- | ------ | -------------------------------------- | --------------------------------- |
+| `title` | ✓   | ✓   | string | The widget title, up to 100 characters | <BloggerSource kind="observed" /> |
+
+The rest comes from the [global data](../data/index.mdx):
+
+| Data                                           | Used for                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------ |
+| `data:blog.searchUrl`                          | The `action` of the form, `https://BLOG.blogspot.com/search` |
+| `data:view.isSearch`, `data:view.search.query` | Refill the field with the current query on search pages      |
+| `data:view.isPreview`                          | Leave out `target='_top'` in the dashboard preview           |
+| `data:messages.search`                         | "Search", for the button                                     |
+| `data:messages.searchThisBlog`                 | "Search this blog", for the placeholder and the `aria-label` |
+
+## Built-in includables
+
+| Includable     | V1  | V2  | Renders                                                                                                       | Source                            |
+| -------------- | --- | --- | ------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `main`         | ✓   | ✓   | Version 1: the title and a table-based form, `form.gsc-search-box`. Version 2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`      |     | ✓   | `div.widget-content` with `role='search'`, around `searchForm`                                                | <BloggerSource kind="observed" /> |
+| `searchForm`   |     | ✓   | The form: `urlParamsAsFormInput`, `div.search-input` with the `q` field, then `searchSubmit`                  | <BloggerSource kind="observed" /> |
+| `searchSubmit` |     | ✓   | `input.search-action` of type `submit`, with the value `data:messages.search.escaped`                         | <BloggerSource kind="observed" /> |
+
+- **`searchForm`, version 2.** The field has `autocomplete='off'`, `data:messages.searchThisBlog` as `aria-label` and placeholder, and the current query as `value`. The form has `target='_top'` outside the preview.
+- **`main`, version 1.** An `h2.title` when there is a title, then `div#BlogSearch1_form` around `form.gsc-search-box`, a one-row table with a text field `q` (`size='10'`) and a submit button labeled `data:messages.search`, then the obsolete `quickedit` include.
+
+`urlParamsAsFormInput` is a built-in includable that adds the parameters of the current URL as hidden fields; that it keeps parameters such as those of the preview when searching is not confirmed. Its markup is not published, and it rendered nothing on the live pages that were checked. <BloggerSource kind="observed" />
+
+### What Blogger's themes change
+
+- `searchSubmit` gets the class `flat-button` in Contempo and Essential. <BloggerSource kind="observed" />
+- `searchSubmit` in Emporio, Notable and Soho: in the header section, a `label` holding a hidden submit input and the `searchIcon` SVG; anywhere else, `super.searchSubmit`. <BloggerSource kind="observed" />
+
+## Writing your own markup
+
+### A search box outside the widget
+
+The form needs nothing from the widget. Written directly in the theme, it works on every page, with or without a BlogSearch widget:
+
+```xml
+<form expr:action='data:blog.searchUrl' role='search'>
+  <input expr:aria-label='data:messages.searchThisBlog' name='q' type='search'/>
+</form>
+```
+
+Keeping a BlogSearch widget still lets the owner rename the placeholder, through the widget title, or hide the search from the Layout editor.
+
+## Things to know
+
+- **The search page.** A working form only needs `action` set to `data:blog.searchUrl` and a field named `q`.
+- **Retired.** `CustomSearch` is the type this widget replaced. `quickedit` in the version 1 `main` is obsolete.

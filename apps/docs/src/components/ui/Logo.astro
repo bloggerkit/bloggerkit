@@ -1,0 +1,20 @@
+---
+import { appName } from '@/lib/site';
+
+interface Props {
+	class?: string;
+}
+
+/** The Blogger Kit mark and name. Same drawing as `public/favicon.svg`, but the colors follow the theme. */
+const { class: className } = Astro.props;
+---
+
+<span class:list={['inline-flex items-center gap-2 font-semibold', className]}>
+	<svg width="24" height="24" viewBox="0 0 512 512" aria-hidden="true" class="shrink-0">
+		<rect width="512" height="512" rx="112" class="fill-primary"></rect>
+		<rect x="128" y="128" width="256" height="64" rx="32" class="fill-primary-foreground"></rect>
+		<rect x="128" y="224" width="160" height="64" rx="32" class="fill-primary-foreground"></rect>
+		<rect x="128" y="320" width="256" height="64" rx="32" class="fill-primary-foreground"></rect>
+	</svg>
+	{appName}
+</span>

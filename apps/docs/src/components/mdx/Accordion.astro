@@ -1,0 +1,29 @@
+---
+import ChevronRight from '@lucide/astro/icons/chevron-right';
+
+interface Props {
+	title: string;
+	id?: string;
+}
+
+/** A collapsible item inside `<Accordions>`: `<Accordion title="…">…</Accordion>`. */
+const { title, id } = Astro.props;
+---
+
+{/* Opening slides the content in where `::details-content` and `interpolate-size` are supported, and snaps elsewhere */}
+<details
+	class="group/accordion border-border not-first:border-t [interpolate-size:allow-keywords] details-content:h-0 details-content:overflow-clip open:details-content:h-auto motion-safe:details-content:transition-[height,content-visibility] motion-safe:details-content:transition-discrete motion-safe:details-content:duration-200"
+	id={id}
+>
+	<summary
+		class="flex cursor-pointer items-center gap-2 px-4 py-3 font-medium transition-colors select-none hover:bg-accent/40 focus-visible:-outline-offset-2"
+	>
+		<ChevronRight
+			size={16}
+			class="text-muted-foreground transition-transform group-open/accordion:rotate-90 motion-reduce:transition-none"
+			aria-hidden="true"
+		/>
+		{title}
+	</summary>
+	<div class="ps-10 pe-4 pt-1 pb-4 *:first:mt-0 *:last:mb-0"><slot /></div>
+</details>

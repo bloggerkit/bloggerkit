@@ -1,0 +1,230 @@
+---
+import ArrowRight from '@lucide/astro/icons/arrow-right';
+import FileText from '@lucide/astro/icons/file-text';
+import House from '@lucide/astro/icons/house';
+import Search from '@lucide/astro/icons/search';
+import Backdrop from '@/components/home/Backdrop.astro';
+import LucideIcon from '@/components/ui/LucideIcon.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getSections } from '@/lib/content/sections';
+import { docsRoute } from '@/lib/routes';
+import { buttonBase, buttonPrimary, buttonSecondary } from '@/lib/ui/buttons';
+
+const sections = getSections();
+---
+
+<BaseLayout title="Page not found" description="This page does not exist." noindex>
+	<main id="content" class="relative overflow-hidden">
+		<Backdrop variant="faint" />
+
+		<div class="relative mx-auto flex max-w-180 flex-col items-center px-4 pt-10 pb-16 text-center sm:pt-20 sm:pb-20 md:px-6">
+			<p
+				class="number m-0 bg-linear-to-b from-foreground to-foreground/20 bg-clip-text text-[5.5rem] leading-none font-semibold tracking-tighter text-transparent tabular-nums sm:text-[8rem]"
+				aria-hidden="true"
+			>
+				404
+			</p>
+			<h1 class="mt-3 mb-0 text-2xl font-semibold tracking-tight text-balance sm:mt-4 sm:text-4xl">This page does not exist</h1>
+			<p class="mt-2 mb-0 max-w-120 text-summary text-pretty text-muted-foreground sm:mt-3 sm:text-base">
+				It may have moved, or the link has a typo.
+			</p>
+			{/* Filled in by the script. Invisible, not hidden, so showing it causes no layout shift */}
+			<p class="invisible mt-3 mb-0 flex max-w-full items-center gap-2 text-sm text-muted-foreground" data-missing>
+				<span class="shrink-0">Nothing is at</span>
+				<code
+					class="min-w-0 truncate rounded-md border border-border bg-card px-1.5 py-0.5 font-mono text-meta text-foreground"
+					data-missing-path>/</code
+				>
+			</p>
+
+			{/* On phones: "Browse the docs" full width, the other two side by side below it */}
+			<div class="mt-7 grid w-full grid-cols-2 gap-2.5 sm:mt-8 sm:flex sm:w-auto sm:gap-3">
+				<a href={docsRoute} class:list={[buttonBase, buttonPrimary, 'col-span-2']}>
+					Browse the docs
+					<ArrowRight size={16} aria-hidden="true" />
+				</a>
+				<button
+					type="button"
+					class:list={[buttonBase, buttonSecondary, 'cursor-pointer bg-card']}
+					data-open-search
+					data-search-missing
+				>
+					<Search size={16} aria-hidden="true" />
+					Search
+				</button>
+				<a href="/" class:list={[buttonBase, buttonSecondary, 'bg-card']}>
+					<House size={16} aria-hidden="true" />
+					Home
+				</a>
+			</div>
+
+			{/* Fixed-height placeholders hold the space until results arrive, so nothing below moves */}
+			<section class="mt-12 w-full text-start sm:mt-14" aria-labelledby="suggestions-title" aria-busy="true" data-suggestions>
+				<h2 id="suggestions-title" class="m-0 mb-3 text-sm font-medium text-muted-foreground">Maybe you were looking for</h2>
+				<ul class="m-0 flex min-h-76 list-none flex-col gap-2 p-0" data-suggestion-list>
+					{
+						[0, 1, 2].map(() => (
+							<li class="h-24 animate-pulse rounded-xl border border-border bg-card motion-reduce:animate-none" aria-hidden="true" />
+						))
+					}
+				</ul>
+				<template data-suggestion>
+					<li>
+						<a
+							href="/docs"
+							class="group flex h-24 items-center gap-3 rounded-xl border border-border bg-card px-4 no-underline transition-colors hover:bg-accent"
+						>
+							<span class="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground">
+								<FileText size={15} aria-hidden="true" />
+							</span>
+							<span class="flex min-w-0 flex-col gap-0.5">
+								<span class="truncate font-medium text-foreground" data-title>Documentation</span>
+								<span class="truncate text-sm text-muted-foreground" data-place></span>
+								<span class="truncate font-mono text-xs text-muted-foreground" data-path></span>
+							</span>
+							<ArrowRight
+								size={16}
+								class="ms-auto shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+								aria-hidden="true"
+							/>
+						</a>
+					</li>
+				</template>
+				<template data-no-suggestion>
+					<li
+						class="flex h-76 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border px-6 text-center text-sm text-muted-foreground"
+					>
+						<span class="font-medium text-foreground">No page matches this address</span>
+						Search the docs, or start from a section below.
+					</li>
+				</template>
+			</section>
+
+			<section class="mt-10 w-full text-start sm:mt-12" aria-labelledby="sections-title">
+				<h2 id="sections-title" class="m-0 mb-3 text-sm font-medium text-muted-foreground">Or start from a section</h2>
+				<ul class:list={['m-0 grid list-none grid-cols-1 gap-2 p-0', sections.length > 1 && 'sm:grid-cols-2']}>
+					{
+						sections.map((section) => (
+							<li>
+								<a
+									href={section.url}
+									class="group flex h-full items-start gap-3 rounded-xl border border-border bg-card p-4 no-underline transition-colors hover:bg-accent"
+								>
+									<span class="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
+										{section.icon && <LucideIcon name={section.icon} size={15} />}
+									</span>
+									<span class="flex min-w-0 flex-col gap-0.5">
+										<span class="font-medium text-foreground">{section.name}</span>
+										{section.description && <span class="line-clamp-2 text-sm text-muted-foreground">{section.description}</span>}
+									</span>
+								</a>
+							</li>
+						))
+					}
+				</ul>
+			</section>
+		</div>
+	</main>
+</BaseLayout>
+
+<style>
+	.number {
+		animation: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+	}
+	@keyframes rise {
+		from {
+			opacity: 0;
+			translate: 0 0.5rem;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.number {
+			animation: none;
+		}
+	}
+</style>
+
+<script>
+	import { onPage } from '@/scripts/page';
+	import { cleanUrl, loadPagefind } from '@/scripts/pagefind';
+
+	// Turns the missing path into a search query: `/docs/blogger-xml/tag/loop.html` → `blogger xml tag loop`
+	const words = (path: string) =>
+		decodeURIComponent(path)
+			.replace(/\.html?$/, '')
+			.split(/[/\-_.\s]+/)
+			.filter((word) => word && word !== 'docs')
+			.join(' ');
+
+	async function search(query: string) {
+		const { results } = await (await loadPagefind()).search(query);
+		return Promise.all(results.slice(0, 3).map((result) => result.data()));
+	}
+
+	// Replaces the placeholders in one go (with results or the "none" note), so the list keeps its height
+	async function suggest(query: string, signal: AbortSignal) {
+		const section = document.querySelector<HTMLElement>('[data-suggestions]');
+		const list = document.querySelector('[data-suggestion-list]');
+		const found = document.querySelector<HTMLTemplateElement>(
+			'template[data-suggestion]',
+		);
+		const none = document.querySelector<HTMLTemplateElement>(
+			'template[data-no-suggestion]',
+		);
+		if (!section || !list || !found || !none) {
+			return;
+		}
+		// Show the note when there is no index (`astro dev`) or the path has no words
+		const pages = query ? await search(query).catch(() => []) : [];
+		if (signal.aborted) {
+			return;
+		}
+		const items = pages.flatMap((page) => {
+			const item = found.content.cloneNode(true);
+			if (!(item instanceof DocumentFragment)) {
+				return [];
+			}
+			const link = item.querySelector<HTMLAnchorElement>('a');
+			const title = item.querySelector<HTMLElement>('[data-title]');
+			const place = item.querySelector<HTMLElement>('[data-place]');
+			const pathText = item.querySelector<HTMLElement>('[data-path]');
+			if (!link || !title || !place || !pathText) {
+				return [];
+			}
+			// Set the clean path, not a resolved URL: links in a template fragment have no base URL yet
+			const path = cleanUrl(page.url);
+			link.href = path;
+			title.textContent = page.meta.title ?? path;
+			// Show the section and topic, since the excerpt is often just code
+			place.textContent = [page.meta.section, page.meta.folder]
+				.filter(Boolean)
+				.join(' · ');
+			pathText.textContent = path;
+			return [item];
+		});
+		list.replaceChildren(
+			...(items.length > 0 ? items : [none.content.cloneNode(true)]),
+		);
+		section.ariaBusy = 'false';
+	}
+
+	onPage((signal) => {
+		const missing = document.querySelector('[data-missing]');
+		const missingPath = document.querySelector('[data-missing-path]');
+		if (!missing || !missingPath) {
+			return;
+		}
+		const path = location.pathname;
+		const query = words(path);
+		missingPath.textContent = path;
+		missing.classList.remove('invisible');
+		// The Search button opens the header search prefilled with the words from the path
+		const searchButton = document.querySelector<HTMLElement>(
+			'[data-search-missing]',
+		);
+		if (searchButton && query) {
+			searchButton.setAttribute('data-search-query', query);
+		}
+		suggest(query, signal);
+	});
+</script>

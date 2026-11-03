@@ -1,0 +1,268 @@
+---
+title: Widgets
+description: The data about widgets, data:widgets for every visible widget of the blog, data:widget for the one being rendered, and the names this, top and title.
+level: advanced
+prerequisites:
+  - blogger-xml/layout/widgets
+  - blogger-xml/expressions/data-paths
+published: 2026-10-26
+---
+
+Two values describe widgets. `data:widgets` is a global list of every visible widget of the blog, readable anywhere, so the head or another widget can know what the blog contains. `data:widget` describes the widget being rendered, inside its own includables.
+
+<CodeTabs>
+
+```xml title="One from anywhere, one from inside"
+<!-- in the head: load the AdSense script only if an AdSense widget is installed -->
+<b:if cond='data:widgets.AdSense.notEmpty'>
+  <script async='async' crossorigin='anonymous' expr:src='params("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", { client: data:blog.adsenseClientId })'/>
+</b:if>
+
+<!-- in a Label widget: ids that stay unique if the widget is installed twice -->
+<b:includable id='main'>
+  <input class='label-toggle' expr:id='"toggle-" + data:widget.instanceId' type='checkbox'/>
+  <label expr:for='"toggle-" + data:widget.instanceId'><data:title/></label>
+</b:includable>
+```
+
+```html title="Rendered in Label1"
+<input class='label-toggle' id='toggle-Label1' type='checkbox'/>
+<label for='toggle-Label1'>Places</label>
+```
+
+</CodeTabs>
+
+## `data:widgets`
+
+The list of the **visible** widgets of the blog, from every section, on every page. <BloggerSource kind="observed" /> It is global, so it can be read anywhere under `<html>` except inside `<![CDATA[ ]]>`, and it exists with version 2 widgets, in the 2017 themes and in custom themes built on them. A widget with `visible='false'` is not in it, nor is a widget whose `cond` is false on the page.
+
+On a blog with a header, a sidebar and the posts, the copy of the list in the page source starts like this:
+
+```txt title="data:widgets, from the page source"
+[{ title: 'Carnets de route', type: 'Header', sectionId: 'theme_section_header', id: 'Header1' },
+ { title: 'Places', type: 'Label', sectionId: 'theme_section_sidebar', id: 'Label1' },
+ { type: 'PopularPosts', sectionId: 'theme_section_sidebar', id: 'PopularPosts1', posts: [ … ] },
+ { title: 'Featured', type: 'FeaturedPost', sectionId: 'theme_section_top', id: 'FeaturedPost1', postId: '5528190364470021938' },
+ { title: 'Blog Posts', type: 'Blog', sectionId: 'theme_section_main', id: 'Blog1', posts: [ … ] },
+ …]
+```
+
+### Fields of every entry
+
+| Field       | Type   | Meaning                                                                  | Example                 | Source                            |
+| ----------- | ------ | ------------------------------------------------------------------------ | ----------------------- | --------------------------------- |
+| `id`        | string | The id of the widget, equal to `data:widget.instanceId` inside it        | `Blog1`                 | <BloggerSource kind="observed" /> |
+| `type`      | string | The type of the widget                                                   | `Blog`                  | <BloggerSource kind="observed" /> |
+| `sectionId` | string | The id of the section that holds it                                      | `theme_section_sidebar` | <BloggerSource kind="observed" /> |
+| `title`     | string | The title of the widget, 100 characters at most. Absent when it has none | `Places`                | <BloggerSource kind="observed" /> |
+
+Blog, FeaturedPost and PopularPosts entries have [more fields](#blog-entries).
+
+### Working with the list
+
+`data:widgets` is a list, so the list properties and the lambda operators work on it. The most useful question is whether a section has anything in it, to skip its container when it is empty: <BloggerSource kind="observed" />
+
+```xml {3}
+<b:if cond='data:view.isLayoutMode or data:widgets any (w => w.sectionId == "theme_section_footer")'>
+  <footer class='site-footer'>
+    <b:class cond='(data:widgets filter (w => w.sectionId == "theme_section_footer")).length &lt;= 3' name='three-columns'/>
+    <b:section class='footer' id='theme_section_footer' name='Footer' showaddelement='true'/>
+  </footer>
+</b:if>
+```
+
+The Layout editor gets the section in every case, so that the owner can still add widgets to it. The class depends on how many widgets the section holds; the parentheses around the `filter` are needed before `.length`.
+
+A list of several sections can be tested at once, with the section ids in a literal list:
+
+```xml
+<b:class cond='["theme_section_sidebar", "theme_section_sidebar_sticky"] any (id => data:widgets any (w => w.sectionId == data:id))' name='has-sidebar'/>
+```
+
+The inner lambda reads the outer parameter as `data:id`: a lambda parameter can be read bare only in its own lambda. Blogger's own themes also use `count` and `first` on this list, as in `data:widgets first (w => w.type == "Blog")`, and read `data:widgets.first.id`. See [lambdas](../expressions/lambdas.mdx).
+
+### By type
+
+`data:widgets.Blog`, `data:widgets.FeaturedPost`, `data:widgets.AdSense` and so on give the visible widgets of one type. <BloggerSource kind="observed" /> Each is a list too, empty when the blog has no widget of that type:
+
+```xml
+<b:with value='data:widgets.FeaturedPost filter (w => w.sectionId == "theme_section_top") map (w => w.postId)' var='featuredIds'>
+  …
+</b:with>
+```
+
+The types are `AdSense`, `Attribution`, `Blog`, `BlogArchive`, `BloggerButton`, `BlogList`, `BlogSearch`, `ContactForm`, `FeaturedPost`, `Feed`, `Followers`, `Header`, `HTML`, `Image`, `Label`, `LinkList`, `PageList`, `PopularPosts`, `Profile`, `ReportAbuse`, `Stats`, `Subscribe`, `Text`, `TextList`, `Translate` and `Wikipedia`. Every one of these lists takes `.first`, `.length`, `.empty`, `.notEmpty` and the other list properties. An index right after the type never reads: `data:widgets.HTML[0].id` and `data:widgets.HTML["0"].id` give nothing, while `data:widgets.HTML.first.id` works, and so does an index on the same list named with `<b:with>`. <BloggerSource kind="observed" />
+
+```xml
+<b:with value='data:widgets.HTML' var='htmlWidgets'>
+  <b:eval expr='data:htmlWidgets[1].id'/>
+</b:with>
+```
+
+A theme with no Blog widget saves, and `data:widgets.Blog` is then an empty list. <BloggerSource kind="observed" />
+
+### By id
+
+A widget can also be read by its id, `data:widgets.LinkList71` or `data:widgets.Image71`. <BloggerSource kind="observed" /> The value is empty when the widget was removed, hidden, or excluded by its `cond`, which makes it a test of whether a feature is installed. A theme can let the owner set the favicon with an Image widget, `Image71`, and fall back to the favicon of the blog when that widget is gone:
+
+```xml
+<b:if cond='!data:widgets.Image71'>
+  <link expr:href='data:blog.blogspotFaviconUrl' rel='icon' type='image/x-icon'/>
+</b:if>
+```
+
+That is also why themes that rely on such lookups ask their users not to change the ids of their widgets. The value is the widget's entry, a map: `data:widgets.Blog1.posts.first.id` reads the id of the first post. The `content` of an HTML widget is not in it: `data:widgets.HTML1.content` is empty. <BloggerSource kind="observed" />
+
+The list properties come first: `data:widgets.first` is the first widget even if a widget had the id `first`. <BloggerSource kind="observed" />
+
+### Blog entries
+
+The entry of a Blog widget carries more: the posts of the page and the byline options set in the widget. <BloggerSource kind="observed" /> Themes read it as `data:widgets.Blog.first`, the first and usually only Blog widget.
+
+| Field                         | Type    | Meaning                                                                                                                                                                           | Source                            |
+| ----------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `posts`                       | list    | The posts of the page, with a few fields each. Absent on 404 pages                                                                                                                | <BloggerSource kind="observed" /> |
+| `posts[i].id`                 | number  | The id of the post                                                                                                                                                                | <BloggerSource kind="observed" /> |
+| `posts[i].title`              | string  | The title of the post                                                                                                                                                             | <BloggerSource kind="observed" /> |
+| `posts[i].featuredImage`      | image   | The main image, or the thumbnail of the video, as in [Posts](./post.mdx#featuredimage). Has `.isResizable`, `.isYoutube` and `.youtubeMaxResDefaultUrl`; no `.width` or `.height` | <BloggerSource kind="observed" /> |
+| `posts[i].showInlineAds`      | boolean | An inline ad can follow this post                                                                                                                                                 | <BloggerSource kind="observed" /> |
+| `headerByline`                | map     | The byline options placed in the header of posts, with `regionName` and `items`                                                                                                   | <BloggerSource kind="observed" /> |
+| `headerByline.regionName`     | string  | The name of the header line                                                                                                                                                       | <BloggerSource kind="observed" /> |
+| `headerByline.items`          | list    | The options of the header line, in the order set in the widget, 7 at most                                                                                                         | <BloggerSource kind="observed" /> |
+| `footerBylines`               | list    | The footer lines of posts, 3 at most, each with `regionName` and `items`                                                                                                          | <BloggerSource kind="observed" /> |
+| `footerBylines[i].regionName` | string  | `footer1`, `footer2` or `footer3`                                                                                                                                                 | <BloggerSource kind="observed" /> |
+| `footerBylines[i].items`      | list    | The options of that footer line                                                                                                                                                   | <BloggerSource kind="observed" /> |
+| `allBylineItems`              | list    | Every option that is on, wherever it is placed, 7 at most                                                                                                                         | <BloggerSource kind="observed" /> |
+| `items[i].name`               | string  | The option: `author`, `timestamp`, `comments`, `labels`, `location`, `share` or `icons`                                                                                           | <BloggerSource kind="observed" /> |
+| `items[i].label`              | string  | The text set for that option in the widget, such as `By` before the author                                                                                                        | <BloggerSource kind="observed" /> |
+
+`posts` is a light copy of the posts of the Blog widget for the head and the other widgets. Its ids are numbers, like `data:view.postId`, though the copy in the page source writes them as strings. A static page uses it to get its own image from the head: <BloggerSource kind="observed" />
+
+```xml
+<b:if cond='data:view.isPage and data:widgets.Blog.first.posts.first.featuredImage'>
+  <meta expr:content='resizeImage(data:widgets.Blog.first.posts.first.featuredImage, 0)' property='og:image'/>
+</b:if>
+```
+
+A width of `0` writes `w0`; that it serves the image at its original size is not confirmed, see [`resizeImage`](../expressions/functions.mdx#the-width). For the full post, read the posts in the Blog widget itself.
+
+### Post options
+
+Each option turned on in the Blog widget, under "Post page options" and "Arrange items" in the Layout editor, is an item with a `name` and a `label`. The lists also take an option name as a member, which gives that item, or nothing when the option is off: `allBylineItems.author`, `headerByline.items.share`. <BloggerSource kind="observed" /> `labels` is the name of an option, and `label` the text of any option. The names, their default labels and how Blogger renders the lines are in [Bylines](../widget-types/blog.mdx#bylines).
+
+Since this data is global, any includable can follow the owner's choices, including ones outside the Blog widget: <BloggerSource kind="observed" />
+
+```xml
+<b:with value='data:widgets.Blog.first.allBylineItems' var='bylines'>
+  <b:if cond='data:bylines.author'>
+    <span class='byline-author'><data:bylines.author.label/> <data:post.author.name/></span>
+  </b:if>
+  <b:include cond='data:bylines.timestamp' data='post' name='post-date'/>
+</b:with>
+```
+
+Blogger's own includables render the lines with `headerByline` and `footerBylines`, see [Bylines](../widget-types/blog.mdx#bylines). The region names in the data have no hyphen, `header1` and `footer1`, while the `regionName` variable that Blogger's includables set is `header-1` or `footer-1`. <BloggerSource kind="observed" />
+
+### FeaturedPost and PopularPosts entries
+
+| Widget       | Extra field | Type   | Meaning                                  | Source                            |
+| ------------ | ----------- | ------ | ---------------------------------------- | --------------------------------- |
+| FeaturedPost | `postId`    | number | The id of the chosen post                | <BloggerSource kind="observed" /> |
+| PopularPosts | `posts`     | list   | The popular posts, with `id` and `title` | <BloggerSource kind="observed" /> |
+
+The `postId` of a FeaturedPost entry lets the Blog widget leave the featured post out of its list, `data:posts filter (p => p.id not in (data:widgets.FeaturedPost map (w => w.postId)))`, as Blogger's 2017 themes do in the `main` includable of their Blog widget. See [Do not show the post twice on the homepage](../widget-types/featured-post.mdx#do-not-show-the-post-twice-on-the-homepage).
+
+## `data:widget`
+
+The widget being rendered. It is set in every includable of a widget, with the same values in all of them. <BloggerSource kind="official" /> It is also set in the shared includables of `<b:defaultmarkup type='Common'>` when a widget includes them. <BloggerSource kind="observed" />
+
+| Field        | Type   | Meaning                                     | Example                 | Source                            |
+| ------------ | ------ | ------------------------------------------- | ----------------------- | --------------------------------- |
+| `instanceId` | string | The id of the widget: its type and a number | `Blog1`, `HTML404`      | <BloggerSource kind="official" /> |
+| `sectionId`  | string | The id of the section that holds it         | `theme_section_sidebar` | <BloggerSource kind="observed" /> |
+| `type`       | string | The type of the widget                      | `Blog`, `PopularPosts`  | <BloggerSource kind="observed" /> |
+| `version`    | number | The version of the widget, `1` or `2`       | `2`                     | <BloggerSource kind="observed" /> |
+
+### `instanceId`
+
+The `id` of `<b:widget>`, which Blogger also gives to the rendered widget element. A widget id is its type followed by digits, leading zeros allowed, so `LinkList71`, `Blog010` and `HTML404` are all valid. Use `instanceId` wherever an id or a key must not collide between two widgets of the same type:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<div class='slider' expr:data-key='data:widget.instanceId'>
+  <b:class expr:name='"slider-" + data:widget.sectionId'/>
+  …
+</div>
+```
+
+```html title="Rendered in Image6, in the carousel section"
+<div class='slider slider-theme_section_carousel' data-key='Image6'>…</div>
+```
+
+</CodeTabs>
+
+Blogger's share buttons build their ids the same way, from the widget id, the region and the post id.
+
+`sectionId` matters most in markup shared by several widgets, such as a Common includable, which does not know in advance where it is included. A theme's ad markup can make an empty ad slot taller in its sticky sidebar only: <BloggerSource kind="observed" />
+
+```xml {6}
+<b:includable id='ManualAd.main'>
+  <b:if cond='data:content'>
+    <data:content/>
+  <b:else/>
+    <div class='ad-placeholder' expr:data-text='data:messages.adsGoHere + " (" + data:title + ")"'>
+      <b:class cond='data:widget.sectionId == "theme_section_side_sticky"' name='tall'/>
+    </div>
+  </b:if>
+</b:includable>
+```
+
+### `type` and `version`
+
+`type` lets an includable shared by several widget types adapt to the one it is in. In a Common includable:
+
+```xml
+<b:if cond='data:widget.type == "Blog"'>
+  <b:include data='post' name='post-comment-link'/>
+</b:if>
+```
+
+`version` is the `version` of `<b:widget>`, and it decides which data the widget receives, see [Posts](./post.mdx#versions).
+
+One of Blogger's theme files reads `data:widget.team` in the Profile widget, where the others read `data:this.team`, the Profile data that Google documents as true on blogs with several authors. `data:widget.team` is not documented; read the Profile data. <BloggerSource kind="observed" />
+
+## `data:this` and `data:top`
+
+Inside an includable, the data of the widget is read directly: `data:title`, `data:posts`. That data has no name of its own, so an includable that received other data, or where a variable hides a name, can not reach it. Naming it on `main` solves this. The 2017 themes call it `this`, the classic themes `top`: <BloggerSource kind="observed" />
+
+```xml {1,10}
+<b:includable id='main' var='this'>
+  <b:loop values='data:posts' var='post'>
+    <b:include data='post' name='post-full'/>
+  </b:loop>
+</b:includable>
+
+<b:includable id='post-full' var='post'>
+  …
+  <!-- data:messages is the global dictionary; the Blog widget's own message is under data:this -->
+  <p class='comment-note'><data:this.messages.blogComment/></p>
+</b:includable>
+```
+
+Inside the Blog widget, `data:messages` is still the global dictionary, which is why the note is read through `data:this`, see [Widget messages](./messages.mdx#widget-messages). `this` and `top` are names, not dictionaries: an includable called from `main` sees them because `main` declared them around it. Paths read through them in Blogger's themes include `data:this.messages.blogComment`, `data:this.postDisplay.showFeaturedImage`, `data:this.adCode`, `data:this.sharing.platforms` and, in classic themes, `data:top.showAuthor` and `data:top.deleteCommentMsg`. See [includables](../layout/includables.mdx).
+
+## `data:title`
+
+Not a dictionary either: most widgets have a `title` among their data, the title set in the Layout editor, and inside the widget `data:title` reads it. In the Blog and Header widgets it is the blog title. Outside widgets, use [`data:blog.title`](./blog.mdx) for the blog, and the `title` of an entry of `data:widgets` for another widget.
+
+```xml
+<b:includable id='main'>
+  <b:if cond='data:title != ""'>
+    <h3 class='widget-title'><data:title/></h3>
+  </b:if>
+  …
+</b:includable>
+```
+
+Because `cond` on `<b:widget>` can read the widget's own data, the title can carry settings the owner edits in the Layout editor, such as `[Mobile]` for a widget shown only to phones. <BloggerSource kind="observed" /> The pattern is in [On phones or computers](../guides/page-layouts.mdx#on-phones-or-computers).

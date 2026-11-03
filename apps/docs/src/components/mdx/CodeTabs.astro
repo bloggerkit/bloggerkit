@@ -1,0 +1,112 @@
+---
+interface Props {
+	/** Groups with the same key (including `<Tabs>`) stay on the same tab across pages. */
+	syncKey?: string;
+	/** Accessible name of the tab list. */
+	label?: string;
+}
+
+const { syncKey, label } = Astro.props;
+---
+
+{/* Code blocks shown as one, with a tab per block named by its fence `title` or language.
+    The tab list moves into the visible block's header. Without JS the blocks stack */}
+<div
+	class="group/tabs my-5 flex flex-col gap-4 [&>figure]:my-0 data-ready:**:data-code-caption:hidden data-ready:**:data-code-icon:hidden"
+	data-code-tabs
+	data-sync-key={syncKey}
+>
+	{/* Keep empty: the script fills it */}
+	<div
+		class="not-content relative -ms-2.5 me-2 hidden h-full min-w-0 flex-1 overflow-x-auto overscroll-x-contain scrollbar-none group-data-ready/tabs:flex"
+		role="tablist"
+		aria-label={label}
+	></div>
+	<slot />
+</div>
+
+<script>
+	import { onPage } from '@/scripts/page';
+	import { setupTabs } from '@/scripts/tabs';
+
+	// Fade the tab list edges where tabs overflow
+	function fadeEdges(list: HTMLElement) {
+		const start = list.scrollLeft > 1;
+		const end = list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
+		list.style.maskImage =
+			start || end
+				? `linear-gradient(to right, ${start ? 'transparent, #000 2.5rem' : '#000'}, ${end ? '#000 calc(100% - 2.5rem), transparent' : '#000'})`
+				: '';
+	}
+
+	onPage((signal) => {
+		document
+			.querySelectorAll<HTMLElement>('[data-code-tabs]')
+			.forEach((root, n) => {
+				const list = root.querySelector<HTMLElement>(':scope > [role=tablist]');
+				const panels = [
+					...root.querySelectorAll<HTMLElement>(':scope > [data-code]'),
+				];
+				if (!list || panels.length === 0) {
+					return;
+				}
+				setupTabs({
+					list,
+					panels,
+					labels: panels.map(
+						(panel, i) =>
+							panel.querySelector('[data-code-title]')?.textContent?.trim() ||
+							panel.getAttribute('data-language') ||
+							`${i + 1}`,
+					),
+					baseId: root.id || `code-tabs-${n + 1}`,
+					syncKey: root.getAttribute('data-sync-key') ?? undefined,
+					tabClass:
+						"relative flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary after:opacity-0 after:transition-opacity after:content-[''] hover:text-foreground focus-visible:ring-2 focus-visible:ring-border focus-visible:ring-inset aria-selected:text-foreground aria-selected:after:opacity-100",
+					// Prepend a copy of the block's language icon
+					decorate: (tab, i) => {
+						const icon = panels[i]
+							.querySelector('[data-code-icon]')
+							?.cloneNode(true);
+						if (icon instanceof SVGElement) {
+							icon.removeAttribute('data-code-icon');
+							tab.append(icon);
+						}
+					},
+					// Move the tab list into the selected block's header, keeping focus and scroll position
+					onSelect: (index) => {
+						const actions = panels[index].querySelector('[data-code-actions]');
+						const header = actions?.parentElement;
+						if (!actions || !header) {
+							return;
+						}
+						const focused = list.contains(document.activeElement)
+							? document.activeElement
+							: null;
+						const { scrollLeft } = list;
+						header.insertBefore(list, actions);
+						list.scrollLeft = scrollLeft;
+						if (focused instanceof HTMLElement) {
+							focused.focus({ preventScroll: true });
+						}
+						// Center the selected tab, clear of the edge fades
+						const tab = list.querySelector<HTMLElement>('[aria-selected=true]');
+						if (tab) {
+							list.scrollLeft =
+								tab.offsetLeft - (list.clientWidth - tab.offsetWidth) / 2;
+						}
+						fadeEdges(list);
+					},
+					signal,
+				});
+				list.addEventListener('scroll', () => fadeEdges(list), {
+					passive: true,
+					signal,
+				});
+				const resize = new ResizeObserver(() => fadeEdges(list));
+				resize.observe(list);
+				signal.addEventListener('abort', () => resize.disconnect());
+				root.setAttribute('data-ready', '');
+			});
+	});
+</script>

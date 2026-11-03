@@ -1,0 +1,199 @@
+---
+import Check from '@lucide/astro/icons/check';
+import Copy from '@lucide/astro/icons/copy';
+import ListIndentDecrease from '@lucide/astro/icons/list-indent-decrease';
+import ListOrdered from '@lucide/astro/icons/list-ordered';
+import TextAlignJustify from '@lucide/astro/icons/text-align-justify';
+import TextWrap from '@lucide/astro/icons/text-wrap';
+import X from '@lucide/astro/icons/x';
+import LucideIcon from '@/components/ui/LucideIcon.astro';
+import { getCodeIcon } from '@/lib/ui/code-icons';
+
+interface Props {
+	/** Plain code, shown without highlighting. Defaults to the slot. */
+	code?: string;
+	/** Sets the header icon and the tab name in `<CodeTabs>`. */
+	lang?: string;
+	title?: string;
+	/** A Simple Icons slug or Lucide icon name. Overrides the language icon. */
+	icon?: string;
+	/** `false` hides line numbers. A number sets the first one. */
+	lineNumbers?: boolean | number;
+	/** Start with lines wrapped. Readers can toggle it. */
+	wrap?: boolean;
+	/** Extra `<pre>` attributes, such as Shiki's classes and colors. */
+	pre?: Record<string, unknown>;
+}
+
+/**
+ * The frame of every code block: a header with icon, title and buttons, then the code.
+ * It doesn't highlight. Pass highlighted HTML in the slot, or plain code in `code` or the slot.
+ * Fence options are parsed in `src/integrations/shiki.ts`. Styles are in `src/styles/code-blocks.css`.
+ */
+const {
+	code,
+	lang: langProp,
+	title,
+	icon: iconName,
+	lineNumbers: lineNumbersProp = true,
+	wrap = false,
+	pre = {},
+} = Astro.props;
+
+const escapeHtml = (text: string) =>
+	text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+// Wrap plain code in `.line` spans like Shiki, so line numbers, wrapping and copy work the same
+const plain = (html: string) =>
+	`<code>${html
+		.replace(/^\n+|\s+$/g, '')
+		.split('\n')
+		.map((line) => `<span class="line">${line}</span>`)
+		.join('\n')}</code>`;
+
+// The slot is a whole `<pre>` (Astro's `<Code>`), the `<code>` inside one (from `Pre`), or plain text
+const preAttributes: Record<string, unknown> = { ...pre };
+let inner: string;
+if (code !== undefined) {
+	inner = plain(escapeHtml(code));
+} else {
+	const html = (await Astro.slots.render('default')).trim();
+	const whole = /^<pre\b([^>]*)>([\s\S]*)<\/pre>$/.exec(html);
+	if (whole) {
+		for (const [, name, value] of whole[1].matchAll(/([\w:-]+)="([^"]*)"/g)) {
+			preAttributes[name] ??= value;
+		}
+		inner = whole[2];
+	} else {
+		inner = /^<code\b/.test(html) ? html : plain(html);
+	}
+}
+const lang =
+	langProp ??
+	(typeof preAttributes['data-language'] === 'string'
+		? preAttributes['data-language']
+		: '');
+const { class: preClass, style: preStyle, ...otherAttributes } = preAttributes;
+const lineOffset =
+	typeof lineNumbersProp === 'number' ? lineNumbersProp - 1 : undefined;
+// Shiki's styles are a string (raw `<pre>`) or an object (MDX). Add the line offset to either
+const style =
+	preStyle !== null && typeof preStyle === 'object'
+		? {
+				...preStyle,
+				...(lineOffset !== undefined && { '--line-start': lineOffset }),
+			}
+		: [preStyle, lineOffset !== undefined && `--line-start:${lineOffset}`]
+				.filter(Boolean)
+				.join(';') || undefined;
+// Keep `code-block` once and drop Astro's unused `astro-code*` classes, like `shiki.ts` does for fences
+const classes = new Set([
+	'code-block',
+	...String(preClass ?? '')
+		.split(/\s+/)
+		.filter((name) => name && !name.startsWith('astro-code')),
+]);
+
+const icon = getCodeIcon(lang, iconName);
+const lineNumbers = lineNumbersProp !== false;
+// Each button stacks its two state icons in one grid cell and cross-fades them
+const button =
+	'grid size-7 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&_svg]:col-start-1 [&_svg]:row-start-1 [&_svg]:size-3.5 [&_svg]:transition-[opacity,scale,rotate] [&_svg]:duration-200 [&_svg]:ease-out motion-reduce:[&_svg]:transition-none';
+---
+
+<figure
+	dir="ltr"
+	class="group/code not-content relative my-5 overflow-hidden rounded-xl border border-border bg-code text-sm"
+	data-code
+	data-language={lang || undefined}
+	data-line-numbers={lineNumbers ? '' : undefined}
+	data-line-sticky
+	data-line-wrapped={wrap ? '' : undefined}
+>
+	<div class="flex h-9.5 items-center gap-2 border-b border-border bg-card px-4 text-muted-foreground">
+		{
+			icon.kind === 'brand' ? (
+				<svg viewBox="0 0 24 24" fill="currentColor" class="size-3.5 shrink-0" aria-hidden="true" data-code-icon>
+					<path d={icon.icon.path} />
+				</svg>
+			) : (
+				<LucideIcon name={icon.name} size={14} class="shrink-0" data-code-icon />
+			)
+		}
+		{
+			title ? (
+				<figcaption class="min-w-0 flex-1 truncate" data-code-title data-code-caption>
+					{title}
+				</figcaption>
+			) : (
+				<span class="flex-1" data-code-caption />
+			)
+		}
+		<div class="-me-2.5 flex shrink-0 gap-0.5 print:hidden" data-code-actions>
+			<button
+				type="button"
+				class={button}
+				aria-pressed={lineNumbers ? 'true' : 'false'}
+				aria-label="Line numbers"
+				title={lineNumbers ? 'Hide line numbers' : 'Show line numbers'}
+				data-code-line-numbers
+			>
+				<ListIndentDecrease
+					class="scale-50 opacity-0 group-data-line-numbers/code:scale-100 group-data-line-numbers/code:opacity-100"
+					aria-hidden="true"
+				/>
+				<ListOrdered
+					class="group-data-line-numbers/code:scale-50 group-data-line-numbers/code:opacity-0"
+					aria-hidden="true"
+				/>
+			</button>
+			<button
+				type="button"
+				class={button}
+				aria-pressed={wrap ? 'true' : 'false'}
+				aria-label="Wrap lines"
+				title={wrap ? 'Disable line wrapping' : 'Enable line wrapping'}
+				data-code-wrap
+			>
+				<TextAlignJustify
+					class="scale-50 opacity-0 group-data-line-wrapped/code:scale-100 group-data-line-wrapped/code:opacity-100"
+					aria-hidden="true"
+				/>
+				<TextWrap
+					class="group-data-line-wrapped/code:scale-50 group-data-line-wrapped/code:opacity-0"
+					aria-hidden="true"
+				/>
+			</button>
+			<button type="button" class={button} aria-label="Copy code" title="Copy code" data-code-copy>
+				<Copy
+					class="in-data-copied:scale-50 in-data-copied:opacity-0 in-data-copy-failed:scale-50 in-data-copy-failed:opacity-0"
+					aria-hidden="true"
+				/>
+				<Check
+					class="scale-50 -rotate-45 opacity-0 in-data-copied:scale-100 in-data-copied:rotate-0 in-data-copied:opacity-100"
+					aria-hidden="true"
+				/>
+				<X
+					class="scale-50 -rotate-45 opacity-0 in-data-copy-failed:scale-100 in-data-copy-failed:rotate-0 in-data-copy-failed:opacity-100"
+					aria-hidden="true"
+				/>
+			</button>
+		</div>
+	</div>
+	{/* Scrolls past 600px. The `<pre>` never scrolls, so the sticky line numbers attach here */}
+	<div
+		class="max-h-150 overflow-auto py-3.5 print:max-h-none print:overflow-visible text-meta leading-[1.7] focus-visible:ring-2 focus-visible:ring-border focus-visible:outline-none focus-visible:ring-inset group-data-line-wrapped/code:overflow-x-hidden"
+		tabindex="0"
+		role="region"
+		aria-label={title ? `Code: ${title}` : 'Code'}
+	>
+		<pre
+			class:list={[
+				[...classes],
+				'm-0 w-max min-w-full overflow-visible! bg-transparent! p-0 group-data-line-wrapped/code:w-auto group-data-line-wrapped/code:wrap-break-word group-data-line-wrapped/code:whitespace-pre-wrap print:w-auto print:wrap-break-word print:whitespace-pre-wrap',
+			]}
+			style={style}
+			{...otherAttributes}
+			set:html={inner}
+		/>
+	</div>
+</figure>

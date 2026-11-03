@@ -1,0 +1,51 @@
+---
+import ArrowLeft from '@lucide/astro/icons/arrow-left';
+import ArrowRight from '@lucide/astro/icons/arrow-right';
+import type { PageLink } from '@/lib/types';
+
+interface Props {
+	prev?: PageLink;
+	next?: PageLink;
+}
+
+/** A link into another topic also shows that topic's name. WebMCP tools read `data-pagination-title`. */
+const { prev, next } = Astro.props;
+const card =
+	'group/page flex min-w-0 flex-col gap-1 rounded-lg border border-border px-4 py-3 no-underline transition-colors hover:border-foreground/20 hover:bg-accent focus-visible:ring-2 focus-visible:ring-border focus-visible:outline-none';
+const label =
+	'flex items-center gap-1.5 text-meta leading-4 text-muted-foreground';
+const title = 'line-clamp-2 text-sm leading-5 font-medium text-foreground';
+const topic = 'truncate before:me-1.5 before:content-["·"]';
+const arrow = 'shrink-0 transition-transform motion-reduce:transition-none';
+---
+
+<nav class="mt-12 grid print:hidden gap-3 sm:grid-cols-2 sm:gap-4" aria-label="Previous and next pages">
+	{
+		prev && (
+			<a href={prev.url} rel="prev" class={card}>
+				<span class={label}>
+					<ArrowLeft size={14} class:list={[arrow, 'group-hover/page:-translate-x-0.5']} aria-hidden="true" />
+					Previous
+					{prev.topic && <span class={topic}>{prev.topic}</span>}
+				</span>
+				<span class={title} data-pagination-title>
+					{prev.title}
+				</span>
+			</a>
+		)
+	}
+	{
+		next && (
+			<a href={next.url} rel="next" class:list={[card, 'items-end text-end sm:col-start-2']}>
+				<span class={label}>
+					{next.topic && <span class:list={[topic, 'order-first after:ms-1.5 after:content-["·"] before:hidden']}>{next.topic}</span>}
+					Next
+					<ArrowRight size={14} class:list={[arrow, 'group-hover/page:translate-x-0.5']} aria-hidden="true" />
+				</span>
+				<span class={title} data-pagination-title>
+					{next.title}
+				</span>
+			</a>
+		)
+	}
+</nav>

@@ -1,0 +1,166 @@
+---
+title: Image
+description: The Image widget, which shows one image from a URL or an upload, with an optional caption and link.
+published: 2026-10-26
+---
+
+The `Image` widget holds one image, given as a URL or uploaded from the computer, with an optional link around it and an optional caption under it. Google's documentation calls it the "Picture" widget. Because the owner can change the image without touching the theme, themes also use it for logos, favicons and share images.
+
+## Quick example
+
+An "about" block for the footer: a logo, a heading and the caption as a short description.
+
+<CodeTabs>
+
+```xml title="theme.xml" {13}
+<b:widget id='Image21' locked='true' title='About us' type='Image' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='caption'>We write about Blogger themes.</b:widget-setting>
+    <b:widget-setting name='displayHeight'>150</b:widget-setting>
+    <b:widget-setting name='displayUrl'>https://blogger.googleusercontent.com/img/b/R29vZ2xl/…/s150/logo.png</b:widget-setting>
+    <b:widget-setting name='displayWidth'>150</b:widget-setting>
+    <b:widget-setting name='link'/>
+    <b:widget-setting name='sectionWidth'>150</b:widget-setting>
+    <b:widget-setting name='shrinkToFit'>true</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:class name='footer-about'/>
+    <img class='footer-logo' expr:alt='data:title' expr:src='resizeImage(data:sourceUrl, 64, "1:1")' height='64' loading='lazy' width='64'/>
+    <h2><data:title/></h2>
+    <b:if cond='data:caption'>
+      <p><data:caption/></p>
+    </b:if>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget Image footer-about' data-version='2' id='Image21'>
+  <img alt='About us' class='footer-logo' height='64' loading='lazy' src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/…/w64-h64-p-k-no-nu/logo.png' width='64'/>
+  <h2>About us</h2>
+  <p>We write about Blogger themes.</p>
+</div>
+```
+
+</CodeTabs>
+
+`data:sourceUrl` is a plain string, but [`resizeImage`](../expressions/functions.mdx) accepts it when it is a Google-hosted image URL. Other URLs come back unchanged.
+
+## Placement and limits
+
+|                     |                                                                                 | Source                            |
+| ------------------- | ------------------------------------------------------------------------------- | --------------------------------- |
+| Type                | `Image`                                                                         | <BloggerSource kind="official" /> |
+| Per blog            | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) |                                   |
+| Placement           | Any section                                                                     | <BloggerSource kind="observed" /> |
+| Locked              | Not usually                                                                     | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                        | <BloggerSource kind="observed" /> |
+| Classic mobile view | Hidden by default                                                               | <BloggerSource kind="official" /> |
+| Compatibility       | Every theme except Mobile Default 2010 and Dynamic mobile                       | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting         | Values          | Data                     | Meaning                                               | Source                            |
+| --------------- | --------------- | ------------------------ | ----------------------------------------------------- | --------------------------------- |
+| `displayUrl`    | image URL       | `sourceUrl`, `sourceSet` | The image                                             | <BloggerSource kind="observed" /> |
+| `displayWidth`  | number          | `width`                  | Display width                                         | <BloggerSource kind="observed" /> |
+| `displayHeight` | number          | `height`                 | Display height                                        | <BloggerSource kind="observed" /> |
+| `sectionWidth`  | number          | `sectionWidth`           | Section width when the image was saved. Legacy        | <BloggerSource kind="observed" /> |
+| `shrinkToFit`   | `true`, `false` | `shrinkToFit`            | "Shrink to fit": scale the image to the section width | <BloggerSource kind="observed" /> |
+| `link`          | URL, or empty   | `link`                   | The link around the image                             | <BloggerSource kind="observed" /> |
+| `caption`       | text, or empty  | `caption`                | The text under the image                              | <BloggerSource kind="observed" /> |
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- An Image widget written with no settings saves, with none added and an empty title. One written with settings needs all five of `displayUrl`, `displayWidth`, `displayHeight`, `sectionWidth` and `shrinkToFit`, or it is refused "Required field must not be blank"; an empty `shrinkToFit` counts as missing. `link` and `caption` are then added empty.
+- `displayUrl` must be a URL: `not a url` is refused "URL is malformed".
+- `displayWidth` must be 1 or more, "Must be at least 1"; `1000000` is kept.
+- `caption` keeps 600 characters.
+
+Blogger stores `link` as typed, without checking it. A relative value such as `/https://…` makes a broken link, and a theme may use the field for any short text it reads itself. <BloggerSource kind="observed" />
+
+## Widget data
+
+Google lists `title`, `sourceUrl`, `width`, `height` and `caption`.
+
+| Field          | V1  | V2  | Type    | Holds                                                                                              | Source                            |
+| -------------- | --- | --- | ------- | -------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `title`        | ✓   | ✓   | string  | The widget title, up to 100 characters. The built-in markup also uses it as the `alt` of the image | <BloggerSource kind="observed" /> |
+| `sourceUrl`    | ✓   | ✓   | string  | The image URL, as a plain string                                                                   | <BloggerSource kind="official" /> |
+| `width`        | ✓   | ✓   | number  | Display width, 0 to 300                                                                            | <BloggerSource kind="official" /> |
+| `height`       | ✓   | ✓   | number  | Display height, 0 to 300                                                                           | <BloggerSource kind="official" /> |
+| `caption`      | ✓   | ✓   | string  | The caption                                                                                        | <BloggerSource kind="official" /> |
+| `link`         | ✓   | ✓   | string  | The link, "Link" in the editor                                                                     | <BloggerSource kind="observed" /> |
+| `shrinkToFit`  | ✓   | ✓   | boolean | The "Shrink to fit" option. Set it before uploading                                                | <BloggerSource kind="observed" /> |
+| `sectionWidth` | ✓   | ✓   | number  | The section width, `-1` without an image. Refreshed only when the widget is saved again            | <BloggerSource kind="observed" /> |
+| `sourceSet`    |     | ✓   | string  | A ready `srcset` value with the widths 72w, 128w, 220w, 400w, 640w, 800w, 1024w, 1280w and 1600w   | <BloggerSource kind="observed" /> |
+
+## Built-in includables
+
+| Includable | V1  | V2  | Renders                                                          | Source                            |
+| ---------- | --- | --- | ---------------------------------------------------------------- | --------------------------------- |
+| `main`     | ✓   | ✓   | Version 1: everything. Version 2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`  |     | ✓   | The image, its link and the caption                              | <BloggerSource kind="observed" /> |
+
+- **`content`, version 2.** `div.widget-content` holding the image `img#IMAGE_ID_img`, with `alt` from `data:title`, `width`, `height`, and `srcset` from `data:sourceSet` when it is set. The image is wrapped in a link only when `data:link` is not empty, through a `b:tag` with a `cond`. Then a `br`, and `span.caption` when there is a caption.
+- **`main`, version 1.** The same markup in one includable, with an `h2` title, without `srcset`, and with the obsolete `quickedit` include.
+
+Blogger's themes keep these includables as they are. <BloggerSource kind="observed" />
+
+## Writing your own markup
+
+### Favicons from an Image widget
+
+An Image widget in a head section lets the owner replace the favicon, or the share image, without editing the theme: one upload gives every icon size through `resizeImage(data:sourceUrl, 32, "1:1")` and the like. A `<b:section>` can not be written directly in `<head>`, and the wrappers of the section and the widget have to be hidden there, see [Sections that render no wrapper](../layout/sections.mdx#sections-that-render-no-wrapper). The pattern, those wrappers and the fix for uploads stored as protocol-relative URLs, `//…`, are on [Favicon](../guides/head-and-seo.mdx#favicon), [Widgets in the head](../guides/head-and-seo.mdx#widgets-in-the-head) and [Protocol-relative URLs](../guides/images.mdx#protocol-relative-urls).
+
+### The title as an option
+
+The title can carry a tag that changes the output, here `[BlogTitle]` to print the blog name instead of the widget title:
+
+```xml
+<b:with value='data:title contains "[BlogTitle]" ? data:blog.title : data:title' var='heading'>
+  <h2><data:heading/></h2>
+</b:with>
+```
+
+### An uploader in the Layout editor
+
+A widget whose `cond` is `data:view.isLayoutMode` exists only in the Layout editor. An Image widget there gives the owner a quick way to upload a file and copy its Blogger URL, and renders nothing on the blog:
+
+```xml
+<b:widget cond='data:view.isLayoutMode' id='Image61' locked='true' title='Image Uploader' type='Image' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='caption'><![CDATA[Upload an image, save, then edit again to copy its URL.]]></b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'/>
+  <b:includable id='content'/>
+</b:widget>
+```
+
+### Several images as one block
+
+A row of Image widgets can share one includable that each of them calls, for a carousel or a gallery. The markup lives in a Common includable, and each widget only points to it:
+
+```xml {6}
+<b:widget id='Image01' locked='true' title='Slide 1' type='Image' version='2' visible='true'>
+  <b:includable id='main'><b:include name='slide'/></b:includable>
+  <b:includable id='content'/>
+</b:widget>
+
+<b:includable id='slide'>
+  <figure class='slide'>
+    <b:tag cond='data:link' expr:href='data:link' name='a'>
+      <img expr:alt='data:title' expr:src='resizeImage(data:sourceUrl, 1280, "16:9")' expr:srcset='data:sourceSet' loading='lazy' sizes='100vw'/>
+    </b:tag>
+    <b:if cond='data:caption'><figcaption><data:caption/></figcaption></b:if>
+  </figure>
+</b:includable>
+```
+
+The second `b:includable` sits in `<b:defaultmarkup type='Common'>`. A Common includable called from a widget reads that widget's data. <BloggerSource kind="observed" />
+
+## Things to know
+
+- **Uploads.** Uploaded images go to the photo album of the blog.
+- **Limits.** The Layout editor offers `width` and `height` up to 300, but the theme file keeps a `displayWidth` of `1000000`. <BloggerSource kind="observed" /> No limit is documented for the link.
+- **Legacy.** `sectionWidth` is left from fixed-width themes. `quickedit` in the version 1 `main` is obsolete.

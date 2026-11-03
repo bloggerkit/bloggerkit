@@ -1,0 +1,132 @@
+---
+title: b:message and b:param
+description: Print one of Blogger's interface texts in the language of the blog, with the values it needs.
+level: intermediate
+published: 2026-10-26
+---
+
+Blogger has a dictionary of interface texts, such as "Home", "Share" or "Post a Comment", translated into the language of each blog. `<b:message>` prints one of them. Some of these texts have a slot for a value, a number of comments or the name of an author: `<b:param>` fills it.
+
+<CodeTabs>
+
+```xml title="The title of the comments of a post"
+<h3 class='comments-title'>
+  <b:if cond='data:post.numberOfComments > 0'>
+    <b:message name='messages.numberOfComments'>
+      <b:param expr:value='data:post.numberOfComments' name='numComments'/>
+    </b:message>
+  <b:else/>
+    <data:messages.postAComment/>
+  </b:if>
+</h3>
+```
+
+```html title="Rendered on an English blog, for a post with 4 comments"
+<h3 class='comments-title'>
+  4 comments
+</h3>
+```
+
+```html title="Rendered on a French blog"
+<h3 class='comments-title'>
+  4 commentaires
+</h3>
+```
+
+</CodeTabs>
+
+The message picks the right form of the word for the number: `1 comment`, `4 comments`. A post without comments gets an invitation instead.
+
+Google does not document `<b:message>` and `<b:param>`. Blogger's own themes use them in their comments and in the Attribution widget. <BloggerSource kind="observed" />
+
+## Attributes
+
+| Tag         | Attribute    | Required             | Value            | Default | Description                          | Source                            |
+| ----------- | ------------ | -------------------- | ---------------- | ------- | ------------------------------------ | --------------------------------- |
+| `b:message` | `name`       | Yes                  | `messages.KEY`   |         | The message to print                 | <BloggerSource kind="observed" /> |
+| `b:message` | `expr:name`  | No                   | expression       |         | The message, computed                | <BloggerSource kind="observed" /> |
+| `b:param`   | `name`       | For named parameters | a parameter name |         | Which slot of the message this fills | <BloggerSource kind="observed" /> |
+| `b:param`   | `value`      | Yes                  | text             |         | The value, as fixed text             | <BloggerSource kind="observed" /> |
+| `b:param`   | `expr:value` | No                   | expression       |         | The value, computed                  | <BloggerSource kind="observed" /> |
+
+### `name` of `<b:message>`
+
+The path of the message without `data:`: `name='messages.numberOfComments'` prints `data:messages.numberOfComments`. Every key, with its English text and its parameters, is listed in [data:messages](../data/messages.mdx).
+
+It is normally a fixed name. With `expr:name`, it is the result of an expression, a string such as `"messages.share"`. <BloggerSource kind="observed" />
+
+### `name` and `value` of `<b:param>`
+
+`<b:param>` gives one value to the message around it. Its `name` is the slot it fills, a name the message defines, such as `numComments` or `authorName`. Its value is almost always a data, so it is written with `expr:value`:
+
+```xml title="The author line of a comment"
+<b:message name='messages.authorSaid'>
+  <b:param expr:value='data:comment.author' name='authorName'/>
+</b:message>
+```
+
+A `value` without the prefix is fixed text: `<b:param name='numComments' value='3'/>`.
+
+## Named and positional parameters
+
+Most messages that take values name their slots, and each `<b:param>` gives both a `name` and a value. A few messages take their values in order instead, and Blogger's own Attribution widget gives those without a `name`:
+
+<CodeTabs>
+
+```xml title="Credits for the images of a theme"
+<p class='image-credits'>
+  <b:message name='messages.templateImagesBy'>
+    <b:param value='Jane'/>
+  </b:message>
+</p>
+```
+
+```html title="Rendered"
+<p class='image-credits'>
+  Theme images by Jane
+</p>
+```
+
+</CodeTabs>
+
+`poweredByBloggerLink`, given one value, builds its link itself: `Powered by <a href='https://www.blogger.com' target='_blank'>Blogger</a>`. <BloggerSource kind="observed" />
+
+A `<b:param>` without `name` also works for messages with named slots: `postedByAuthor` and `byAuthor` print the value given without a name, `Posted by Ann`. Whether Blogger reads the names at all, or only the order, is not confirmed. <BloggerSource kind="observed" />
+
+The messages that take parameters, with their English text, their parameters and whether Blogger's own themes use them, are listed in [Messages with parameters](../data/messages.mdx#messages-with-parameters). Give the named parameters with their `name`: `postedByAuthor` takes `authorName`, and also works with the value given without a name.
+
+Four of the linked messages failed when tested: `templateImagesByLink` given two values without names, `authorSaidWithLink`, `byAuthorLink` and `postedByAuthorLink` were each a [markup error](../basics/saving.mdx#markup-errors). <BloggerSource kind="observed" /> Blogger's own themes use `authorSaidWithLink` with `authorName` and `authorUrl`; how to give these messages their values so that they render is not confirmed. Until it is, use the message without `Link` and build the link in the theme.
+
+## Output
+
+`<b:message>` prints the text of the message in the language of the blog, with the values in their slots. For a message without parameters, it prints the same text as a data tag or `<b:eval>`, see [Printing a message](../data/messages.mdx#printing-a-message). <BloggerSource kind="observed" />
+
+A message with parameters needs `<b:message>`: a data tag or `<b:eval>` has no way to give it values. The escaping properties, such as `.escaped`, apply to messages without parameters, not to these. <BloggerSource kind="observed" />
+
+## Placement
+
+- `<b:message>` contains only `<b:param>` tags, with whitespace between them. Text or an element such as `<i>` inside it saves, and is a markup error when the message renders.
+- `<b:message>` with no `<b:param>` is valid, and can be self-closed. Without `name`, it is a markup error.
+- A name that is not a message is an error when the tag is reached, and nothing when it is not: outside widgets, the page fails with a 500 error, `Invalid message name 'messages.nothing'`; in a widget, the widget fails.
+- `<b:param>` is only valid directly inside `<b:message>`. Written elsewhere, it saves, and then fails: in a widget, with `The tag 'param' is not a known Blogger tag.`; outside widgets, every page fails with a 500 error, `Unknown runtime binding: param in widget`.
+- `<b:param>` is empty and self-closed. A space between an opening and a closing tag is fine. Without `value` or `expr:value`, it is a markup error.
+- `<b:message>` works anywhere markup renders, including the text of a `<script>` outside CDATA. Inside a `<![CDATA[ ]]>` section it is text.
+- It is a tag, so it can not be written in an attribute. For a message in an attribute, read a message without parameters with `expr:`, `expr:aria-label='data:messages.share'`.
+
+<BloggerSource kind="observed" />
+
+A message can go into JSON like any text. A theme can give its scripts the comment count of a post already worded:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<script type='application/json'>{"comments":{"count":<data:post.numberOfComments/>,"title":"<b:message name='messages.numberOfComments'><b:param expr:value='data:post.numberOfComments' name='numComments'/></b:message>"}}</script>
+```
+
+```html title="Rendered"
+<script type='application/json'>{"comments":{"count":4,"title":"4 comments"}}</script>
+```
+
+</CodeTabs>
+
+The text `<b:message>` prints can not be escaped, so this is only safe for messages whose translations contain no quote.

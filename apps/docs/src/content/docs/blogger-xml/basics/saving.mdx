@@ -1,0 +1,648 @@
+---
+title: Saving a theme
+description: What Blogger checks when a theme is saved, the mistakes that make it refuse the file, the ones that fail later, and how it rewrites the theme it keeps.
+level: beginner
+published: 2026-10-26
+---
+
+Clicking **Save** in Edit HTML sends the whole theme to Blogger. Blogger parses it, checks part of it, and then does one of two things:
+
+- it **refuses** the file: an error message appears in a notice at the bottom of the editor, and the blog keeps its previous theme. Blogger reports only the first error it finds;
+- it **accepts** the file, and stores a rewritten copy of it. Reopen Edit HTML and you see that copy, not exactly what you pasted. Some content is deleted on the way, without a message.
+
+An accepted theme is not a working theme. Saving checks the XML and the layout, not the logic: a missing attribute or an invalid expression saves, and fails only when a page reaches it. Outside a widget, the whole page fails with a 500 error that names the problem. Inside a widget, only the widget fails, and the page shows a comment in its place: `<!--Failed to render gadget 'HTML1'. There was an error processing the markup. -->`. This guide calls such a failure a [markup error](#markup-errors). <BloggerSource kind="observed" />
+
+This page lists what is refused, what is saved but deleted, and what saves but fails when rendered, then shows each rewrite, before and after. Uploading a file with **Restore** goes through the same process. <BloggerSource kind="observed" />
+
+## What Blogger checks
+
+| Check                                                           | In short                                                             |
+| --------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [Declaration and doctype](#the-xml-declaration-and-the-doctype) | The declaration first, an uppercase `<!DOCTYPE`, both optional       |
+| [Well-formed XML](#well-formed-xml)                             | Closed tags, quoted attribute values, escaped `&` and `<`            |
+| [Entities](#entities)                                           | Five named entities and numeric references, nothing else             |
+| [The root element](#the-root-element)                           | Its `b:` attributes are not checked                                  |
+| [Blogger's elements](#bloggers-elements)                        | Unknown `b:` elements save                                           |
+| [The skins](#the-skins)                                         | Exactly one `<b:skin>`, outside `<body>`, text only                  |
+| [Layout nesting](#layout-nesting)                               | Sections, widgets and default markups in their places                |
+| [Content in one-line tags](#empty-elements)                     | Saved; the content is dropped or breaks the tag                      |
+| [Required attributes](#required-attributes)                     | Only ids, widget types and a few names are checked when saving       |
+| [Widget types and ids](#widget-types-and-ids)                   | A known type, an id made of the type and a number up to 1000, unique |
+| [Section ids](#section-ids)                                     | Not blank, no space at either end, unique                            |
+| [`expr:` forms](#expr-forms-of-attributes)                      | Deleted on widgets, read when rendering elsewhere                    |
+| [Expressions](#expressions)                                     | Not checked: an invalid one fails when reached                       |
+| [Theme Designer definitions](#theme-designer-definitions)       | Well-formed, unique, typed `<Group>` and `<Variable>` tags           |
+
+A refused check refuses the whole file: there is no partial save. <BloggerSource kind="observed" />
+
+### The XML declaration and the doctype
+
+A theme starts with these two lines: <BloggerSource kind="observed" />
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+```
+
+Both are optional. A theme without the declaration saves, and Blogger adds it back. A theme without a doctype saves, and Blogger adds none. <BloggerSource kind="observed" />
+
+| Rule                                                     | Refused                                                                      |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| The declaration is the very first characters of the file | A byte order mark, a space, a blank line, a comment or the doctype before it |
+| There is one declaration                                 | A second one                                                                 |
+| It has only `version`, `encoding` and `standalone`       | Any other pseudo-attribute, `foo="1"`                                        |
+| The doctype keyword is uppercase                         | `<!doctype html>`                                                            |
+| There is one doctype, before the root element            | A second doctype, `<!DOCTYPE html>` in the body                              |
+
+<BloggerSource kind="observed" />
+
+The values are not checked. `version="1.1"`, `encoding="ISO-8859-1"`, `encoding="utf-8"`, no encoding, `standalone="yes"` and single quotes all save, and the declaration is always stored as `<?xml version="1.0" encoding="UTF-8" ?>`. The doctype's root name is not checked either: `<!DOCTYPE foo>` saves and is stored as `<!DOCTYPE html>`, and a public or system identifier is dropped. A doctype after a blank line, or on the same line as the declaration, saves too. See [Declaration and doctype](#declaration-and-doctype). <BloggerSource kind="observed" />
+
+A refused declaration or doctype shows the parser's message, with a line and a column, such as `org.xml.sax.SAXParseException; lineNumber: 1; columnNumber: 1; Content is not allowed in prolog.` for a byte order mark, or `The markup in the document preceding the root element must be well-formed.` for `<!doctype html>`. <BloggerSource kind="observed" />
+
+### Well-formed XML
+
+The theme has to be well-formed XML. These are the mistakes that come up most, each one enough to refuse the file, with the parser's message and position: <BloggerSource kind="observed" />
+
+| Mistake                            | Example                                        | Write instead                                         |
+| ---------------------------------- | ---------------------------------------------- | ----------------------------------------------------- |
+| An element not closed              | `<br>`, `<img src='a.png'>`, `<p>One<p>Two`    | `<br/>`, `<img src='a.png'/>`, `<p>One</p><p>Two</p>` |
+| Tags closed in the wrong order     | `<b><i>x</b></i>`                              | `<b><i>x</i></b>`                                     |
+| An attribute without a value       | `<script async src='…'/>`, `<input required/>` | `async='async'`, `required='required'`                |
+| An unquoted value                  | `<div class=box>`                              | `<div class='box'>`                                   |
+| The same attribute twice           | `<a class='a' class='b'>`                      | `<a class='a b'>`                                     |
+| No space between attributes        | `<a href='/'class='home'>`                     | `<a class='home' href='/'>`                           |
+| A bare `&`                         | `href='/search?q=a&max-results=5'`             | `href='/search?q=a&amp;max-results=5'`                |
+| A `<` in an attribute value        | `cond='data:n < 3'`                            | `cond='data:n &lt; 3'`                                |
+| A `<` in text                      | `<p>a < b</p>`                                 | `<p>a &lt; b</p>`                                     |
+| `--` inside a comment              | `<!-- old -- new -->`                          | `<!-- old, new -->`                                   |
+| `<!` that starts nothing           | `<!if>`                                        | a comment, a CDATA section or text with `&lt;!`       |
+| Text or an element after `</html>` | text after `</html>`                           | everything inside the root element                    |
+| A character XML forbids            | `&#1;`, `&#0;`                                 | nothing, or a character XML allows                    |
+
+A comment after `</html>` is fine: Blogger keeps it, on the line of `</html>`. <BloggerSource kind="observed" />
+
+`>` needs no escaping, in text or in attributes: `cond='data:n > 3'` and `data:posts map (p => p.title)` are valid as written. Only `&` and `<` have to be escaped. <BloggerSource kind="observed" />
+
+Inline scripts are where `&` and `<` appear most. Wrapping the code in a commented CDATA section lets you write it as usual:
+
+```xml
+<script>/*<![CDATA[*/
+document.querySelectorAll('.post-body img').forEach((img) => {
+  if (img.width < 200 && !img.closest('a')) img.classList.add('small');
+});
+/*]]>*/</script>
+```
+
+Processing instructions other than the declaration, such as `<?editor ignore?>`, save, but Blogger removes them from the stored theme. In `<b:skin>` they are refused. <BloggerSource kind="observed" />
+
+### Entities
+
+XML defines five named entities. Any other name is an error, even one every browser knows: `&nbsp;` refuses the file with `The entity "nbsp" was referenced, but not declared.` <BloggerSource kind="observed" />
+
+| Entity   | Character | Note                                |
+| -------- | --------- | ----------------------------------- |
+| `&amp;`  | `&`       | Required for every literal `&`      |
+| `&lt;`   | `<`       | Required in attribute values        |
+| `&gt;`   | `>`       | Optional                            |
+| `&quot;` | `"`       | Optional inside single quotes       |
+| `&apos;` | `'`       | Needed for `'` inside single quotes |
+
+For every other character, use a numeric reference, decimal or hexadecimal, or the character itself, since the theme is UTF-8:
+
+| Instead of | Write                |
+| ---------- | -------------------- |
+| `&nbsp;`   | `&#160;` or `&#xA0;` |
+| `&copy;`   | `&#169;` or `©`      |
+| `&mdash;`  | `&#8212;` or `—`     |
+| `&rarr;`   | `&#8594;` or `→`     |
+
+### The root element
+
+The root element is `<html>`. Blogger does not check its name: a theme whose root is `<htm>` saves, and renders `<htm …>`. <BloggerSource kind="observed" />
+
+Its `b:` attributes are the settings of the theme, and Blogger does not check their names or their values. `b:foo='1'`, `b:layoutsVersion='4'`, `b:css='maybe'`, `b:responsive='1'` and `b:js='no'` all save, and are stored as written. What an unusual value does on the page is not confirmed, apart from these: <BloggerSource kind="observed" />
+
+- `b:css='True'` adds Blogger's stylesheet like `b:css='true'`: the value is read without regard to case;
+- `b:defaultwidgetversion='3'` gives new widgets `data-version='3'`;
+- `b:css='maybe'` and `b:layoutsVersion='4'` render the page without an error.
+
+One check depends on them: a `<b:template-skin>` is refused in a version 1 theme, one with no version attribute on `<html>`, with `template-skin only available for templates version 2 and above`. A layouts version 3 theme saves it, and Blogger's classic themes, with `b:version='2'` and no `b:layoutsVersion`, have one. Whether `b:version='2'` alone is enough to save it is not confirmed. <BloggerSource kind="observed" />
+
+Its other attributes are not checked either: like any element, `<html>` takes any HTML attribute, such as `class`, `lang`, `style`, `data-x` or `expr:dir`, and Blogger stores them sorted by name with the `b:` attributes. <BloggerSource kind="observed" />
+
+The namespace declarations are not required either. A theme without `xmlns`, or with `xmlns` alone and none of `xmlns:b`, `xmlns:data` and `xmlns:expr`, saves and works. See [Root attributes](../reference/root-attributes.mdx) for what each attribute does. <BloggerSource kind="observed" />
+
+### Blogger's elements
+
+An element with the `b:` prefix that Blogger does not know is not refused. `<b:nothing/>` saves, and renders nothing outside a widget. Inside a widget, it is not confirmed. A misspelled `<b:includeable>` or `<b:elsif>` therefore saves too, and simply does not work. <BloggerSource kind="observed" />
+
+`b:attr`, `b:case`, `b:class`, `b:comment`, `b:default`, `b:defaultmarkup`, `b:defaultmarkups`, `b:else`, `b:elseif`, `b:eval`, `b:if`, `b:include`, `b:includable`, `b:loop`, `b:message`, `b:param`, `b:section`, `b:skin`, `b:switch`, `b:tag`, `b:template-script`, `b:template-skin`, `b:widget`, `b:widget-setting`, `b:widget-settings`, `b:with`.
+
+Classic themes also have `<b:section-contents>` and `<b:variable>`, see [Classic themes](../reference/classic-themes.mdx). Names are case-sensitive, as everywhere in XML: `<b:If>` is not `<b:if>`.
+
+A known element out of its place is not a known tag to the renderer. `<b:case>` outside `<b:switch>`, or `<b:else>` outside `<b:if>`, saves, and fails in a widget with `The tag 'case' is not a known Blogger tag.` <BloggerSource kind="observed" />
+
+An attribute Blogger does not read on a `b:` element does not refuse the file. Blogger keeps it, and ignores it: `<b:if cond='data:olderPageUrl' rel='next'>` saves and behaves like a plain `<b:if>`. `<b:tag>` is different: its other attributes are rendered on the element it produces. `<b:section>` renders only `id`, `class`, placed before Blogger's own `section` class, `name` and `tag`, see [Other attributes](../layout/sections.mdx#other-attributes). <BloggerSource kind="observed" />
+
+### The skins
+
+| Rule                                         | Refused                                                                          |
+| -------------------------------------------- | -------------------------------------------------------------------------------- |
+| A theme has one `<b:skin>`                   | No `<b:skin>`, or two, even in the two branches of a `<b:if>`                    |
+| It is not in `<body>`                        | A `<b:skin>` in `<body>`: `b:skin should not appear inside of body`              |
+| A skin contains only text and CDATA sections | A `<style>` element, an XML comment, a processing instruction, any other element |
+
+<BloggerSource kind="observed" />
+
+The messages are `There should be one and only one skin in the theme, and we found: 2` and `A skin cannot contain the element: #comment. Only text and CDATA sections are accepted.` <BloggerSource kind="observed" />
+
+The content can be plain text with entities, CDATA sections, or both, read as described in [How Blogger reads the content](../styles/skin.mdx#how-blogger-reads-the-content). An empty skin, `<b:skin/>`, is accepted. Attributes of `<b:skin>` are not checked. A skin inside `<b:if cond='false'>` still counts, and still defines its variables: `data:skin.vars` reads them on every page. <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Refused"
+<b:skin>
+  <style>body { margin: 0; }</style> <!-- [!code error] -->
+</b:skin>
+```
+
+```xml title="Accepted"
+<b:skin><![CDATA[body { margin: 0; }]]></b:skin>
+```
+
+</CodeTabs>
+
+`<b:template-skin>` is checked less. A theme can have two, a comment in it is kept, and its attributes are not checked: `foo='x'` saves. Its CSS can use the skin variables with `$(name)`, but it can not declare any: `<Variable>` and `<Group>` tags written in it are plain text. It is refused only in a version 1 theme, see [The root element](#the-root-element). <BloggerSource kind="observed" />
+
+The `<b:variable>` elements of classic themes, inside their `<b:template-skin>`, are described in [Classic themes](../reference/classic-themes.mdx). [Skin](../styles/skin.mdx) covers the rest.
+
+### Layout nesting
+
+The elements that make the layout of a theme have strict places. A mistake there is handled in one of three ways: refused, saved with the content deleted, or saved and broken when rendered. <BloggerSource kind="observed" />
+
+| Element                   | Can contain                                                       | Only directly inside                             |
+| ------------------------- | ----------------------------------------------------------------- | ------------------------------------------------ |
+| `<b:section>`             | `<b:widget>`                                                      | anywhere outside `<head>`, a section or a widget |
+| `<b:widget>`              | at most one `<b:widget-settings>`, any number of `<b:includable>` | `<b:section>`                                    |
+| `<b:widget-settings>`     | `<b:widget-setting>`                                              | `<b:widget>`                                     |
+| `<b:widget-setting>`      | text, CDATA                                                       | `<b:widget-settings>`                            |
+| `<b:defaultmarkups>`      | `<b:defaultmarkup>`                                               | anywhere outside sections and widgets            |
+| `<b:defaultmarkup>`       | `<b:includable>`                                                  | `<b:defaultmarkups>`                             |
+| `<b:includable>`          | any markup                                                        | `<b:widget>` or `<b:defaultmarkup>`              |
+| `<b:message>`             | `<b:param>`                                                       | anywhere                                         |
+| `<b:elseif>`, `<b:else>`  | nothing                                                           | `<b:if>`                                         |
+| `<b:case>`, `<b:default>` | nothing                                                           | `<b:switch>`                                     |
+
+**Refused when saving.** <BloggerSource kind="observed" />
+
+- A section inside a section: `Sections may not be nested`.
+- A section in `<head>`: `b:section should not appear inside of head`.
+- A widget that is not directly in a section, in `<body>` or in a `<b:if>` inside the section: `The widget with id HTML1 is not within a section (actual parent element is: b:if.) Every widget should be in a section.`
+- Text, an HTML element, `<b:include>` or `<b:defaultmarkups>` directly in a widget: `The widget with id "HTML5" cannot contain element: "#text". A widget can only contain b:includable elements.`, with the name of what was found, `div`, `b:include` or `b:defaultmarkups`. A comment there is deleted instead.
+- Two `<b:widget-settings>` in a widget, or one inside an includable: `The widget settings in widget with id HTML5 is not valid.`
+- `<b:defaultmarkups>` in a section: `b:defaultmarkups tags can not be contained within widgets or sections.`
+- Text, an HTML element or a `<b:defaultmarkup>` in a `<b:defaultmarkup>`, or two includables with the same id in one `<b:defaultmarkup>`: `Invalid default markup for type(s) 'Common'`, with the type of the block.
+- A `<b:defaultmarkup>` without `type`: `Default Markup tags must specify the widget type ('type' attribute) value`. A type that is not a widget type, or a known one in another case, or a list with an empty part such as `'Common,'`: `Default Markup tag contained unknown widget type: label`.
+- A `<b:skin>` in `<body>`.
+
+**Saved, then deleted from the stored theme.** <BloggerSource kind="observed" />
+
+- Anything in a section that is not a widget: text, a `&#160;`, a CDATA section, a comment, an HTML element, a `<b:if>`.
+- Comments in a widget and in `<b:widget-settings>`; text and HTML elements in `<b:widget-settings>`.
+
+**Saved and kept.** Text in `<b:defaultmarkups>`, an includable directly in `<b:defaultmarkups>`, two `<b:defaultmarkups>` blocks, the same includable id in two Common blocks, where the last one wins, and `<b:widget-settings>` outside a widget. A `<b:widget-settings>` written after the includables saves, and is stored before them. A section can be inside a `<b:if>`. <BloggerSource kind="observed" />
+
+**Saved, broken when rendered.** <BloggerSource kind="observed" />
+
+- An includable outside a widget and a default markup, such as directly in `<body>`: every page that reaches it fails with a 500 error, `Unknown runtime binding: includable in widget`. In a `<b:if>` that is false, it does no harm.
+- A `<b:param>` outside `<b:message>`: every page fails with a 500 error, `Unknown runtime binding: param in widget`, or the widget with `The tag 'param' is not a known Blogger tag.`
+- An includable, a section or `<b:defaultmarkups>` inside an includable of a widget: the widget fails with `The tag 'includable' is not a known Blogger tag.`, naming the tag, `section` or `defaultmarkups`.
+
+<CodeTabs>
+
+```xml title="Written: a comment in a section"
+<b:section id='sidebar' name='Sidebar'>
+  <!-- Widgets go here -->
+</b:section>
+```
+
+```xml title="Stored"
+<b:section id='sidebar' name='Sidebar'/>
+```
+
+</CodeTabs>
+
+Comments that should stay belong outside the section.
+
+The separators of conditionals are not checked when saving: two `<b:else>`, a `<b:elseif>` after `<b:else>`, or a separator that is not a direct child of its `<b:if>` all save, and render as described in [Placement of the separators](../tags/conditionals.mdx#placement-of-the-separators). One order breaks the page: a `<b:switch>` whose first child is `<b:default>` saves, then fails with `b:switch must have 'case' element as first child`, see [Placement and matching](../tags/conditionals.mdx#placement-and-matching). A `<b:message>` with no `<b:param>` is fine. <BloggerSource kind="observed" />
+
+A section or a widget with nothing in it is fine. `<b:section id='footer'/>` is an empty area, and `<b:widget id='HTML2' type='HTML'/>` a widget that gets Blogger's built-in markup. <BloggerSource kind="observed" />
+
+### Empty elements
+
+These elements are written empty, self-closed: <BloggerSource kind="observed" />
+
+`b:attr`, `b:case`, `b:class`, `b:default`, `b:else`, `b:elseif`, `b:eval`, `b:include`, `b:param`.
+
+Content in them does not refuse the file. Blogger keeps it, and the renderer deals with it: <BloggerSource kind="observed" />
+
+| Element                                                          | Content when rendered                                         |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| `b:attr`, `b:case`, `b:class`, `b:default`, `b:else`, `b:elseif` | Dropped: `<b:else>B</b:else>C` renders `C` in the else branch |
+| `b:eval`                                                         | Ignored: the value is printed                                 |
+| `b:include`                                                      | Whitespace is fine; anything else is a markup error           |
+| `b:param`                                                        | Whitespace is fine; other content is not confirmed            |
+| A data tag, `<data:blog.title>x</data:blog.title>`               | Ignored                                                       |
+
+`<b:else></b:else>`, with nothing at all between the tags, is saved as `<b:else/>`.
+
+<CodeTabs>
+
+```xml title="Saved, fails when rendered"
+<b:include name='postMeta'>Meta</b:include> <!-- [!code error] -->
+```
+
+```xml title="Works"
+<b:include name='postMeta'/>
+```
+
+</CodeTabs>
+
+The other elements may be empty. `<b:if cond='…'/>`, `<b:loop …/>`, `<b:with …/>` and `<b:widget-settings/>` all save; they just render nothing. <BloggerSource kind="observed" />
+
+### Required attributes
+
+Only the attributes that build the layout are checked when saving. A missing one refuses the file. The others are checked when a page reaches the element: the theme saves, and the element fails then, with a markup error in a widget. In a `<b:if>` that is false, a missing attribute does no harm. <BloggerSource kind="observed" />
+
+| Element            | Required        | When it is missing                                                                   | Optional                                                                                   |
+| ------------------ | --------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `b:section`        | `id`            | Refused                                                                              | any                                                                                        |
+| `b:widget`         | `id`, `type`    | Refused; `type` only for a new widget                                                | `cond`, `locked`, `mobile`, `title`, `version`, `visible`; `pageType`, deleted when stored |
+| `b:includable`     | `id`            | Refused, also for `id=' '`                                                           | `var`                                                                                      |
+| `b:defaultmarkup`  | `type`          | Refused                                                                              |                                                                                            |
+| `b:widget-setting` | `name`          | Refused                                                                              |                                                                                            |
+| `b:if`             | `cond`          | Markup error when reached, also for `cond=''`                                        |                                                                                            |
+| `b:elseif`         | `cond`          | Markup error when reached                                                            |                                                                                            |
+| `b:switch`         | `var`           | Markup error when reached                                                            |                                                                                            |
+| `b:case`           | `value`         | Markup error when reached                                                            |                                                                                            |
+| `b:loop`           | `values`, `var` | Markup error when reached                                                            | `index`, `reverse`                                                                         |
+| `b:with`           | `value`, `var`  | Markup error when reached                                                            |                                                                                            |
+| `b:eval`           | `expr`          | Markup error when reached, also for `expr=''`                                        |                                                                                            |
+| `b:attr`           | `name`          | Markup error when reached                                                            | `cond`, `value`: without it, no attribute is added                                         |
+| `b:class`          | `name`          | Markup error when reached                                                            | `cond`                                                                                     |
+| `b:tag`            | `name`          | Markup error when reached; outside a widget, `b:tag missing required name attribute` | `cond`, any                                                                                |
+| `b:include`        | `name`          | Markup error when reached                                                            | `cond`, `data`                                                                             |
+| `b:message`        | `name`          | Markup error when reached                                                            |                                                                                            |
+| `b:param`          | `value`         | Markup error when reached                                                            | `name`: without it, parameters are taken in order                                          |
+| `b:skin`           |                 |                                                                                      | `version`                                                                                  |
+
+<BloggerSource kind="observed" />
+
+A widget already in the layout can be written without `type`: Blogger keeps the type it has. A new widget without `type` is refused: `The new widget with id "HTML5" has no type. A widget type is required when adding a new widget.` An includable without an id, or with `id=' '`, is refused with `The widget with id "HTML5" contains a b:includable element which has no id attribute. …`. `b:comment` takes `render`. `b:default`, `b:defaultmarkups`, `b:else`, `b:template-skin` and `b:widget-settings` take no attributes. A widget's `title` is optional: `<b:widget id='HTML2' type='HTML'/>` saves. <BloggerSource kind="observed" />
+
+### Widget types and ids
+
+The `type` of a widget is one of Blogger's widget types, spelled exactly, with the same capitals: <BloggerSource kind="observed" />
+
+`AdSense`, `Attribution`, `Blog`, `BlogArchive`, `BlogList`, `BlogSearch`, `BloggerButton`, `ContactForm`, `FeaturedPost`, `Feed`, `Followers`, `HTML`, `Header`, `Image`, `Label`, `LinkList`, `Navbar`, `PageList`, `PopularPosts`, `Profile`, `ReportAbuse`, `Stats`, `Subscribe`, `Text`, `TextList`, `Translate`, `Wikipedia`.
+
+`Html` is refused: `The new widget with id "HTML9" has an invalid type: Html`. `FollowByEmail`, a retired type, saves, but Blogger deletes the widget without a message. <BloggerSource kind="observed" />
+
+The `id` of a new widget is its type followed by a whole number no larger than 1000, and it is unique in the theme. The number is read like a Java integer: a sign and any Unicode decimal digits are accepted. <BloggerSource kind="observed" />
+
+| Id                                       | For a widget of type `HTML`                 |
+| ---------------------------------------- | ------------------------------------------- |
+| `HTML1`, `HTML12`, `HTML007`, `HTML1000` | Accepted: leading zeros included            |
+| `HTML-1`, `HTML+1`, `HTML١`, `HTML１`    | Accepted: a sign, a digit of another script |
+| `HTML1001`, `HTML9999`, `HTML0001001`    | Refused: the number is larger than 1000     |
+| `HTML`, `HTML+`                          | Refused: no number                          |
+| `html1`, `Html9`, `Sidebar1`             | Refused: not the exact type                 |
+| `HTML1a`, `HTML_1`, `HTML1.5`, `HTML 1`  | Refused: something other than a number      |
+
+The message is `The new widget id "HTML1001" is invalid for type: HTML`. Some types allow one or two widgets per blog, see [Limits](../reference/limits.mdx#widgets-per-type). <BloggerSource kind="observed" />
+
+Stick to ASCII digits all the same. Two widgets with the same id refuse the file, wherever they are: `More than one widget was found with id: HTML1. Widget IDs should be unique.` A widget id cannot be changed once the widget exists: a theme that renames `HTML1` to `HTML2` deletes the first widget and creates a new one. <BloggerSource kind="observed" />
+
+### Section ids
+
+A section needs an `id`, and no other section may have the same one: <BloggerSource kind="observed" />
+
+| Id                                              | Result                                                                                                      |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `''`, `' '`, a tab or a line break alone        | Refused: `One of the sections is missing the required id attribute. Every section should have a unique id.` |
+| `' a'`, `'a '`                                  | Refused: `Update failed.`, with no detail                                                                   |
+| `'a&#9;b'`, a line break inside                 | Saved, the tab or line break stored as a space, so `'a&#9;b'` and `'a b'` are the same id                   |
+| `'a'` and `'&#97;'`                             | Refused: the same id once the reference is decoded                                                          |
+| `'a'` and `'A'`                                 | Saved: ids are case-sensitive                                                                               |
+| `main`, `a b`, `a.b`, `café`, `data:blog.title` | Saved: any other character is fine                                                                          |
+
+Two sections with the same id are refused with `More than one section was found with id: s1. Section IDs should be unique.` A no-break space, `&#160;`, is not whitespace here: `'&#160;b'` saves and keeps it. <BloggerSource kind="observed" />
+
+Google asks for letters and numbers. <BloggerSource kind="official" /> Blogger's own themes also use `_` and `-`, as in `page_body` and `sidebar-right-1`, and the table shows that saving accepts more. <BloggerSource kind="observed" />
+
+Sections and widgets have separate ids: a section and a widget can share one, `<b:section id='Blog1'>` holding `<b:widget id='Blog1' …>` is valid. It is clearer to avoid it. <BloggerSource kind="observed" />
+
+### `expr:` forms of attributes
+
+The `expr:` form of an attribute computes it when the page is rendered. On the elements of the layout, it behaves differently: <BloggerSource kind="observed" />
+
+| Element and attribute                       | What happens                                                                                                                                                                                                              |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Any `expr:` attribute of `<b:widget>`       | Deleted when stored: `expr:id`, `expr:type`, `expr:title`, `expr:visible`, `expr:cond`, `expr:locked`, `expr:mobile` and the others. A widget with `expr:visible='"false"'` still renders                                 |
+| `<b:section expr:id>` alone                 | Refused: the section has no `id`                                                                                                                                                                                          |
+| `<b:section expr:id>` with `id`             | Saved and kept, then read when rendering, and it wins: `expr:id='"s2"' id='s1'`, with no section `s2`, makes every page fail with a 500 error, `Could not find section s2`. With the id of another section, not confirmed |
+| `<b:section expr:class>`, `expr:title`      | Saved and kept, render nothing                                                                                                                                                                                            |
+| `<b:section expr:name>`, `expr:tag`         | Work, and win over `name` and `tag`                                                                                                                                                                                       |
+| `<b:includable expr:id>` with `id`          | Saved and kept; its effect is not confirmed                                                                                                                                                                               |
+| `<b:loop expr:var>`, `expr:index`           | Work, alone or next to the plain one, and win                                                                                                                                                                             |
+| `<b:eval expr:expr>`, `<b:switch expr:var>` | Markup error: the element has no `expr` or `var`                                                                                                                                                                          |
+
+On every other element, HTML and `b:` alike, an attribute and its `expr:` form can be written together, and the `expr:` one wins. `class` and `expr:class` are not merged: `expr:class` replaces `class`. What `expr:` does on each attribute is in [`expr:`](../tags/attributes.mdx#expr). <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<a expr:href='data:blog.homepageUrl' href='/'>Home</a>
+```
+
+```html title="Rendered"
+<a href='https://example.blogspot.com/'>Home</a>
+```
+
+</CodeTabs>
+
+Both attributes stay in the saved theme.
+
+### Expressions
+
+Blogger does not read expressions when the theme is saved. An expression that does not parse, `cond='data:a ==== 1'` or `cond='(data:a'`, saves, and fails only when a page reaches it, in the widget or on the whole page. In a branch that is not taken, or a loop over an empty list, it does nothing. [Errors](../expressions/evaluation.mdx#errors) gives the messages. <BloggerSource kind="observed" />
+
+The XML around the expression is checked like any attribute: a raw `<` refuses the file. Entities are decoded before the expression is read, so `&amp;&amp;`, `&lt;` and `&quot;` mean `&&`, `<` and `"`. <BloggerSource kind="observed" />
+
+Two values are not expressions, and follow the same rule:
+
+- The `data` of `<b:include>`, which also takes a bare name such as `data='post'`, see [Passing data](../layout/includables.mdx#passing-data). A value with a space, such as `data='post title'`, saves and is a markup error when rendered.
+- The ranges of `<b:loop>`, `1 to 5` and `1..5`, which are not parsed when saving either: `1 .. 5` saves, then fails when the loop is reached. See [Ranges](../tags/loops.mdx#ranges).
+
+An expression over 40 nodes fails the same way, see [Size limit](../expressions/evaluation.mdx#size-limit). Other attributes of `b:` elements are plain text and not parsed: the `value` of `<b:case>`, the `name` of `<b:message>`, the `name` and `value` of `<b:attr>` and `<b:class>`. Their `expr:` forms are expressions: `<b:case expr:value='1 + 1'/>` matches `2`. [Expressions](../expressions/index.mdx) describes the syntax. <BloggerSource kind="observed" />
+
+### Markup errors
+
+A markup error is a mistake that saves and fails only when a page renders it: a missing required attribute, content in `<b:include>`, an includable that does not exist, a tag out of its place, a nesting of `<b:with>` 41 deep. How it shows depends on where it is: <BloggerSource kind="observed" />
+
+- **Inside a widget**, the widget is not rendered. Blogger leaves an HTML comment in its place, and the rest of the page renders: `<!--Failed to render gadget 'HTML1'. There was an error processing the markup. -->`. Some mistakes name themselves instead, such as `The tag 'case' is not a known Blogger tag.`
+- **Outside a widget**, the whole page fails with a 500 error, with a message that names the problem, such as `Unknown runtime binding: includable in widget` or `Error during evaluation of NAME`.
+
+A markup error in a `<b:if>` that is false, or in a loop over an empty list, does no harm. An expression that does not parse fails the same way, with its own message, see [Errors](../expressions/evaluation.mdx#errors). To find a doubtful piece of markup, try it inside an HTML widget: the comment in the page source tells whether it failed.
+
+### Theme Designer definitions
+
+Blogger reads the `<Group>` and `<Variable>` declarations of the Theme Designer from the text of `<b:skin>`, not from `<b:template-skin>`, and checks them: the tags it reads must be well-formed, with their attribute values in double quotes, and each name, description, type and default must follow the rules of its type. Any other `<` in the skin is plain CSS. <BloggerSource kind="observed" />
+
+A mistake refuses the file, most often with a message that starts `com.google.blogger.b2.layouts.framework.skin.InvalidVariableException: Invalid variable declaration in page skin:`, such as `Variable name must not be declared twice. Input: text.color`. [How Blogger reads the declarations](../styles/theme-designer.mdx#how-blogger-reads-the-declarations) gives every rule and its message. <BloggerSource kind="observed" />
+
+### What saving does not check
+
+Saving does not look at the HTML itself, beyond its well-formedness, nor at the logic of the theme. These save without complaint: <BloggerSource kind="observed" />
+
+- unknown HTML elements and attributes, `<my-card>` or `<div foo='1'>`;
+- unknown `b:` elements and attributes, and unusual values of the `b:` attributes of `<html>`;
+- prefixes that are not declared, such as `macro:` in classic themes, and missing `xmlns` declarations;
+- expressions, valid or not, and data paths that do not exist, `data:post.titel`, which render nothing;
+- the attributes of logic tags, see [Required attributes](#required-attributes);
+- a theme with no section, no widget, no section marked `preferred`, or no Blog widget;
+- `maxwidgets`: a section with `maxwidgets='1'` and two widgets saves.
+
+The place of the skin and of sections is checked: a `<b:skin>` in `<body>` and a `<b:section>` in `<head>` are refused.
+
+## How Blogger rewrites the theme
+
+Blogger does not keep the file byte for byte. It stores a normalized copy, and that copy is what Edit HTML shows afterwards. Most rewrites change only how the theme reads; the content Blogger deletes is listed in [Layout nesting](#layout-nesting) and [Widgets](#widgets). The examples of this guide follow most of this form, see [How examples are written](../index.mdx#how-examples-are-written). <BloggerSource kind="observed" />
+
+### Declaration and doctype
+
+The first two lines are written in their standard form: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Before"
+<?xml version='1.0' encoding='ISO-8859-1'?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+```
+
+```xml title="After"
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+```
+
+</CodeTabs>
+
+A doctype written on the line of the declaration, or after blank lines, moves to line 2. Blank lines before the root element are removed. A comment written before the root element, between the declaration and the doctype included, moves onto the line of the root element: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Before"
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Garden 1.0 -->
+<!DOCTYPE html>
+<html …>
+```
+
+```xml title="After"
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<!-- Garden 1.0 --><html …>
+```
+
+</CodeTabs>
+
+A comment after `</html>` stays on the line of `</html>`. Windows line endings, CRLF, are stored as LF. <BloggerSource kind="observed" />
+
+### Start tags
+
+Every start tag is written on one line, with its attributes sorted by name and quoted with single quotes: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Before"
+<a href="/p/about.html" title="It's &quot;us&quot;"   class="nav" >About</a><br />
+```
+
+```xml title="After"
+<a class='nav' href='/p/about.html' title='It&apos;s &quot;us&quot;'>About</a><br/>
+```
+
+</CodeTabs>
+
+- **Order.** Names are sorted character by character, by character code: uppercase letters come before lowercase ones, and `b:…` comes before `class`, `expr:…`, `id` and `xmlns`.
+- **Quotes.** Every value is in single quotes. In every value, `'` is written `&apos;`, `"` is written `&quot;` and `>` is written `&gt;`, whatever the quotes were. `&amp;` and `&lt;` stay.
+- **References.** Other character references in a value are decoded: `&#169;` is stored as `©`, `&#x41;` as `A`, `&#160;` as a no-break space.
+- **Spacing.** One space between attributes, none before `>`, none before `/>`.
+
+Expressions get the same escaping, and nothing else: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Before"
+<b:if cond='data:n > 3 and data:labels any (l => l.name == "news")'>
+```
+
+```xml title="After"
+<b:if cond='data:n &gt; 3 and data:labels any (l =&gt; l.name == &quot;news&quot;)'>
+```
+
+</CodeTabs>
+
+### Line breaks in attribute values
+
+Each line break, tab, `&#9;`, `&#10;` or `&#13;` in an attribute value becomes one space. Other spaces stay: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Before"
+<div class='card
+  featured' data-note='  two  spaces  '>
+```
+
+```xml title="After"
+<div class='card   featured' data-note='  two  spaces  '>
+```
+
+</CodeTabs>
+
+The line break became a space, and the two spaces of indentation after it stayed, which leaves three spaces between the classes. A string in an expression can not hold a line break for the same reason.
+
+### Empty elements
+
+Any element with nothing between its tags is written self-closed, HTML elements included: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Before"
+<b:include name='pager'></b:include>
+<b:if cond='data:view.isPost'></b:if>
+<div class='clear'></div>
+<br></br>
+```
+
+```xml title="After"
+<b:include name='pager'/>
+<b:if cond='data:view.isPost'/>
+<div class='clear'/>
+<br/>
+```
+
+</CodeTabs>
+
+A space, a line break or a comment between the tags is content, and the element keeps its end tag: `<span> </span>` stays as it is. An empty skin is the exception: `<b:skin></b:skin>` and `<b:skin/>` are stored as `<b:skin><![CDATA[]]></b:skin>`.
+
+This does not change the rendered page. Blogger writes elements that are not void in HTML with an end tag: `<div class='clear'/>` renders as `<div class='clear'></div>`, and `<script async='async' src='…'/>` as `<script async='async' src='…'></script>`. A void element written with an end tag around `<b:attr>` or `<b:class>` keeps its end tag in the page, after a line break, see [Placement](../tags/attributes.mdx#placement). <BloggerSource kind="observed" />
+
+### Sections, widgets and settings
+
+The children of `<b:section>`, `<b:widget>` and `<b:widget-settings>` are each put on their own line, indented two spaces more than their parent, and their end tags too: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Before"
+<b:section id='sidebar'><b:widget id='HTML1' locked='false' title='Ad' type='HTML' visible='true'><b:widget-settings><b:widget-setting name='content'>Hi</b:widget-setting></b:widget-settings><b:includable id='main'><data:content/></b:includable></b:widget></b:section>
+```
+
+```xml title="After"
+<b:section id='sidebar'>
+  <b:widget id='HTML1' locked='false' title='Ad' type='HTML' visible='true'>
+    <b:widget-settings>
+      <b:widget-setting name='content'>Hi</b:widget-setting>
+    </b:widget-settings>
+    <b:includable id='main'><data:content/></b:includable>
+  </b:widget>
+</b:section>
+```
+
+</CodeTabs>
+
+What is inside an includable or a setting keeps its own formatting.
+
+### Widgets
+
+Blogger rewrites the widgets it stores: <BloggerSource kind="observed" />
+
+- `locked='false'`, `title=''` and `visible='true'` are added when missing. What happens to `version` is described in [`version`](../layout/widgets.mdx#version).
+- Unknown attributes, `pageType` and every `expr:` attribute are dropped; `mobile` and `cond` are kept.
+- `locked` and `visible` are read without regard to case, `'TRUE'` is stored `'true'`; another value is stored as the default, `visible='maybe'` as `'true'`, `locked='maybe'` as `'false'`.
+- A `title` over 100 characters is stored empty. Entities in a title are escaped twice: `title='T &amp; "q"'` is stored as `title='T &amp;amp; &amp;quot;q&amp;quot;'`.
+- `<b:widget-settings>` moves before the includables. Settings missing from it are added with their defaults for most types, and an empty HTML `content` setting is removed, with `<b:widget-settings>` when nothing is left. The `content` of an HTML widget is trimmed, and stored in a CDATA section when it has `&`, `<`, `>`, `"` or `'`.
+- A new widget with no includable gets Blogger's default `main` includable, and so does a widget with includables but no `main`.
+- Includables are sorted, `main` first, then the others by character code, and two ids that are equal once decoded refuse the file, see [`id`](../layout/includables.mdx#id).
+
+See [Widgets](../layout/widgets.mdx) for the settings of each type.
+
+### Skins
+
+The content of `<b:skin>` becomes a single CDATA section. Entities of the plain text are decoded, CDATA sections are kept as they are, and the whitespace at both ends of each part stays: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Before"
+<b:skin>
+a &gt; b { content: "&amp;"; }
+<![CDATA[.x::after { content: "&amp;"; }]]>
+</b:skin>
+```
+
+```xml title="After"
+<b:skin><![CDATA[
+a > b { content: "&"; }
+.x::after { content: "&amp;"; }
+]]></b:skin>
+```
+
+</CodeTabs>
+
+The `&amp;` of the plain text was an escaped `&`, so it became `&`. The one in CDATA was already literal text, so it stayed `&amp;`, as the CSS had it. A skin with nothing in it is written `<b:skin><![CDATA[]]></b:skin>`. If the CSS contains `]]>`, Blogger does not split the CDATA section around it: the stored theme ends the section there, and is broken. Keep `]]>` out of the CSS: where it is needed, in a `content` string for example, write it with the CSS escape `\5d\5d>`. Whether `<b:template-skin>` gets the same treatment is not confirmed. <BloggerSource kind="observed" />
+
+### Theme Designer tags
+
+Blogger keeps the `<Group>` and `<Variable>` tags as written, with their double quotes and their order of attributes. It adds a `value` attribute, a copy of `default`, to every `<Variable>` that has none, except `automatic` ones: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Before"
+<b:skin><![CDATA[
+/* <Variable name="link.color" description="Link color" type="color" default="#1a7f37"/> */
+]]></b:skin>
+```
+
+```xml title="After"
+<b:skin><![CDATA[
+/* <Variable name="link.color" description="Link color" type="color" default="#1a7f37" value="#1a7f37"/> */
+]]></b:skin>
+```
+
+</CodeTabs>
+
+For a literal default, as here, the `value` is the same text. Blogger's own themes hold values computed from their defaults, such as `default="$(latoNormal16)"` with `value="16px Lato, sans-serif"`, and `default="#eee"` with `value="#eeeeee"`. Whether saving itself writes such a computed value, or a literal copy, is not confirmed, and neither is the place of the added `value` in the tag. [`value`](../styles/theme-designer.mdx#value) describes what the attribute does.
+
+### Text and comments
+
+Text outside the skins keeps its spaces, line breaks and indentation, but its characters are written again: <BloggerSource kind="observed" />
+
+- `>`, `"` and `'` in text are written `&gt;`, `&quot;` and `&#39;`; `&apos;` becomes `&#39;`;
+- hexadecimal references become decimal: `&#xA9;` is stored as `&#169;`;
+- a character outside ASCII that is not a letter or a digit is stored as a decimal reference, in text, comments and widget settings: `©`, `–`, `€` and a no-break space become `&#169;`, `&#8211;`, `&#8364;` and `&#160;`. Letters such as `é` and `あ`, and emoji, stay;
+- comments in a section or a widget are removed, and so are processing instructions.
+
+Attribute values, CDATA sections and the skin keep their characters as written.
+
+### What stays as written
+
+Everything not listed above keeps its exact form: <BloggerSource kind="observed" />
+
+- expressions, apart from the escaping of their attribute: `eq`, `not`, `&amp;&amp;`, `yes` and extra spaces are not rewritten;
+- the spacing of text, CDATA sections outside the skins, HTML comments outside sections and widgets;
+- end tags, apart from those of sections and widgets;
+- the case of tag names, `<P>`;
+- the bare-name `data` of `<b:include>`, `data='post'`;
+- `<b:loop>` ranges, `1..5`;
+- the `value` of `<b:case>` and the `name` and `value` of `<b:attr>` and `<b:class>`.

@@ -1,0 +1,188 @@
+---
+title: Values
+description: The literals of Blogger expressions, strings, numbers, booleans, lists and maps, and the types of the values Blogger gives a theme.
+level: intermediate
+published: 2026-10-26
+---
+
+A literal is a value written in the expression itself, rather than read from the data. This list describes the comment systems a theme offers, each one a map with a string, and a boolean computed from a Theme Designer setting:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:with value='[{ id: "blogger", name: "Blogger", enabled: (data:skin.vars.comments_blogger == "2px") }, { id: "disqus", name: "Disqus", enabled: (data:skin.vars.comments_disqus == "2px") }]' var='platforms'>
+  <b:loop values='data:platforms filter (p => p.enabled)' var='platform'>
+    <button expr:data-platform='data:platform.id' type='button'><data:platform.name/></button>
+  </b:loop>
+</b:with>
+```
+
+```html title="Rendered when both are enabled"
+<button data-platform="blogger" type="button">Blogger</button>
+<button data-platform="disqus" type="button">Disqus</button>
+```
+
+</CodeTabs>
+
+| Kind                               | Example                                | Source                            |
+| ---------------------------------- | -------------------------------------- | --------------------------------- |
+| [String](#strings)                 | `"item"`                               | <BloggerSource kind="official" /> |
+| [Number](#numbers)                 | `24`, `-5`, `0.5`                      | <BloggerSource kind="official" /> |
+| [Boolean](#booleans)               | `true`, `false`                        | <BloggerSource kind="official" /> |
+| [Boolean](#booleans)               | `yes`, `no`                            | <BloggerSource kind="observed" /> |
+| [List](#lists)                     | `["https://", "#"]`                    | <BloggerSource kind="observed" /> |
+| [List in braces](#lists-in-braces) | `{"index", "archive"}`                 | <BloggerSource kind="official" /> |
+| [Map](#maps)                       | `{ size: 24, stroke: "currentColor" }` | <BloggerSource kind="observed" /> |
+
+The language has no literal for "nothing". `null` and `nil` are errors. <BloggerSource kind="observed" /> The only way to get no value is to read a path that does not exist, see [Missing data](./evaluation.mdx#missing-data).
+
+## Strings
+
+A string is text between double quotes. Single quotes never delimit a string: in a theme they are the quotes of the attribute around the expression. <BloggerSource kind="observed" />
+
+```xml
+<b:if cond='data:skin.vars.metatags_feeds == "2px"'>
+<b:with value='"image/" + (data:image contains ".svg" ? "svg+xml" : "png")' var='type'>
+```
+
+- **Escapes.** `\"` is a double quote inside the string. Any other backslash stays a backslash: `"a\n"` is three characters, `a`, `\` and `n`. <BloggerSource kind="observed" />
+- **A trailing backslash can not be written.** `\"` always escapes the quote, so `"C:\"` never ends. <BloggerSource kind="observed" />
+- **One line.** A string can not contain a raw line break. <BloggerSource kind="observed" />
+- **Entities.** XML decodes the attribute before Blogger reads the expression, so an entity in a string becomes its character. `"&lt;!--"` is the string `<!--`. A theme can write markup that Blogger would not let through as tags this way, for example the start and the end of an HTML comment around generated content: `<b:eval expr='"&lt;!--"'/>`. <BloggerSource kind="observed" />
+- **An apostrophe** inside a single-quoted attribute is written `&apos;`: `"The &apos;notice&apos; field is empty"`.
+- **Quoted values written in the expression stay strings.** `"24" + 1` is `241`. A string read back from a variable, a list or a map is converted: `"24"` becomes a number and `"true"` a boolean. <BloggerSource kind="observed" /> See [Strings read from data](./evaluation.mdx#strings-read-from-data).
+
+Strings compare case by case: `"News" == "news"` is false, and so is `"Blogger" contains "blog"`. <BloggerSource kind="observed" />
+
+## Numbers
+
+| Written     | Is                                                                                |
+| ----------- | --------------------------------------------------------------------------------- |
+| `24`        | an integer                                                                        |
+| `0.5`, `.5` | a decimal: digits are optional before the point <BloggerSource kind="observed" /> |
+| `-5`, `-.5` | a negative number: the `-` touches the digits or the point                        |
+
+- **A number keeps the text it is written with.** `.5`, `1.50`, `007` and `-0` print as written, and compare by that text: `007 == 7` and `5 == 5.0` are false. <BloggerSource kind="observed" /> There is no limit on the number of digits.
+- There is no exponent: `1e3` is not a number. <BloggerSource kind="observed" />
+- A trailing point is not a number: `5.` is an error. Write `5` or `5.0`. <BloggerSource kind="observed" />
+- `- 5`, with a space, is not a negative number, and it is an error at the start of an expression. <BloggerSource kind="observed" /> Data is negated by subtraction: `0 - data:offset`.
+- A negative literal can not follow a value: `data:i -1` is an error. Write `data:i - 1`. <BloggerSource kind="observed" /> See [Minus signs](./operators.mdx#minus-signs).
+
+Data often holds numbers as strings, such as the ids of posts. How strings and numbers mix is in [Conversions](./evaluation.mdx#conversions).
+
+## Booleans
+
+`true` and `false`. <BloggerSource kind="official" /> `yes` and `no` mean the same, and print `true` and `false`. The four words ignore case: `TRUE` and `No` are booleans. <BloggerSource kind="observed" />
+
+Booleans have no quotes, but the strings `"false"` and `"no"`, in any case, are false as a condition. A boolean compares with a string as its text, so `"false" == false` and `"true" == true` are true, and `"yes" == true` is false. <BloggerSource kind="observed" />
+
+A boolean is also what comparisons, `not`, `in` and the lambdas `any`, `all` and `none` give. A theme can store one in a variable or a map:
+
+```xml
+<b:with value='data:links none (l => l.name == "dismiss" and l.target == "false")' var='dismissible'>
+```
+
+## Lists
+
+A list is a series of values in brackets, separated by commas. `[]` is an empty list.
+
+```xml
+<b:if cond='data:link.target not in ["https://", "#", "custom_text"]'>
+<b:attr cond='data:canResize' expr:value='sourceSet(data:image, [240, 320, 480, 600, 720, 900], data:ratio)' name='srcset'/>
+<b:loop values='["home", "archive", "label", "search"]' var='page'>
+```
+
+- **Items are single values**: literals, data with its properties, calls, `!x`, or any expression in parentheses. An item that uses an operator goes in parentheses: `[data:post.title, (data:post.featuredImage ?: data:fallback)]`. So does a property of a literal or a call: `[("abc".length)]`. <BloggerSource kind="observed" />
+- **Items can be of different kinds.** `[192, "maskable"]` mixes a number and a string, and a list of maps such as the one at the top of this page is common. <BloggerSource kind="observed" />
+- **Lists nest**: `[["role", "presentation"], ["aria-hidden", "true"]]`. <BloggerSource kind="observed" />
+- **Spaces** inside the brackets and around commas are free: `[ "Sponsored" , "Product" ]`. <BloggerSource kind="observed" />
+- **Properties** apply directly to a list literal: `[240, 320, 480].first` is `240`. An index does not: `[240, 320][0]` is an error, as indexes are only for data. <BloggerSource kind="observed" /> See [Indexes](./data-paths.mdx#indexes).
+- **A lambda** can take a list literal as its source: `["data:blog.", "data:view."] any (e => data:input contains e)`. <BloggerSource kind="observed" />
+
+A comma after the last item is accepted and ignored: `[1, 2, ]` is `[1, 2]`. An empty item, `[1,, 2]`, and a leading comma, `[, 1]`, are errors. <BloggerSource kind="observed" /> The same trailing comma is accepted in a list in braces, `{1, 2,}`, and after the last argument of a function, `path(data:url, "search",)`.
+
+## Lists in braces
+
+A list can also be written in braces. Google's examples write lists this way with `in`: <BloggerSource kind="official" />
+
+```xml
+<b:if cond='data:blog.pageType in {"index", "archive"}'>
+```
+
+It is the same list as one in brackets, not a set: it keeps the order of its items, and their duplicates. <BloggerSource kind="observed" /> `data:blog.pageType in ["index", "archive"]` means the same as the example. The items can be lists, which makes a list of pairs:
+
+```xml
+<b:include data='{["role", "presentation"], ["aria-hidden", "true"]}' name='attrs'/>
+```
+
+In `data` of `<b:include>`, a list must be written in braces: `data='{1, 2, 3}'` passes a list, and `data='[1, 2, 3]'` fails. See [Passing data](../layout/includables.mdx#passing-data). <BloggerSource kind="observed" />
+
+`{}` is always an empty list. <BloggerSource kind="observed" /> Braces hold either bare values, a list, or `key: value` entries, a map. Mixing both in the same braces is an error. <BloggerSource kind="observed" />
+
+## Maps
+
+A map is a group of named values in braces, each entry a key, a colon and a value:
+
+```xml
+<b:include data='{ size: 20, stroke: "currentColor", strokeWidth: 1.5 }' name='icon'/>
+<a expr:href='params("https://www.facebook.com/sharer.php", { u: data:blog.url.canonical })'>Share</a>
+<b:eval expr='snippet(data:post.snippet, { length: 147, links: false, linebreaks: false, ellipsis: false })'/>
+```
+
+### Keys
+
+- A key is a word made of letters, digits, `_`, `$` and `-`: `size`, `strokeWidth`, `og_image`, `max-results`. Dashes work anywhere in it, at the ends too, and the key is read with the same name: `{ max-results: 8 }.max-results` is `8`. <BloggerSource kind="observed" />
+- A number is a key too, read the same way: `{ 1: "x" }.1` is `"x"`. <BloggerSource kind="observed" />
+- **Leave keys unquoted.** A key in double quotes keeps its quotes as part of its name. `{ "x": 1 }.x` reads nothing, only `."x"` reads it, and `params(data:url, { "a-b": 1 })` writes the parameter `%22a-b%22`, with the quotes. <BloggerSource kind="observed" />
+- Whether `data` works as an unquoted key is not confirmed, since `data:` starts a path.
+- The colon is followed by whitespace: `{ size: 20 }`, never `{ size:20 }`. A space before it is allowed. <BloggerSource kind="observed" />
+
+### Values
+
+- A value is a single value, as a list item is. A value that uses an operator goes in parentheses: `{ isAnonymous: (data:c.author == "Anonymous" and !data:c.authorUrl) }`. <BloggerSource kind="observed" />
+- Values can be lists, maps, and the results of lambdas: `{ children: (data:comments filter (r => r.inReplyTo == data:c.id)) }`. <BloggerSource kind="observed" />
+- A comma after the last entry is accepted. Blogger's own themes have one in a map passed to an includable. <BloggerSource kind="observed" />
+- A key written twice keeps its last value: `{ a: 1, a: 2 }.a` is `2`. <BloggerSource kind="observed" />
+- A number in a map loses the text it is written with: `{ a: 007 }.a` is `7`. A string of digits read from a map becomes a number, see [Strings read from data](./evaluation.mdx#strings-read-from-data). <BloggerSource kind="observed" />
+
+There is no way to write an empty map: `{}` is an empty list.
+
+### Using a map
+
+The entries are read with `.key`: `data:icon.size`. Maps carry:
+
+- the options of [`snippet`](./functions.mdx#snippet) and the query parameters of [`params` and `appendParams`](./functions.mdx#params-and-appendparams);
+- the `data` of [`<b:include>`](../layout/includables.mdx), where every key becomes a name in the includable;
+- records built with [`<b:with>`](../tags/variables.mdx) or [`map`](./lambdas.mdx#map), to give a list of items a new shape.
+
+```xml title="One map per post, passed to an includable"
+<b:include data='{ title: data:post.title, url: data:post.url.canonical, image: data:post.featuredImage, first: (data:i == 0) }' name='postCard'/>
+```
+
+## Types
+
+Values have no declared type. They keep the kind of the data or literal they come from, and operators convert them when they need another one. These are the kinds a theme meets: <BloggerSource kind="observed" />
+
+| Type    | Is                                                                                                          | Literal            |
+| ------- | ----------------------------------------------------------------------------------------------------------- | ------------------ |
+| string  | text                                                                                                        | `"text"`           |
+| number  | an integer or a decimal                                                                                     | `24`, `1.5`        |
+| boolean | `true` or `false`                                                                                           | `true`, `no`       |
+| list    | an ordered series of values                                                                                 | `[1, 2]`, `{1, 2}` |
+| map     | named values                                                                                                | `{ a: 1 }`         |
+| url     | a string holding a URL, with the [URL properties](./properties.mdx#urls)                                    | none               |
+| image   | a string holding an image URL, with the [image properties](./properties.mdx#images)                         | none               |
+| date    | a date, with the [date properties](./properties.mdx#dates), formatted by [`format`](./functions.mdx#format) | none               |
+| locale  | the language of the blog, `data:blog.locale`, with the [locale properties](./properties.mdx#locales)        | none               |
+| message | a text of [`data:messages`](../data/messages.mdx)                                                           | none               |
+
+- **URLs, images, dates, locales and messages are strings with more properties.** They join, compare and test as their text, and they have the [string properties](./properties.mdx#strings). <BloggerSource kind="observed" />
+- **Only Blogger creates them.** A string literal holding a URL is a plain string, so `"https://example.com/".canonical` gives nothing. <BloggerSource kind="observed" /> The [functions](./functions.mdx) are the exception: `resizeImage` and the URL functions accept a string holding a URL.
+- **Text Blogger gives may read as a number or a boolean.** A post titled `2024` is the number `2024`, a label named `yes` is `true`, and post ids are numbers. <BloggerSource kind="observed" /> See [Strings read from data](./evaluation.mdx#strings-read-from-data).
+- **Lists keep the type of their items.** `data:posts map (p => p.featuredImage)` is a list of images, each with `.isResizable`. <BloggerSource kind="observed" />
+- **Theme Designer values are not plain strings.** A [Theme Designer](../styles/theme-designer.mdx) variable read as `data:skin.vars.name` has the type of the variable, color, font, length, and the [skin properties](./properties.mdx#skin-variables). To use it as text, themes convert it first, with `+ ""` or with [`snippet`](./functions.mdx#snippet) and one argument: <BloggerSource kind="observed" />
+
+```xml
+<b:eval expr='(data:skin.vars.template_version + "").jsonEscaped'/>
+<meta expr:content='snippet(data:skin.vars.status_light)' name='theme-color'/>
+```

@@ -1,0 +1,34 @@
+---
+import CodeBlock from './CodeBlock.astro';
+
+interface Props {
+	'data-title'?: string;
+	'data-language'?: string;
+	'data-icon'?: string;
+	'data-no-line-numbers'?: string;
+	'data-wrap'?: string;
+	[attribute: string]: unknown;
+}
+
+/**
+ * Replaces MDX's `<pre>`. Turns the fence options that `src/integrations/shiki.ts` stores as `data-*`
+ * attributes into `CodeBlock` props.
+ */
+const {
+	'data-title': title,
+	'data-language': lang,
+	'data-icon': icon,
+	'data-no-line-numbers': noLineNumbers,
+	'data-wrap': wrap,
+	...pre
+} = Astro.props;
+---
+
+<CodeBlock
+	lang={lang}
+	title={title}
+	icon={icon}
+	lineNumbers={noLineNumbers === undefined}
+	wrap={wrap !== undefined}
+	pre={pre}><slot /></CodeBlock
+>

@@ -1,0 +1,24 @@
+---
+import SectionOverview from '@/components/sections/SectionOverview.astro';
+import DocsLayout from '@/layouts/DocsLayout.astro';
+import { getLatestUpdate, getPages } from '@/lib/content/pages';
+import { getSections } from '@/lib/content/sections';
+import { appName } from '@/lib/site';
+
+/** Every section with its topics. No sidebar: the page is itself the overview, and gets the full width. */
+const sections = getSections();
+const updated = await getLatestUpdate((await getPages()).keys());
+const description = `Every section of the ${appName} docs and its topics: guides and references for Blogger themes, tools and packages.`;
+---
+
+<DocsLayout
+	title="Documentation"
+	description={description}
+	sidebar={false}
+	items={sections.map((section) => ({ name: section.name, url: section.url }))}
+	updated={updated}
+>
+	<div class="not-content flex flex-col gap-6">
+		{sections.map((section) => <SectionOverview section={section} headingLevel={2} />)}
+	</div>
+</DocsLayout>

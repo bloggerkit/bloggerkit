@@ -1,0 +1,317 @@
+---
+title: Operators
+description: 'The operators of Blogger expressions: arithmetic, joining, comparison, logic, membership, ternary and elvis, with word forms, spacing rules and precedence.'
+level: intermediate
+published: 2026-10-26
+---
+
+Operators compute numbers, join text, compare values, combine conditions and choose between values. This label of a carousel button counts slides from 1, while the loop counts from 0:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:loop index='i' values='data:slides' var='slide'>
+  <span class='sr-only'><b:eval expr='data:slide.title contains "[NoTitle]" ? "Slide " + (data:i + 1) : data:slide.title'/></span>
+</b:loop>
+```
+
+```html title="Rendered for the second slide, untitled"
+<span class='sr-only'>Slide 2</span>
+```
+
+</CodeTabs>
+
+`contains` tests the title, `? :` chooses the text, `+` adds `1` to the index and joins the result to `"Slide "`.
+
+## Every operator
+
+| Group                                     | Operators                              | Example                                           | Gives                              | Source                            |
+| ----------------------------------------- | -------------------------------------- | ------------------------------------------------- | ---------------------------------- | --------------------------------- |
+| [Arithmetic](#arithmetic)                 | `+` `-` `*` `/` `%`                    | `(data:i + 1) % 3`                                | a number                           | <BloggerSource kind="official" /> |
+| [Joining text](#joining-text)             | `+`                                    | `"#slide-" + data:slide.id`                       | a string                           | <BloggerSource kind="official" /> |
+| [Comparison](#comparison)                 | `==` `!=` `<` `>` `<=` `>=`            | `data:slides.length > 1`                          | a boolean                          | <BloggerSource kind="official" /> |
+| [Comparison words](#comparison)           | `eq` `neq` `lt` `gt` `lte` `gte`       | `data:post.adNumber lt 3`                         | a boolean                          | <BloggerSource kind="observed" /> |
+| [Logic](#logic)                           | `and` `or` `not` `!`                   | `data:view.isSearch and !data:view.isLabelSearch` | a boolean                          | <BloggerSource kind="official" /> |
+| [Logic symbols](#logic)                   | `&&` `\|\|`                            | `data:view.isArchive \|\| data:view.isSearch`     | a boolean                          | <BloggerSource kind="observed" /> |
+| [Membership](#membership)                 | `in` `contains`                        | `data:blog.pageType in {"index", "archive"}`      | a boolean                          | <BloggerSource kind="official" /> |
+| [Membership](#membership)                 | `not in` `not contains`                | `data:link.target not in ["https://", "#"]`       | a boolean                          | <BloggerSource kind="observed" /> |
+| [Ternary](#ternary)                       | `? :`                                  | `data:blog.adultContent ? "adult" : "general"`    | one of two values                  | <BloggerSource kind="official" /> |
+| [Elvis](#elvis)                           | `?:`                                   | `data:props.size ?: 24`                           | a value or its fallback            | <BloggerSource kind="observed" /> |
+| [Grouping](#precedence)                   | `( )`                                  | `(data:i + 1) % 3`                                |                                    | <BloggerSource kind="official" /> |
+| [Operator functions](#operator-functions) | `+(…)` `==(…)` `and(…)` and the others | `+(data:a, data:b, data:c)`                       | the operator applied from the left | <BloggerSource kind="observed" /> |
+
+[Lambdas](./lambdas.mdx), such as `filter` and `map`, [`take` and `skip`](./lambdas.mdx#take-and-skip), and the infix forms of [functions](./functions.mdx#infix-form), such as `data:post.url fragment "comment"`, are written between two operands too. They have their own pages.
+
+## Arithmetic
+
+| Operator | Gives          | Example                  | Result                     |
+| -------- | -------------- | ------------------------ | -------------------------- |
+| `+`      | the sum        | `data:num + 2`           | `3` when `data:num` is `1` |
+| `-`      | the difference | `data:labels.length - 1` |                            |
+| `*`      | the product    | `data:width * 9 / 16`    |                            |
+| `/`      | the quotient   | `7 / 2`                  | `3.5`                      |
+| `%`      | the remainder  | `13 % 6`                 | `1`                        |
+
+```xml title="A row break after every third card"
+<b:loop index='i' values='data:posts' var='post'>
+  <b:include data='post' name='card'/>
+  <b:if cond='(data:i + 1) % 3 == 0'><hr class='row-end'/></b:if>
+</b:loop>
+```
+
+- **Decimal arithmetic.** Results are exact decimals, `0.1 + 0.2` is `0.3`, and keep the decimal places of their operands: `1.50 + 0` is `1.50`, `.5 * 2` is `1.0`. <BloggerSource kind="observed" />
+- **Division.** An exact quotient is written in full, `1 / 8` is `0.125`. Any other is rounded half up to 4 decimals: `7 / 3` is `2.3333`, and `1 / 3 * 3` is `0.9999`. Multiply before you divide. <BloggerSource kind="observed" />
+- **Dividing by zero is an error.** `1 / 0` and `0 / 0` are invalid expressions, and `5 % 0` crashes the page with [Blogger's generic error page](./evaluation.mdx#crashes). <BloggerSource kind="observed" /> Test the divisor first: `data:n != 0 and data:a / data:n > 1`.
+- **There is no exponent and no integer division.** The integer quotient of 13 by 6 is `(13 - 13 % 6) / 6`.
+- **Operands must be numbers** for `-`, `*`, `/` and `%`, or strings of digits: `"5" * 2` is `10`. A boolean, any other string, `""`, a list or a map is an error: `true * 2`, `"a" * 2`. <BloggerSource kind="observed" /> `+` joins strings instead, see [Joining text](#joining-text).
+- **Missing data is not zero.** `data:missing * 2` is an error, and `data:missing + 1` is `1` joined as text, so `data:missing + 1 + 1` is `11`. <BloggerSource kind="observed" /> Give a default first: `(data:count ?: 0) + 1`.
+- **Numbers print as written.** `.5`, `1.50`, `007` and `-0` are written so, and large integers are exact: `1000000 * 1000000` is `1000000000000`. <BloggerSource kind="observed" />
+
+Operators other than `-` need no spaces: `data:num+2` is `data:num + 2`. <BloggerSource kind="observed" />
+
+### Minus signs
+
+`-` has three roles: a character of [paths](./data-paths.mdx), the sign of negative numbers, and subtraction. Where the spaces are decides which one it is: <BloggerSource kind="observed" />
+
+| Written                                    | Is                                                         |
+| ------------------------------------------ | ---------------------------------------------------------- |
+| `data:i - 1`, `5 - 3`, `5 - -3`            | a subtraction                                              |
+| `(5)- 3`, `5 -(3)`                         | a subtraction: `)` before, or `(` after, counts as a space |
+| `data:i-1`                                 | the data named `i-1`                                       |
+| `-5`, `-0.5`, `-.5`                        | a negative number                                          |
+| `5-3`, `5 -3`, `5-(3)`, `(5)-3`, `5--3`    | an error                                                   |
+| `data:i -1`, `data:list[0]-1`, `5 -data:n` | an error                                                   |
+| `-data:n`, `- 5`, `--5`                    | an error                                                   |
+| `-(5)`, `- (5)`                            | `5`: the [operator function](#operator-functions) `-`      |
+
+A subtraction has whitespace or `)` before the minus, and whitespace or `(` after it. There is no minus that negates a value. `-(…)` is the [operator function](#operator-functions) `-` with one value, which gives the value back: `-(5)` is `5`, and `5 * -(2)` is `10`. <BloggerSource kind="observed" /> Its value is a single value, like any argument, so `-(1 + 1)` is an error and `-((1 + 1))` is `2`. To negate a value, subtract it from zero: `0 - data:offset`.
+
+## Joining text
+
+`+` joins when one side is a string, and adds when both are numbers: <BloggerSource kind="official" />
+
+```xml
+<b:with value='"image/" + (data:image contains ".ico" ? "x-icon" : "png")' var='type'>
+<a expr:href='"#comment-" + data:comment.id'>Link</a>
+<b:with value='data:post.title + " " + data:post.url.canonical' var='shareText'>
+```
+
+| Expression                          | Result                                       |
+| ----------------------------------- | -------------------------------------------- |
+| `"Slide " + 2`                      | `Slide 2`                                    |
+| `"10" + 10`                         | `1010`                                       |
+| `20 + 25 + ""`                      | `2025`: the whole chain is joined            |
+| `(20 + 25) + ""`                    | `45`: the parentheses end the chain          |
+| `1 + 1 + data:blog.title`           | `11` followed by the title                   |
+| `"Private: " + data:blog.isPrivate` | `Private: false`                             |
+| `"Hi " + data:missing`              | `Hi `: missing data joins as nothing         |
+| `true + 1`                          | an error: no string, and `true` is no number |
+
+- **A chain of `+` is one operation.** Once any value of the chain is a string or missing data, every value is joined as text, the ones before it too. Parentheses end the chain, and `-` is not part of it: `1 - 1 + "a"` is `0a`. <BloggerSource kind="observed" /> Put a sum in parentheses before joining it: `"Total: " + (data:a + data:b)`.
+- **Without a string, `+` adds numbers only.** `5 + true` and `[1] + [2]` are errors. <BloggerSource kind="observed" />
+- **A string read from data may be a number.** When `data:x` holds `"10"`, from `<b:with>`, a loop or a list, `10 + data:x` is `20`: Blogger converts strings of digits when it reads them. See [Strings read from data](./evaluation.mdx#strings-read-from-data). <BloggerSource kind="observed" />
+- `value + ""` turns any value into text. Themes use it before an escaping property, on values that are not plain strings: `(data:blog.blogId + "").jsonEscaped`. <BloggerSource kind="observed" />
+- To add a query parameter to a URL, use [`params` and `appendParams`](./functions.mdx#params-and-appendparams) rather than `+`: they write `?`, `&` and the encoding right.
+
+## Comparison
+
+| Symbol | Word  | Is true when                 | Source                                                                          |
+| ------ | ----- | ---------------------------- | ------------------------------------------------------------------------------- |
+| `==`   | `eq`  | the values are equal         | <BloggerSource kind="official" /> `==`, <BloggerSource kind="observed" /> `eq`  |
+| `!=`   | `neq` | the values differ            | <BloggerSource kind="official" /> `!=`, <BloggerSource kind="observed" /> `neq` |
+| `<`    | `lt`  | the left is smaller          | <BloggerSource kind="official" /> `<`, <BloggerSource kind="observed" /> `lt`   |
+| `<=`   | `lte` | the left is smaller or equal | <BloggerSource kind="official" /> `<=`, <BloggerSource kind="observed" /> `lte` |
+| `>`    | `gt`  | the left is larger           | <BloggerSource kind="official" /> `>`, <BloggerSource kind="observed" /> `gt`   |
+| `>=`   | `gte` | the left is larger or equal  | <BloggerSource kind="official" /> `>=`, <BloggerSource kind="observed" /> `gte` |
+
+```xml {2}
+<b:if cond='data:post.lastUpdated != data:post.date'>
+<b:if cond='data:view.isMultipleItems != data:view.isHomepage'>
+<b:class cond='(data:widgets filter (w => w.sectionId == "footer")).length &lt;= 3' name='three-columns'/>
+<b:if cond='data:all >= 5'>
+```
+
+- In an attribute, `<` and `<=` are written `&lt;` and `&lt;=`. `>` and `>=` need no escape. The words avoid the question, and Blogger's own themes use `lt` and `gt`.
+- `eq` and `neq` are the words for `==` and `!=`. `ne` does not exist, and is an error. <BloggerSource kind="observed" /> Most themes write the symbols.
+- `!=` between two booleans is "exactly one of them": the second example is true on listings that are not the homepage.
+- `<`, `>`, `<=` and `>=` take numbers and strings of digits only. Other strings, booleans and missing data are errors: `"a" < "b"`, `data:missing < 1`. <BloggerSource kind="observed" />
+- Comparisons do not chain. `1 < 2 < 3` is `(1 < 2) < 3`, which orders a boolean, an error. <BloggerSource kind="observed" /> Write `data:a < data:b and data:b < data:c`.
+- `==` compares numbers by their text, so `5 == 5.0` and `007 == 7` are false. Missing data equals `""`. <BloggerSource kind="observed" />
+
+How values of different kinds compare, `5 == "5"`, strings with `<`, missing data, is in [Equality and comparison](./evaluation.mdx#equality-and-comparison).
+
+## Logic
+
+| Word  | Symbol | Gives                                         | Source                                                                           |
+| ----- | ------ | --------------------------------------------- | -------------------------------------------------------------------------------- |
+| `and` | `&&`   | `true` when both sides are true, else `false` | <BloggerSource kind="official" /> `and`, <BloggerSource kind="observed" /> `&&`  |
+| `or`  | `\|\|` | `true` when one side is true, else `false`    | <BloggerSource kind="official" /> `or`, <BloggerSource kind="observed" /> `\|\|` |
+| `not` | `!`    | `true` or `false`, the opposite truth         | <BloggerSource kind="official" />                                                |
+
+```xml
+<b:if cond='!data:widgets.Image71'>
+<b:if cond='data:view.isSearch and !data:view.isLabelSearch'>
+<b:with value='data:comments filter (c => not data:c.inReplyTo or data:c.inReplyTo == 0)' var='topLevel'>
+<b:class cond='(data:view.isHomepage or data:view.isPost) and data:widgets any (w => w.sectionId == "sidebar")' name='has-sidebar'/>
+```
+
+- **Operands are conditions.** A value read from data counts by [truthiness](./evaluation.mdx#truthiness): `""`, missing data, `"false"` and `"no"` are false, and `0` and an empty list are true. A value made in the expression must be a boolean: `"x" and true` and `(data:n + 1) or false` are errors. See [Conditions inside an expression](./evaluation.mdx#conditions-inside-an-expression). <BloggerSource kind="observed" />
+- **`and` and `or` give `true` or `false`**, never an operand: `true and data:blog.title` is `true`. <BloggerSource kind="observed" /> They can not give a fallback, and `data:missing or "none"` is an error. Use [elvis](#elvis) for a fallback: `data:a ?: "none"`.
+- **They stop early.** The right side is evaluated only when the left one does not decide the result. <BloggerSource kind="observed" /> See [Order of evaluation](./evaluation.mdx#order-of-evaluation).
+- **`&&` must be written `&amp;&amp;`** in an attribute, so themes write `and`. `||` needs no escape, but `or` is the usual form.
+- **`!` binds tightly.** `!data:a == data:b` is `(!data:a) == data:b`. Write `!(data:a == data:b)`, or `data:a != data:b`.
+- **`not` is followed by a space** when the next character is a letter, `not data:view.isPreview`. `!` needs none.
+- **`not` before `in` or `contains`** is part of the operator `not in` or `not contains`. Anywhere else it is the prefix: `not data:a in data:list` is `(not data:a) in data:list`. Write `data:a not in data:list`. <BloggerSource kind="observed" />
+
+## Membership
+
+`a in b` and `b contains a` are the same test, written in two orders. `not in` and `not contains` are its opposite: <BloggerSource kind="official" />
+
+```xml
+<b:if cond='data:blog.pageType in {"index", "archive"}'>
+<b:if cond='data:content not in ["", "&lt;!-- removed --&gt;"]'>
+<b:if cond='data:image contains ".ico"'>
+<b:if cond='data:sourceUrl not contains "http://"'>
+<b:loop values='data:links filter (l => "https://" in l.target)' var='link'>
+```
+
+What the test means depends on the side that holds the values: <BloggerSource kind="observed" />
+
+| `b` in `a in b`, or `a contains …` | True when                                                           |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| a list, in brackets or braces      | an item is equal to the value, by the rules of `==`                 |
+| a string                           | the value, a string, a number or a boolean, is found in `b` as text |
+| missing data                       | the value is `""`: missing data is searched like `""`               |
+| a map, a number or a boolean       | never: an error                                                     |
+
+- Items compare with `==`, where a number equals its text: `5 in ["5"]` and `"5" in [5]` are true. <BloggerSource kind="observed" />
+- A number is searched as text in a string: `5 in "12345"` is true. <BloggerSource kind="observed" />
+- A list can not be searched for: `[1] in [[1], [2]]` is an error. A map searched for in a list is `false`. <BloggerSource kind="observed" />
+- A string of digits read from data is a number, and can not be searched: when `data:id` holds `"123"`, `data:id contains "2"` is an error. Join it with `""` first: `(data:id + "") contains "2"`. <BloggerSource kind="observed" />
+- The test is case-sensitive: `"Blogger" contains "blog"` is false.
+- The list can be a literal, data, or the result of a lambda in parentheses: `data:post.id in (data:widgets.FeaturedPost map (w => w.postId))`. <BloggerSource kind="observed" />
+- With a fallback for missing data, put `?:` in parentheses: `l.name in (data:names ?: [])`.
+
+## Ternary
+
+`condition ? a : b` gives `a` when the condition is true, and `b` otherwise: <BloggerSource kind="official" />
+
+```xml {3}
+<meta expr:content='data:blog.adultContent ? "adult" : "general"' name='rating'/>
+<b:eval expr='data:blog.isPrivate ? "true" : "false"'/>
+<b:class expr:name='data:skin.vars.direction == "2px" ? "ltr" : (data:skin.vars.direction == "3px" ? "rtl" : data:blog.languageDirection)'/>
+```
+
+- The condition is a value read from data, true or false by [truthiness](./evaluation.mdx#truthiness), or a boolean. A value made in the expression that is not a boolean, `5 ? 1 : 2` or `(data:a + "") ? 1 : 2`, is an error. See [Conditions inside an expression](./evaluation.mdx#conditions-inside-an-expression). <BloggerSource kind="observed" />
+- The two results can be of any kind: strings, numbers, booleans, lists, maps, or an image of the data, `data:featuredImages.first`. <BloggerSource kind="observed" />
+- Only the chosen branch is evaluated. <BloggerSource kind="observed" />
+- **Ternaries nest.** The last part groups to the right, so `a ? 1 : b ? 2 : 3` is `a ? 1 : (b ? 2 : 3)`. <BloggerSource kind="observed" /> Parentheses make it easier to read, as in the third example.
+
+The ternary binds more loosely than any other operator. Inside a larger expression it needs parentheses, or it takes everything before the `?` as its condition:
+
+```xml
+<div expr:style='"font-size: " + (data:view.isMobile ? 14 : 16) + "px"'/>
+```
+
+Without the parentheses, `"font-size: " + data:view.isMobile ? 14 : 16 + "px"` is read as `("font-size: " + data:view.isMobile) ? 14 : (16 + "px")`. The condition is a string made in the expression, not a boolean, so the expression is an error. <BloggerSource kind="observed" />
+
+## Elvis
+
+`a ?: b` gives `a`, or `b` when `a` is missing. <BloggerSource kind="observed" /> It sets a default value. Blogger's own themes use it for options an includable may or may not receive:
+
+```xml
+<svg expr:height='data:props.size ?: 24' expr:stroke='data:props.stroke ?: "currentColor"' expr:width='data:props.size ?: 24' viewBox='0 0 24 24'/>
+<b:eval expr='data:image.width ?: 1280'/>
+<b:with value='(data:c.links ?: data:links) filter (l => l.name == data:c.name)' var='matches'>
+```
+
+- **Only missing data is replaced.** `false`, `""` and an empty list are values, and are kept: `false ?: "x"` is `false`, and `"" ?: "x"` is `""`. <BloggerSource kind="observed" />
+- **It stops early.** The right side is evaluated only when the left one is missing. <BloggerSource kind="observed" />
+- Data that exists but is empty is therefore kept. A blog without a description has `data:blog.metaDescription` empty, and `data:blog.metaDescription ?: data:blog.title` gives an empty string. For empty strings, use a ternary: `data:blog.metaDescription ? data:blog.metaDescription : data:blog.title`.
+- `?:` is one operator, with no space inside. `a ? : b` is an incomplete ternary, an error.
+- It chains: `data:a ?: data:b ?: "default"` is the first one that exists.
+- **It binds tightly**, more than `*` and `+`: `"a" + data:missing ?: "x"` is `"a" + (data:missing ?: "x")`, `2 * data:missing ?: 3` is `6`, and `a ?: b ? c : d` is `(a ?: b) ? c : d`. <BloggerSource kind="observed" /> To give a fallback to a larger expression, put that expression in parentheses: `((data:view.isPage ? data:values[8] : data:values[7]) ?: data:values[6])`.
+
+## Ranges
+
+`1 to 5` and `1..5` write a range of whole numbers. They exist only in `values` of [`<b:loop>`](../tags/loops.mdx), where `1 to 5` <BloggerSource kind="official" /> takes expressions as its ends, and `1..5` <BloggerSource kind="observed" /> takes integer literals with no spaces. They are not operators of other expressions.
+
+## Operator functions
+
+Every binary operator also has a function form, written like a call: `+(1, 2, 3)` is `6`. <BloggerSource kind="observed" /> It takes any number of values, and applies the operator to them from the left:
+
+| Expression                                   | Result                        |
+| -------------------------------------------- | ----------------------------- |
+| `+(1, 2, 3)`                                 | `6`                           |
+| `+(1, "a", 2)`                               | `1a2`                         |
+| `-(5, 3, 1)`                                 | `1`                           |
+| `*(2, 3, 4)`                                 | `24`                          |
+| `/(100, 10, 2)`                              | `5`                           |
+| `==(1, 1, true)`                             | `true`, as `(1 == 1) == true` |
+| `and(true, false)`, `or(false, false, true)` | `false`, `true`               |
+| `?:(data:missing, data:missing, 3)`          | `3`                           |
+| `in(1, [1])`, `contains([1], 1)`             | `true`, `true`                |
+| `neq(1, 2)`, `lt(1, 2)`, `gte(1, 1)`         | `true`, `true`, `true`        |
+| `!(true)`, `not(true)`                       | `false`, `false`              |
+
+- **With one value**, the function gives it back, computed: `+(007)` is `7`, and `-(5)` is `5`. With none, `+()` is `0`, `and()` is `true` and `or()` is `false`. <BloggerSource kind="observed" />
+- **Too few values crash the page.** `-()`, `*()`, `/()`, `%()`, `==()`, `==(1)` and `!=(1)` show [Blogger's generic error page](./evaluation.mdx#crashes) for the whole page. `<(1)`, `?:()` and `!()` are errors. <BloggerSource kind="observed" />
+- **From the left means what it says.** `<(1, 2, 3)` is `true < 3`, an error.
+- **The arguments are single values**, as for any [function](./functions.mdx#arguments): `+(data:a, (data:b * 2))`.
+- **An operator function is one node** for all its values, where `a + b + c` is five. A long sum or `and` fits the [size limit](./evaluation.mdx#size-limit) better this way.
+- Lambdas have no function form: `map(data:posts, …)` is an error. `take` and `skip` have one, see [`take` and `skip`](./lambdas.mdx#take-and-skip).
+
+## Precedence
+
+When an expression has several operators, the tighter ones apply first. From the loosest to the tightest: <BloggerSource kind="observed" />
+
+| Level | Operators                                      | Groups       |
+| ----- | ---------------------------------------------- | ------------ |
+| 1     | `? :`                                          | to the right |
+| 2     | `or`, `\|\|`                                   | to the left  |
+| 3     | `and`, `&&`                                    | to the left  |
+| 4     | `==`, `!=`, `eq`, `neq`                        | to the left  |
+| 5     | `in`, `contains`, `not in`, `not contains`     |              |
+| 6     | `<`, `>`, `<=`, `>=`, `lt`, `gt`, `lte`, `gte` |              |
+| 7     | `+`, `-`                                       | to the left  |
+| 8     | `*`, `/`, `%`                                  | to the left  |
+| 9     | `?:`                                           |              |
+| 10    | `!`, `not` before a value                      |              |
+| 11    | `.name`, `[index]`, function calls             |              |
+
+| Expression                           | Is read as                               |
+| ------------------------------------ | ---------------------------------------- |
+| `data:num + 2 * 3`                   | `data:num + (2 * 3)`                     |
+| `data:a or data:b and data:c`        | `data:a or (data:b and data:c)`          |
+| `data:a == 1 and data:b ? "x" : "y"` | `((data:a == 1) and data:b) ? "x" : "y"` |
+| `data:type == "x" in data:list`      | `data:type == ("x" in data:list)`        |
+| `data:i < data:labels.length - 1`    | `data:i < (data:labels.length - 1)`      |
+| `"a" + data:b ?: "x"`                | `"a" + (data:b ?: "x")`                  |
+| `data:a ?: data:b ? "x" : "y"`       | `(data:a ?: data:b) ? "x" : "y"`         |
+| `!data:a == data:b`                  | `(!data:a) == data:b`                    |
+| `data:a + data:url path "x"`         | `data:a + (data:url path "x")`           |
+
+`in` binds tighter than `==`, and `?:` tighter than arithmetic, unlike in most languages. Put parentheses around any mix of them.
+
+[Lambdas](./lambdas.mdx), `take` and `skip`, and infix functions take on their left only the value next to them: `"n=" + data:l count (x => x)` is `"n=" + (data:l count (x => x))`, and `data:l take 2 == [1, 2]` is `(data:l take 2) == [1, 2]`. `!` applies before them: `!data:l any (x => x)` is `(!data:l) any (x => x)`, an error. Write `!(data:l any (x => x))`. <BloggerSource kind="observed" />
+
+A `.name` written after a string literal, or after a space, applies to everything on its left: `"x" + "ab".length` is `3`. See [Members](./data-paths.mdx#members).
+
+### Where parentheses are needed
+
+Some positions take a single value, not a whole expression: <BloggerSource kind="observed" />
+
+- the arguments of a function: `path(data:blog.bloggerUrl, ("blog/post/edit/" + data:blog.blogId + "/" + data:post.id))`;
+- the items of a list, in brackets or braces: `[data:url, (data:image ?: data:fallback)]`;
+- the values of a map: `{ status: (data:skin.vars.comments == "2px") }`;
+- the right side of an infix function: `data:url path ("p/" + data:slug)`.
+
+A single value is a literal, a list or a map, data with its members and indexes, a call, an operator function, `!` or `not` before a value, or anything in parentheses. An operator, `and`, `or`, a ternary, elvis, a lambda, `take` or `skip`, or an infix function in these positions goes in parentheses. So does a member of anything but data: `snippet([1, 2].length)` is an error, and `snippet(([1, 2].length))` works. <BloggerSource kind="observed" />
+
+Parentheses are also needed:
+
+- around a ternary or an elvis inside a larger expression, as shown above;
+- around a lambda chain before `.`: `(data:links filter (l => l.name == "icon")).last`. See [Chaining](./lambdas.mdx#chaining);
+- around an infix function before another infix function: `(data:url path "search") appendParams { q: "x" }`.
+
+Extra parentheses are always allowed and change nothing.

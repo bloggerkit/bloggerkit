@@ -1,0 +1,161 @@
+---
+title: Feed
+description: The Feed widget, which lists the latest entries of an RSS or Atom feed after the page has loaded in the browser.
+published: 2026-10-26
+---
+
+`Feed` shows the newest entries of an RSS or Atom feed: the blog's own feed, another blog's, a podcast or a news site. Unlike most widgets, the entries never reach the theme. The template only writes a placeholder, a "Loading..." link to the feed, and a script fills it in the browser once the page is shown. Google describes the content as loaded dynamically after the blog is rendered, and stylable only with CSS. <BloggerSource kind="official" />
+
+## Quick example
+
+<CodeTabs>
+
+```xml title="theme.xml" {11}
+<b:widget id='Feed1' locked='false' title='From the newsroom' type='Feed' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='feedUrl'>https://another-example.blogspot.com/feeds/posts/default</b:widget-setting>
+    <b:widget-setting name='numItemsShow'>5</b:widget-setting>
+    <b:widget-setting name='openLinksInNewWindow'>false</b:widget-setting>
+    <b:widget-setting name='showItemAuthor'>false</b:widget-setting>
+    <b:widget-setting name='showItemDate'>true</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:include name='widget-title'/>
+    <div class='widget-content' expr:id='data:widget.instanceId + "_feedItemListDisplay"'>
+      <a class='feed-loading' expr:href='data:feedUrl'><data:loadingMsg/></a>
+    </div>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered, before the script runs"
+<div class='widget Feed' data-version='2' id='Feed1'>
+<h3 class='title'>
+From the newsroom
+</h3>
+<div class='widget-content' id='Feed1_feedItemListDisplay'>
+<a class='feed-loading' href='https://another-example.blogspot.com/feeds/posts/default'>Loading...</a>
+</div>
+</div>
+```
+
+</CodeTabs>
+
+The element with the id `Feed1_feedItemListDisplay` is where the entries are written. Keep that id, built from `data:widget.instanceId`, when you restyle the widget and still rely on Blogger's script.
+
+## Placement and limits
+
+| Property                 | Value                                                                           | Source                            |
+| ------------------------ | ------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `Feed`                                                                          | <BloggerSource kind="official" /> |
+| Per blog                 | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) |                                   |
+| Suggested width          | 300px                                                                           | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | Any section                                                                     | <BloggerSource kind="observed" /> |
+| Locked                   | Not by default                                                                  | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                        | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                           | <BloggerSource kind="official" /> |
+| Not available in         | Dynamic Views, Mobile Default 2010                                              | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting                | Values                        | Read as                | Meaning                       | Source                            |
+| ---------------------- | ----------------------------- | ---------------------- | ----------------------------- | --------------------------------- |
+| `feedUrl`              | a URL, up to 2,083 characters | `feedUrl`              | The feed to read              | <BloggerSource kind="observed" /> |
+| `numItemsShow`         | `1` to `5`                    | `numItemsShow`         | How many entries to list      | <BloggerSource kind="observed" /> |
+| `showItemDate`         | `true`, `false`               | `showItemDate`         | Show the date of each entry   | <BloggerSource kind="observed" /> |
+| `showItemAuthor`       | `true`, `false`               | `showItemAuthor`       | Show the author of each entry | <BloggerSource kind="observed" /> |
+| `openLinksInNewWindow` | `true`, `false`               | `openLinksInNewWindow` | Open the entries in a new tab | <BloggerSource kind="observed" /> |
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A Feed written with no settings saves, with none added and an empty title; it renders nothing without a URL.
+- A Feed written with settings needs `feedUrl` and `numItemsShow`, or it is refused "Required field must not be blank". The three booleans default to `false`.
+- `feedUrl` keeps any text, `not a url` too; one of 2,084 characters is refused.
+- `numItemsShow` must be 1 to 5: "Must be at least 1", "Must be no greater than 5".
+
+## Widget data
+
+Both widget versions have the same fields. Google documents `title` and `feedUrl`.
+
+| Field                  | Type    | Content                                                                           | Source                            |
+| ---------------------- | ------- | --------------------------------------------------------------------------------- | --------------------------------- |
+| `title`                | string  | Widget title, up to 100 characters. The editor fills it with the name of the feed | <BloggerSource kind="observed" /> |
+| `feedUrl`              | string  | The feed address                                                                  | <BloggerSource kind="official" /> |
+| `loadingMsg`           | string  | Localized "Loading...", the same text as `data:messages.loading`                  | <BloggerSource kind="observed" /> |
+| `numItemsShow`         | number  | 1 to 5                                                                            | <BloggerSource kind="observed" /> |
+| `showItemDate`         | boolean | The date setting                                                                  | <BloggerSource kind="observed" /> |
+| `showItemAuthor`       | boolean | The author setting                                                                | <BloggerSource kind="observed" /> |
+| `openLinksInNewWindow` | boolean | The new-tab setting                                                               | <BloggerSource kind="observed" /> |
+
+There is no list of entries. A template can not loop over the feed: only the script sees it.
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders                                                                        | Source                            |
+| ---------- | --- | --- | -------------------------------------------------------------------------------------- | --------------------------------- |
+| `main`     | Yes | Yes | v1: an `h2` title, the placeholder and `quickedit`. v2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`  | No  | Yes | The placeholder                                                                        | <BloggerSource kind="observed" /> |
+
+The placeholder is a `div.widget-content` with the id `ID_feedItemListDisplay`, holding a faded `span` (25% opacity) with a link to `feedUrl` whose text is `loadingMsg`.
+
+## Writing your own markup
+
+### Load the entries yourself
+
+Google's description names the Google AJAX Feed API, which has since been shut down, and how Blogger fetches the entries today is not confirmed. A theme that drops Blogger's widget script (`b:js='false'` on `<html>`) gets only the placeholder. It can fill the list itself when the feed is a Blogger feed, because Blogger feeds answer in JSON with a callback (JSONP), which works across sites. Feeds of other hosts usually block cross-site requests.
+
+Put the settings on the placeholder as data attributes:
+
+```xml {3}
+<b:includable id='main'>
+  <b:include name='widget-title'/>
+  <ul class='feed-list' expr:data-count='data:numItemsShow' expr:data-new-tab='data:openLinksInNewWindow' expr:data-url='data:feedUrl'>
+    <li><a expr:href='data:feedUrl'><data:loadingMsg/></a></li>
+  </ul>
+</b:includable>
+```
+
+Then request the feed with `alt=json` and a callback, and build the items:
+
+```js title="feed-widget.js" {4}
+document.querySelectorAll('.feed-list').forEach((list, n) => {
+  const callback = `feedWidget${n}`;
+  window[callback] = (json) => {
+    const entries = json.feed.entry || [];
+    list.replaceChildren(...entries.map((entry) => {
+      const link = entry.link.find((l) => l.rel === 'alternate');
+      const a = document.createElement('a');
+      a.href = link.href;
+      a.textContent = entry.title.$t;
+      if (list.dataset.newTab === 'true') a.target = '_blank';
+      const li = document.createElement('li');
+      li.append(a);
+      return li;
+    }));
+  };
+  const url = new URL(list.dataset.url);
+  url.searchParams.set('alt', 'json');
+  url.searchParams.set('max-results', list.dataset.count);
+  url.searchParams.set('callback', callback);
+  const script = document.createElement('script');
+  script.src = url.href;
+  document.body.append(script);
+});
+```
+
+A feed with no entries has no `entry` key, hence the `|| []`. See [feeds](../guides/feeds.mdx) for the other feed addresses and parameters.
+
+### Style the default output
+
+When you keep Blogger's script, the list it writes can only be styled with CSS, by the id or the classes around it:
+
+```css
+#Feed1_feedItemListDisplay a { text-decoration: none; }
+.Feed .widget-content { font-size: 0.9em; }
+```
+
+## Things to know
+
+- **Any feed.** Exported themes show feeds of other blogs, podcasts and news sites in `feedUrl`. Only the script reads it: the theme renders the same placeholder whether the address works or not.
+- **Five entries at most.** `numItemsShow` stops at 5.
+- **`quickedit`** in the version 1 `main` no longer does anything.

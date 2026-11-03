@@ -1,0 +1,257 @@
+---
+title: b:loop
+description: Repeat markup once for every item of a list, or for every number of a range.
+level: beginner
+published: 2026-10-26
+---
+
+`<b:loop>` takes a list and renders its content once per item. Inside, the current item has a name of your choice, and its position can have one too. Lists are everywhere in a theme: the posts of a page, the labels of a post, the comments, the links of a widget.
+
+<CodeTabs>
+
+```xml title="The labels of a post, separated by commas"
+<div class='post-labels'>
+  <b:loop index='i' values='data:post.labels' var='label'>
+    <b:if cond='data:i != 0'>, </b:if>
+    <a expr:href='data:label.url' rel='tag'><data:label.name/></a>
+  </b:loop>
+</div>
+```
+
+```html title="Rendered for a post with two labels"
+<div class='post-labels'>
+  <a href='https://example.blogspot.com/search/label/Recipes' rel='tag'>Recipes</a>, <a href='https://example.blogspot.com/search/label/Vegan' rel='tag'>Vegan</a>
+</div>
+```
+
+</CodeTabs>
+
+`values` gives the list, `var` names the item, read as `data:label`, and `index` names its position, read as `data:i`. The first label has the index `0`, so the comma goes before every other label.
+
+## Attributes
+
+| Attribute | Required | Value                                | Default | Description                                            | Source                            |
+| --------- | -------- | ------------------------------------ | ------- | ------------------------------------------------------ | --------------------------------- |
+| `values`  | Yes      | expression giving a list, or a range |         | The items to repeat the content for                    | <BloggerSource kind="official" /> |
+| `var`     | Yes      | name                                 |         | The name of the current item                           | <BloggerSource kind="official" /> |
+| `index`   | No       | name                                 |         | The name of the position of the current item, from `0` | <BloggerSource kind="official" /> |
+| `reverse` | No       | expression                           | `false` | When true, the items come from the last to the first   | <BloggerSource kind="observed" /> |
+
+Google documents the first three attributes on [Widget Tags for Layouts](https://support.google.com/blogger/answer/46995). Blogger keeps any other attribute written on `<b:loop>` and ignores it. <BloggerSource kind="observed" />
+
+### `reverse`
+
+With `reverse='true'`, the loop runs over the items in reverse order. The index still counts from `0`: over `[1, 2, 3]`, the items come as `3`, `2`, `1` with the indexes `0`, `1`, `2`. `reverse` is an expression: `reverse='maybe'` is an error, `The expression 'maybe' is not valid.` <BloggerSource kind="observed" />
+
+### `values`
+
+An [expression](../expressions/index.mdx) whose result is a list. A list of the data, a list filtered or mapped with a [lambda](../expressions/lambdas.mdx), a list literal and a range all work:
+
+```xml
+<b:loop values='data:posts' var='post'>…</b:loop>
+<b:loop values='data:posts filter (p => p.id != data:view.postId)' var='post'>…</b:loop>
+<b:loop values='data:links filter (l => l.target != "#")' var='link'>…</b:loop>
+<b:loop values='[16, 32, 192, 512]' var='size'>…</b:loop>
+<b:loop values='1 to 5' var='star'>…</b:loop>
+```
+
+When the list is empty, or the data does not exist, the loop renders nothing. A value that is not a list, a string or a number, makes the loop run once, with the whole value as the item: over `"abc"`, the item is `abc`. <BloggerSource kind="observed" />
+
+### `var` and `index`
+
+Both are plain names, without `data:`: `var='post'` is read as `data:post` in the content. They exist only between `<b:loop>` and `</b:loop>`.
+
+`expr:var` and `expr:index` work too, and compute the name. When `var` and `expr:var` are both written, `expr:var` wins. A loop with `expr:var` and no `var` saves and works. Without any of them, or without `values`, the loop is a [markup error](../basics/saving.mdx#markup-errors) when it renders. <BloggerSource kind="observed" />
+
+The index counts from `0` and rises by one for each item, whatever the list. It is a number, so arithmetic works on it: `data:i + 1` is the position from `1`.
+
+```xml
+<b:loop index='i' values='data:posts' var='post'>
+  <article class='post' expr:data-position='data:i + 1'>
+    <h2><data:post.title/></h2>
+  </article>
+</b:loop>
+```
+
+### Names that hide data
+
+The name of the loop hides any data of the same name for the duration of the loop. Inside `<b:loop values='data:posts' var='post'>` in the Blog widget, `data:post` is the item, not the post of the page. After `</b:loop>`, the old value is back. A name can even hide Blogger's own data: a loop or a `<b:with>` named `data` or `blog` hides `data:blog`. An `index` named like the `var` hides the item: `data:r` is then the index. <BloggerSource kind="observed" />
+
+It also reaches every includable called from the content. An includable called with [`<b:include>`](../layout/includables.mdx) inside the loop reads the item and the index under their loop names, `data:post` and `data:i`. <BloggerSource kind="observed" /> Passing the item explicitly, `<b:include data='post' name='postCard'/>`, makes the includable clearer and independent of the loop's names.
+
+## Ranges
+
+Instead of a list, `values` can be a range of whole numbers. The loop then runs once per number, both ends included, with the number as the item. There are two ways to write a range.
+
+| Form     | Ends                                    | Spaces      | Example                      | Source                            |
+| -------- | --------------------------------------- | ----------- | ---------------------------- | --------------------------------- |
+| `A to B` | any expression giving a whole number    | around `to` | `0 to data:posts.length - 1` | <BloggerSource kind="official" /> |
+| `A..B`   | integer literals only, negative allowed | none        | `1..5`, `-2..3`              | <BloggerSource kind="observed" /> |
+
+### `A to B`
+
+The form Google documents. It counts up or down, and the ends can be negative:
+
+```xml
+<b:loop values='1 to 5' var='n'>…</b:loop>
+<b:loop values='9 to 7' var='n'>…</b:loop>
+<b:loop values='-3 to -9' var='n'>…</b:loop>
+```
+
+The first loop runs for `1`, `2`, `3`, `4`, `5`, the second for `9`, `8`, `7`. The index still starts at `0`: in `9 to 7`, the index of `9` is `0`. <BloggerSource kind="official" />
+
+The ends can be data or arithmetic, which makes `to` the way to loop over the positions of a list. A string of digits works as an end, `"1" to 3`. `to` takes everything before it as the start and everything after it as the end: it is looser than `+` and even than the ternary, so `true ? 1 : 2 to 3` runs from `1` to `3`. `to` needs spaces: `1to3` is a markup error. <BloggerSource kind="observed" />
+
+```xml
+<b:loop values='0 to data:posts.length - 1' var='n'>
+  <b:eval expr='data:posts[data:n].title'/>
+</b:loop>
+```
+
+### `A..B`
+
+The short form takes two integer literals and nothing else: `values='1..5'`, `values='-2..3'`. It counts down too: `5..1` runs for `5`, `4`, `3`, `2`, `1`. <BloggerSource kind="observed" />
+
+It has no spaces around `..`, and its ends can not be data. Blogger does not check this when saving: `1 .. 5` and `1..data:n` save, and the page fails when the loop renders, with a 500 error, `Invalid 'values' attribute on loop: '1 .. 5' could not be resolved.` In a widget, the widget fails instead. `1 ..3`, with a space before `..` only, is worse: no error, and the loop runs zero times. <BloggerSource kind="observed" />
+
+### Where ranges work
+
+A range is only a range in the `values` of a `<b:loop>`. Elsewhere it fails: `<b:eval expr='1 to 3'/>` with a 500 error, `Invalid expression '1 to 3'`, and `<b:with value='1 to 3'>` with `b:with has invalid value expression '1 to 3'`. It is not a list value that other operators can use: it can not be filtered, indexed, taken from with `take`, or stored with `<b:with>`. `take` works in `values` on a list, `[1, 2, 3] take 2`, but `1 to 4 take 2` is invalid: the end is read as `4 take 2`. <BloggerSource kind="observed" /> Ends that are not whole numbers, such as `1.5 to 3`, are a markup error.
+
+<CodeTabs>
+
+```xml title="Five stars, filled up to a rating"
+<b:with value='4' var='rating'>
+  <span class='rating'>
+    <b:loop values='1 to 5' var='star'>
+      <span expr:class='data:star &lt;= data:rating ? "star full" : "star"'>★</span>
+    </b:loop>
+  </span>
+</b:with>
+```
+
+```html title="Rendered"
+<span class='rating'>
+  <span class='star full'>★</span>
+  <span class='star full'>★</span>
+  <span class='star full'>★</span>
+  <span class='star full'>★</span>
+  <span class='star'>★</span>
+</span>
+```
+
+</CodeTabs>
+
+## Nesting
+
+A loop can contain other loops. Give each one its own names: an inner loop with the same `var` or `index` hides the outer one. The inner content sees both items.
+
+```xml title="The archive as a tree of years and months"
+<ul class='archive'>
+  <b:loop values='data:data' var='year'>
+    <li>
+      <a expr:href='data:year.url'><data:year.name/></a> (<data:year.post-count/>)
+      <ul>
+        <b:loop values='data:year.data' var='month'>
+          <li><a expr:href='data:month.url'><data:month.name/></a> (<data:month.post-count/>)</li>
+        </b:loop>
+      </ul>
+    </li>
+  </b:loop>
+</ul>
+```
+
+This runs in the BlogArchive widget with the hierarchy style, where `data:data` holds the years, and each year holds its months in `data`. `post-count` is a real data name, hyphen included.
+
+An inner loop can also walk the same list as the outer one, to read a neighbor of the current item. This carousel links each slide to the one before it, and the first slide to the last:
+
+```xml title="A link to the previous slide"
+<b:loop index='i' values='data:slides' var='slide'>
+  <b:if cond='data:i == 0'>
+    <label expr:for='"slide-" + data:slides.last.id'>Previous</label>
+  <b:else/>
+    <b:loop index='j' values='data:slides' var='other'>
+      <b:if cond='data:j == data:i - 1'>
+        <label expr:for='"slide-" + data:other.id'>Previous</label>
+      </b:if>
+    </b:loop>
+  </b:if>
+</b:loop>
+```
+
+## Patterns
+
+**The first items only.** A loop always runs over the whole list. To render a few items, test the index:
+
+```xml
+<b:loop index='i' values='data:links' var='link'>
+  <b:if cond='data:i &lt; 5'>
+    <a expr:href='data:link.target'><data:link.name/></a>
+  </b:if>
+</b:loop>
+```
+
+**Something after every third item.** `%` gives the remainder. A theme can insert an in-feed ad this way:
+
+```xml
+<b:loop index='i' values='data:posts' var='post'>
+  <b:include data='post' name='postCard'/>
+  <b:if cond='(data:i + 1) % 3 == 0 and not data:view.isPreview'>
+    <b:include name='inFeedAd'/>
+  </b:if>
+</b:loop>
+```
+
+**A comma after every item but the last.** The loop has no "last" flag, so compare the index with the length of the list. This is how a theme writes JSON:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<script id='labels' type='application/json'>{<b:loop index='i' values='data:labels' var='label'>"<data:label.name.jsonEscaped/>":<data:label.count/><b:if cond='data:i &lt; data:labels.length - 1'>,</b:if></b:loop>}</script>
+```
+
+```html title="Rendered in a Label widget"
+<script id='labels' type='application/json'>{"Recipes":12,"Travel":5,"Vegan":3}</script>
+```
+
+</CodeTabs>
+
+**A list written in the theme.** A list literal saves writing the same markup several times. A theme can turn one square image hosted by Blogger, `data:image`, into a favicon per size. In a simpler form:
+
+```xml
+<b:loop values='[32, 192, 512]' var='size'>
+  <link expr:href='resizeImage(data:image, data:size, "1:1")' expr:sizes='data:size + "x" + data:size' rel='icon'/>
+</b:loop>
+```
+
+**The items in reverse order.** Set `reverse`:
+
+```xml
+<b:loop reverse='true' values='data:posts' var='post'>
+  <h3><data:post.title/></h3>
+</b:loop>
+```
+
+The index still counts from `0`, from the first item rendered.
+
+**An empty list.** A loop over an empty list renders nothing, not even a message. Test the list first when the page needs one:
+
+```xml
+<b:if cond='data:posts.length == 0'>
+  <p class='no-posts'><data:messages.noResultsFound/></p>
+<b:else/>
+  <b:loop values='data:posts' var='post'>
+    <b:include data='post' name='postCard'/>
+  </b:loop>
+</b:if>
+```
+
+## Placement and limits
+
+- `<b:loop>` works anywhere markup renders: in `<head>`, `<body>`, includables, the text of a `<script>` or `<style>` outside CDATA.
+- Inside a `<![CDATA[ ]]>` section it is plain text.
+- A loop with no content is saved self-closed, `<b:loop values='data:posts' var='post'/>`, and renders nothing.
+- Loops and `<b:with>` nest up to 40 deep together: each is a variable scope, and the 41st is a markup error. See [Nesting depth](../reference/limits.mdx#nesting-depth).
+- A loop is markup, not a value: it can not write the value of an attribute. To set an attribute from a list, compute it with [`expr:`](./attributes.mdx) and a lambda, or print the whole element with [`<b:eval>`](./output.mdx).
+
+<BloggerSource kind="observed" />

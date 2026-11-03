@@ -1,0 +1,337 @@
+---
+title: Page layouts
+description: 'A layout for each kind of page from one theme: a custom homepage and 404 page, reserved paths, hiding sections the right way, and page classes for CSS.'
+level: intermediate
+prerequisites:
+  - blogger-xml/data/view
+  - blogger-xml/tags/conditionals
+published: 2026-10-26
+---
+
+A Blogger theme is one file for every page of the blog: the homepage, the lists, the posts, the static pages and the 404 page. The layout of each kind of page comes from tests on [`data:view`](../data/view.mdx): the theme renders one set of sections on posts, another on the homepage, and nothing it does not need.
+
+```xml title="A sidebar on the homepage and on posts only" {7}
+<div class='page'>
+  <main class='content'>
+    <b:section id='main' maxwidgets='3' name='Main' showaddelement='false'>
+      <b:widget id='Blog1' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'/>
+    </b:section>
+  </main>
+  <b:if cond='data:view.isLayoutMode or data:view.isHomepage or data:view.isPost'>
+    <aside class='sidebar'>
+      <b:section id='sidebar' name='Sidebar' showaddelement='true'/>
+    </aside>
+  </b:if>
+</div>
+```
+
+On a label page or a static page, the `<aside>` and the sidebar are not in the HTML at all. In the Layout editor, `data:view.isLayoutMode` keeps them, so the owner can still add widgets to the sidebar.
+
+## The page flags
+
+Every test of this page uses the flags of `data:view`: `isHomepage`, `isMultipleItems`, `isLabelSearch`, `isArchive`, `isPost`, `isPage`, `isSingleItem`, `isError` and `isLayoutMode`. Which page sets which flag, with the URLs of each kind of page, is on [Flags matrix](../data/page-types.mdx#flags-matrix), and the test to write for each case on [Choosing a test](../data/page-types.mdx#choosing-a-test). Two traps matter for layouts:
+
+- `isSearch` is true on label pages and on the older pages of the homepage, not only on searches. <BloggerSource kind="observed" />
+- The second page of the homepage is a `/search` page: `isHomepage` is false there. <BloggerSource kind="observed" />
+
+## Three ways to hide a section
+
+| Way                                         | The section in the HTML  | In the Layout editor                  | Use it for                               |
+| ------------------------------------------- | ------------------------ | ------------------------------------- | ---------------------------------------- |
+| `cond` on `<b:section>` or `<b:widget>`     | absent when false        | absent unless the condition allows it | a section with no wrapper of its own     |
+| `<b:if>` around the section and its wrapper | absent, with its wrapper | absent unless the condition allows it | a section inside markup that must go too |
+| A class, and CSS                            | present, hidden          | present                               | a section that only looks empty          |
+
+`cond` and `<b:if>` remove the markup: the widgets of a removed section are not rendered, their scripts do not run and their images do not load. CSS only hides what the visitor still downloads. Prefer the first two. See [sections](../layout/sections.mdx) and [widgets](../layout/widgets.mdx).
+
+<CodeTabs>
+
+```xml title="cond"
+<b:section cond='data:view.isLayoutMode or data:view.isSingleItem' id='after_post' name='After the post' showaddelement='true'/>
+```
+
+```xml title="b:if, when the wrapper must go too"
+<b:if cond='data:view.isLayoutMode or data:widgets any (w => w.sectionId == "footer_links")'>
+  <nav class='footer-links'>
+    <b:section id='footer_links' maxwidgets='2' name='Footer links' showaddelement='true'/>
+  </nav>
+</b:if>
+```
+
+```xml title="A class, when the section must stay"
+<div class='banner'>
+  <b:class cond='data:widgets none (w => w.sectionId == "banner")' name='is-empty'/>
+  <b:section id='banner' maxwidgets='1' name='Banner' showaddelement='true'/>
+</div>
+```
+
+</CodeTabs>
+
+`data:widgets any (w => w.sectionId == "ID")` is true when the section holds at least one visible widget. Production themes use it to drop a wrapper, a column or a heading when its section is empty. <BloggerSource kind="observed" /> With two sections in the column, test both in one expression:
+
+```xml
+<b:if cond='["sidebar", "sidebar_sticky"] any (id => data:widgets any (w => w.sectionId == data:id))'>
+```
+
+Without a class of its own, a theme can hide an empty section with the `no-items` class Blogger puts on it: `.section.no-items { display: none; }`. The HTML stays the same on every page, at the cost of an empty element.
+
+<Callout type="warn" title="Keep sections in the Layout editor">
+The Layout editor renders the theme with the same conditions. A section hidden there can no longer be edited, and its widgets can not be moved out of it or turned back on. Start every hiding condition with `data:view.isLayoutMode or`. See [Detecting the editor](./layout-editor.mdx#detecting-the-editor).
+</Callout>
+
+### A section that appears when its widget is on
+
+The test on `data:widgets` only counts visible widgets. A section whose widgets are all turned off is hidden on the blog, and comes back as soon as one of them is turned on in the Layout editor. A theme can use this for a maintenance notice: its section only renders when its widget, shipped with `visible='false'`, is switched on. <BloggerSource kind="observed" />
+
+```xml
+<b:section cond='data:widgets any (w => w.sectionId == "theme_section_maintenance")' id='theme_section_maintenance' maxwidgets='1' name='Maintenance' showaddelement='false'>
+  <b:widget cond='!data:view.isPreview' id='LinkList01' locked='true' title='Website under Maintenance' type='LinkList' version='2' visible='false'>…</b:widget>
+</b:section>
+```
+
+### On one post or page
+
+To change the layout of one static page, compare its URL. A theme can tell pages apart this way, with `path`:
+
+```xml
+<b:section cond='data:view.isLayoutMode or data:view.url.canonical != path(data:blog.homepageUrl.canonical, "p/contact.html")' id='sidebar' name='Sidebar' showaddelement='true'/>
+```
+
+The canonical URL has no query or fragment, so `?m=1` or `#comments` do not break the test.
+
+### On phones or computers
+
+`data:blog.isMobileRequest` is true when the request comes from a phone, or the URL has `?m=1`. A theme can let the owner target a widget with a word in its title: <BloggerSource kind="observed" />
+
+```xml /data:title/
+<b:widget cond='(data:title contains "[Mobile]" and data:blog.isMobileRequest) or (data:title contains "[Desktop]" and !data:blog.isMobileRequest) or (data:title not contains "[Mobile]" and data:title not contains "[Desktop]")' id='HTML85' locked='false' title='Sticky ad [Desktop]' type='HTML' version='2' visible='true'/>
+```
+
+The `cond` of a widget can read the widget's own data, here `data:title`, so the owner controls it from the Layout editor without editing the theme. Remove the tag from the displayed title in the widget's markup. See [`cond`](../layout/widgets.mdx#cond) and [`mobile`](../layout/widgets.mdx#mobile). For layouts that only change with the screen size, CSS media queries are simpler and work with any cache.
+
+## Layouts per page type
+
+A complete body usually looks like this: a header everywhere, a different main column per kind of page, and the sidebar only where it helps.
+
+```xml title="One body for every page"
+<body>
+  <header class='site-header'>
+    <b:section id='header' maxwidgets='1' name='Header' showaddelement='false'/>
+  </header>
+  <b:if cond='!data:view.isError'>
+    <b:section cond='data:view.isLayoutMode or data:view.isHomepage' id='home_top' name='Homepage, above the posts' showaddelement='true'/>
+    <b:section cond='data:view.isLayoutMode or data:view.isMultipleItems' id='list_top' name='Lists, above the posts' showaddelement='true'/>
+  </b:if>
+  <main class='content'>
+    <b:section id='main' maxwidgets='3' name='Main' showaddelement='false'>
+      <b:widget id='Blog1' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'/>
+    </b:section>
+    <b:section cond='data:view.isLayoutMode or data:view.isPost' id='after_post' name='After the post' showaddelement='true'/>
+  </main>
+  <b:if cond='data:view.isLayoutMode or ((data:view.isHomepage or data:view.isPost) and data:widgets any (w => w.sectionId == "sidebar"))'>
+    <aside class='sidebar'>
+      <b:section id='sidebar' name='Sidebar' showaddelement='true'/>
+    </aside>
+  </b:if>
+  <footer class='site-footer'>
+    <b:section id='footer' name='Footer' showaddelement='true'/>
+  </footer>
+</body>
+```
+
+Inside the Blog widget, the posts themselves change with the page: a card with a snippet on lists, the full post on items. See [Posts and pagination](./posts-and-pagination.mdx).
+
+```xml
+<b:loop values='data:posts' var='post'>
+  <b:if cond='data:view.isMultipleItems'>
+    <b:include data='post' name='postCard'/>
+  <b:else/>
+    <b:include data='post' name='postFull'/>
+  </b:if>
+</b:loop>
+```
+
+The heading of a list says what the list is. A theme can pick it from the flags and the search data:
+
+```xml title="The heading of a list"
+<b:if cond='data:view.isHomepage'>
+  <h2 class='list-title'><data:messages.latestPosts/></h2>
+<b:elseif cond='data:view.search.label'/>
+  <h1 class='list-title'><data:view.search.label/></h1>
+<b:elseif cond='data:view.search.query'/>
+  <h1 class='list-title'><data:view.search.resultsMessageHtml/></h1>
+<b:elseif cond='data:view.isArchive'/>
+  <h1 class='list-title'><data:view.archive.rangeMessage/></h1>
+<b:elseif cond='data:view.isMultipleItems'/>
+  <h1 class='list-title'><data:messages.posts/></h1>
+</b:if>
+```
+
+The blog title is an `h1` on lists and an `h2` on items, where the post title is the `h1`. A theme can write it with a dynamic tag, and link it everywhere except on the homepage: <BloggerSource kind="observed" />
+
+```xml
+<b:tag class='blog-title' expr:name='data:view.isSingleItem ? "h2" : "h1"'>
+  <b:tag expr:name='data:view.isHomepage ? "span" : "a"'>
+    <b:attr cond='!data:view.isHomepage' expr:value='data:blog.homepageUrl.canonical' name='href'/>
+    <data:blog.title/>
+  </b:tag>
+</b:tag>
+```
+
+See [dynamic tags](../tags/dynamic-tags.mdx).
+
+## A custom homepage
+
+A landing homepage shows blocks of the theme's own instead of the latest posts. The Blog widget can not be removed, and it still receives the posts on the homepage, so the theme simply does not print them there:
+
+```xml title="In the Blog widget"
+<b:includable id='main' var='this'>
+  <b:if cond='data:view.isHomepage'>
+    <a class='all-posts' expr:href='path(data:blog.homepageUrl.canonical, "search")'><data:messages.viewAll/></a>
+  <b:else/>
+    <b:loop values='data:posts' var='post'>
+      <b:include data='post' name='postCard'/>
+    </b:loop>
+    <b:include name='postPagination'/>
+  </b:if>
+</b:includable>
+```
+
+```xml title="Next to it, the blocks of the homepage"
+<b:section cond='data:view.isLayoutMode or data:view.isHomepage' id='landing' name='Homepage blocks' showaddelement='true'/>
+```
+
+- `/search` lists every post, newest first, with the posts per page of the homepage. It becomes the blog's "all posts" page, and its older pages work as before. <BloggerSource kind="observed" />
+- To style `/search` apart from searches and labels, test its URL: `data:view.url.canonical == path(data:blog.homepageUrl.canonical, "search")`. A theme can add a class for it. <BloggerSource kind="observed" />
+- The homepage still counts as a list: `data:view.isMultipleItems` is true, and the Blog widget's pager links lead to `/search`. A theme that keeps a short list of posts on the homepage can print the first posts only, see [Posts and pagination](./posts-and-pagination.mdx).
+- The blocks themselves are often FeaturedPost, Image, HTML or LinkList widgets, or empty placeholders filled by a script from the [feeds](./feeds.mdx).
+
+When a FeaturedPost widget sits above the list, its post is also in `data:posts`. A theme can remove it from the list on the homepage, by redefining `posts`; the caveats are on [FeaturedPost](../widget-types/featured-post.mdx#do-not-show-the-post-twice-on-the-homepage):
+
+```xml
+<b:with value='data:widgets.FeaturedPost filter (w => w.sectionId == "home_top") map (w => w.postId)' var='featuredIds'>
+  <b:with value='data:view.isHomepage ? data:posts filter (p => p.id not in data:featuredIds) : data:posts' var='posts'>
+    <b:loop values='data:posts' var='post'>
+      <b:include data='post' name='postCard'/>
+    </b:loop>
+  </b:with>
+</b:with>
+```
+
+## A custom 404 page
+
+Blogger renders the theme for any unknown address, with the HTTP status 404 and `data:view.isError` true. <BloggerSource kind="observed" /> The Blog widget has no posts there; its `data:navMessage` holds the 404 message, which the owner can change in Settings, under Errors and redirects. <BloggerSource kind="observed" />
+
+```xml title="In the Blog widget"
+<b:if cond='data:view.isError'>
+  <div class='not-found'>
+    <h1><data:messages.theresNothingHere/></h1>
+    <p><data:navMessage/></p>
+    <a expr:href='data:blog.homepageUrl.canonical'><data:messages.home/></a>
+  </div>
+</b:if>
+```
+
+A theme can go further: a section only rendered on 404 pages and in the Layout editor holds an HTML widget, so the owner writes the page in the Layout editor. When the widget is empty, the theme's own text is shown:
+
+```xml title="A 404 section the owner edits"
+<b:if cond='data:view.isError or data:view.isLayoutMode'>
+  <section class='error-page'>
+    <b:section id='error_page' maxwidgets='1' name='Page not found' showaddelement='false'>
+      <b:widget id='HTML404' locked='true' title='Page not found' type='HTML' version='2' visible='true'>
+        <b:widget-settings>
+          <b:widget-setting name='content'/>
+        </b:widget-settings>
+        <b:includable id='main'>
+          <h1><data:title/></h1>
+          <b:if cond='data:content'>
+            <data:content/>
+          <b:else/>
+            <p>The page you are looking for has moved, or never existed.</p>
+          </b:if>
+        </b:includable>
+      </b:widget>
+    </b:section>
+  </section>
+</b:if>
+```
+
+- The page keeps the status 404 whatever the theme prints. Search engines do not index it. <BloggerSource kind="observed" />
+- The canonical link, Open Graph tags and structured data are left out of 404 pages, see [Head and SEO](./head-and-seo.mdx).
+- The URL of a 404 page has a double slash after the host, `https://example.blogspot.com//old-post`, in `data:view.url` and `data:blog.url`. <BloggerSource kind="observed" />
+- An empty search, `/search?q=`, is a 404 page too. <BloggerSource kind="observed" />
+
+## A bare 404 for reserved paths
+
+Browsers, apps and crawlers request files that a blog never has: `/.well-known/assetlinks.json`, `/.well-known/apple-app-site-association`, `/.well-known/traffic-advice`, or `/cdn-cgi/…` on blogs behind a proxy. Blogger answers each with the full themed 404 page, with every script and style of the theme. <BloggerSource kind="observed" /> A theme can answer these paths with a bare document instead:
+
+```xml title="theme.xml" {2}
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' expr:lang='data:blog.locale.language' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+  <b:if cond='data:view.isError and [".well-known", "cdn-cgi"] any (dir => snippet(data:view.url.canonical) contains ("/" + data:dir))'>
+    <head>
+      <title>404 Not Found</title>
+    </head>
+    <body>
+      <h1>404 Not Found</h1>
+    </body>
+  <b:else/>
+    <head>
+      <!-- the head of the theme -->
+    </head>
+    <body>
+      <!-- the body of the theme -->
+    </body>
+  </b:if>
+</html>
+```
+
+- These paths reach the theme as ordinary 404 pages, with `data:view.isError` true. <BloggerSource kind="observed" />
+- `snippet` turns the URL into plain text, so `contains` compares text. Production themes do this before testing a URL. <BloggerSource kind="observed" />
+- `contains ("/" + data:dir)` matches the path with one slash or with the double slash of 404 URLs, with or without a trailing slash.
+- A `<b:if>` can choose between two whole documents, each with its own `<head>` and `<body>`. The layout of the theme, its sections and its `<b:skin>`, stays in one branch: a theme has a single skin. <BloggerSource kind="observed" />
+- Put the test before every other branch, so nothing of the theme is rendered for these requests.
+
+The same structure serves other alternate documents: a theme can render a light document in the Layout editor, and an internal document on `/search?view=-XLazyContent` that only holds code for its scripts to fetch. See [Layout editor](./layout-editor.mdx) and [Performance](./performance.mdx).
+
+## Page classes
+
+CSS often needs to know the kind of page: a wider column on posts, no sidebar on static pages, a hero on the homepage. `<b:class>` adds classes to its parent element from the flags, once, so the CSS never tests anything else. <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Classes on body" {12}
+<body>
+  <b:class cond='data:view.isHomepage' name='on-home'/>
+  <b:class cond='data:view.isMultipleItems and !data:view.isHomepage' name='on-list'/>
+  <b:class cond='data:view.isLabelSearch' name='on-label'/>
+  <b:class cond='data:view.search.query' name='on-query'/>
+  <b:class cond='data:view.isArchive' name='on-archive'/>
+  <b:class cond='data:view.isSingleItem' name='on-item'/>
+  <b:class cond='data:view.isPost' name='on-post'/>
+  <b:class cond='data:view.isPage' name='on-page'/>
+  <b:class cond='data:view.isError' name='on-error'/>
+  <b:class cond='data:view.url.canonical == path(data:blog.homepageUrl.canonical, "search")' name='on-all-posts'/>
+  <b:class cond='(data:view.isHomepage or data:view.isPost) and data:widgets any (w => w.sectionId == "sidebar")' name='has-sidebar'/>
+  <b:class cond='data:view.isPreview' name='is-preview'/>
+  …
+</body>
+```
+
+```html title="Rendered on a post, with a sidebar"
+<body class='on-item on-post has-sidebar'>
+```
+
+</CodeTabs>
+
+```css
+.content { max-width: 720px; }
+.has-sidebar .page { display: grid; grid-template-columns: 1fr 300px; gap: 32px; }
+.on-page .post-meta, .on-error .sidebar { display: none; }
+```
+
+- Each `<b:class>` adds one class when its `cond` is true, and keeps the classes already there. `expr:name` computes the name, and one `name` can hold several classes, `name='grid gap-3'`. See [attributes](../tags/attributes.mdx).
+- `has-sidebar` repeats the condition of the sidebar's `<b:if>`, so the grid only applies when the sidebar is really rendered.
+- A theme can put these classes on an element that wraps the page rather than on `<body>`, or use the same names, `on-home`, `on-post`, `on-error`, as hooks for its CSS utilities. <BloggerSource kind="observed" />
+- Classes on `<html>` work the same way: a `<b:class>` placed directly inside `<html>`, outside `<head>` and `<body>`, applies to `<html>`. <BloggerSource kind="observed" />
+
+Blogger's own themes do the same with classes such as `item-view` and `feed-view`. The names are free: nothing in Blogger reads them.

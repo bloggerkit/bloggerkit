@@ -1,0 +1,262 @@
+---
+title: data:view
+description: 'The global dictionary of the page being rendered: its kind, flags, title, description, URL and main image, and the details of a search or an archive.'
+level: beginner
+published: 2026-10-26
+---
+
+`data:view` answers the question every theme asks first: what page is this? It gives the kind of page as flags, the title, description and address of the page, its main image, and the details of a search or a date archive. It is global, like [`data:blog`](./blog.mdx), and can be read anywhere under `<html>` except inside `<![CDATA[ ]]>`. The 2017 themes take all their page logic from it. <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="Page classes on the root element" {4}
+<div class='app' id='root'>
+  <b:class cond='data:view.isHomepage' name='on-home'/>
+  <b:class cond='data:view.isMultipleItems' name='on-list'/>
+  <b:class cond='data:view.isMultipleItems != data:view.isHomepage' name='on-list-inner'/>
+  <b:class cond='data:view.isSingleItem' name='on-item'/>
+  <b:class cond='data:view.isPost' name='on-post'/>
+  <b:class cond='data:view.isPage' name='on-page'/>
+  <b:class cond='data:view.isError' name='on-error'/>
+  …
+</div>
+```
+
+```html title="Rendered"
+<!-- the homepage -->
+<div class='app on-home on-list' id='root'>
+<!-- a label page -->
+<div class='app on-list on-list-inner' id='root'>
+<!-- a static page -->
+<div class='app on-item on-page' id='root'>
+```
+
+</CodeTabs>
+
+The third class is true on every list of posts except the homepage, see [Choosing a test](./page-types.mdx#choosing-a-test). CSS can then style each family of pages from one class, and a utility framework can key variants to them, such as a `post:` variant for `.on-post *`.
+
+Google does not document `data:view`. Every field below was checked against Blogger's themes and live blogs. <BloggerSource kind="observed" />
+
+## Fields
+
+| Field                       | Type    | Set on                                          | Meaning                                                             | Source                            |
+| --------------------------- | ------- | ----------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `type`                      | string  | every page                                      | `feed`, `item` or `error`                                           | <BloggerSource kind="observed" /> |
+| `title`                     | string  | every page                                      | The title of the page, without the blog title                       | <BloggerSource kind="observed" /> |
+| `description`               | string  | every page                                      | A description of the page, 500 characters at most                   | <BloggerSource kind="observed" /> |
+| `url`                       | URL     | every page                                      | The address of the page. Equal to `data:blog.url`                   | <BloggerSource kind="observed" /> |
+| `featuredImage`             | image   | posts and static pages with an image or a video | The main image, or the thumbnail of the first video                 | <BloggerSource kind="observed" /> |
+| `postId`                    | number  | posts                                           | The id of the post                                                  | <BloggerSource kind="observed" /> |
+| `pageId`                    | number  | static pages                                    | The id of the static page                                           | <BloggerSource kind="observed" /> |
+| `isHomepage`                | boolean | every page                                      | The first page of the homepage                                      | <BloggerSource kind="observed" /> |
+| `isMultipleItems`           | boolean | every page                                      | A list of posts: homepage, `/search` pages, labels, archives        | <BloggerSource kind="observed" /> |
+| `isSingleItem`              | boolean | every page                                      | A post or a static page                                             | <BloggerSource kind="observed" /> |
+| `isPost`                    | boolean | every page                                      | A post                                                              | <BloggerSource kind="observed" /> |
+| `isPage`                    | boolean | every page                                      | A static page                                                       | <BloggerSource kind="observed" /> |
+| `isSearch`                  | boolean | `/search` pages                                 | Any `/search` URL: all posts, labels and queries. Missing elsewhere | <BloggerSource kind="observed" /> |
+| `isLabelSearch`             | boolean | every page                                      | A label page                                                        | <BloggerSource kind="observed" /> |
+| `isArchive`                 | boolean | every page                                      | A date archive                                                      | <BloggerSource kind="observed" /> |
+| `isError`                   | boolean | every page                                      | A 404 page                                                          | <BloggerSource kind="observed" /> |
+| `isPreview`                 | boolean | dashboard only; missing elsewhere               | A preview in the dashboard                                          | <BloggerSource kind="observed" /> |
+| `isLayoutMode`              | boolean | dashboard only; missing elsewhere               | The Layout editor of the dashboard                                  | <BloggerSource kind="observed" /> |
+| `isMobile`                  | boolean | every page                                      | The mobile version, `?m=1`. Widget version 1                        | <BloggerSource kind="observed" /> |
+| `search`                    | map     | `/search` pages                                 | The details of a search                                             | <BloggerSource kind="observed" /> |
+| `search.query`              | string  | searches with `?q=`                             | The text searched for                                               | <BloggerSource kind="observed" /> |
+| `search.label`              | string  | label pages                                     | The label, from `/search/label/…` or `?label=`                      | <BloggerSource kind="observed" /> |
+| `search.resultsMessage`     | string  | searches and label pages                        | A translated heading for the results                                | <BloggerSource kind="observed" /> |
+| `search.resultsMessageHtml` | HTML    | searches and label pages                        | The same heading, with the query or label in a `<span>`             | <BloggerSource kind="observed" /> |
+| `archive`                   | map     | archives                                        | The details of an archive                                           | <BloggerSource kind="observed" /> |
+| `archive.year`              | number  | archives                                        | The year                                                            | <BloggerSource kind="observed" /> |
+| `archive.month`             | number  | month and day archives                          | The month, 1 to 12                                                  | <BloggerSource kind="observed" /> |
+| `archive.day`               | number  | day archives                                    | The day, 1 to 31                                                    | <BloggerSource kind="observed" /> |
+| `archive.rangeMessage`      | string  | archives                                        | A translated heading for the period                                 | <BloggerSource kind="observed" /> |
+
+## The flags
+
+Each flag is a boolean, and a flag that does not apply is false or simply absent; a condition treats both the same. The two families of pages, lists and single items, are told apart by `isMultipleItems` and `isSingleItem`, and the other flags narrow them down. Which flag is true on which page is in the [Flags matrix](./page-types.mdx#flags-matrix), with `data:blog.pageType`, the other page fields and the URLs of every kind of page.
+
+### `isMultipleItems` and `isSingleItem`
+
+`isMultipleItems` is true on every page meant to list posts, whatever the number of posts it lists. A label no post has still gives a list page, with HTTP status 200 and no posts: to show a message on an empty list, test `data:posts.empty` in the Blog widget. `isSingleItem` is true on posts and static pages.
+
+A 404 page belongs to neither family: `isSingleItem` and `isMultipleItems` are both false, and only `isError` is true. The Blog widget has no posts there, and its `data:navMessage` holds the 404 message, which the owner can change in Settings. <BloggerSource kind="observed" />
+
+```xml
+<b:loop values='data:posts' var='post'>
+  <b:include cond='data:view.isMultipleItems' data='post' name='post-card'/>
+  <b:include cond='data:view.isSingleItem' data='post' name='post-full'/>
+</b:loop>
+```
+
+### `isHomepage`
+
+True on the first page of the homepage and nowhere else. The "Older posts" link of the homepage goes to `/search?updated-max=…`, a search page, where `isHomepage` is false and `isSearch` is true. A URL such as `/?updated-max=…` still counts as the homepage.
+
+Inside the Blog widget, `data:view.url == data:blog.homepageUrl and !data:olderPageUrl` is true on the homepage of a blog that has no posts yet, a good place for a welcome message. <BloggerSource kind="observed" />
+
+### `isSearch` and `isLabelSearch`
+
+`isSearch` is true on every `/search` URL, not only on searches. On other pages it is missing, not false, so `data:view.isSearch == false` is not true there; test `!data:view.isSearch` instead. <BloggerSource kind="observed" /> Three tests separate the cases:
+
+```xml {3}
+<b:class cond='data:view.isLabelSearch' name='on-label'/>
+<b:class cond='data:view.search.query' name='on-query'/>
+<b:class cond='data:view.url.canonical == path(data:blog.homepageUrl.canonical, "search")' name='on-all-posts'/>
+```
+
+The last one compares the canonical page address with the bare search URL, so it is true on `/search` alone, the list of all posts. <BloggerSource kind="observed" /> Blogger's own themes write their search class as `data:view.isSearch and !data:view.isLabelSearch`.
+
+### `isPreview` and `isLayoutMode`
+
+`isPreview` is true when the dashboard renders a preview of the theme or of a post, and `isLayoutMode` when it renders the Layout editor, where the owner moves sections and widgets. On public pages both are missing from the data. <BloggerSource kind="observed" />
+
+Previews show unsaved work, so a theme turns off what would count or charge for it, such as ads and analytics, with `<b:if cond='!data:view.isPreview'>`. <BloggerSource kind="observed" /> How a theme keeps its sections reachable in the editor, and widgets meant only for it, is in [Detecting the editor](../guides/layout-editor.mdx#detecting-the-editor).
+
+### `isMobile`
+
+Meant for the mobile version of a page, `?m=1`, with widget version 1. No test found it true, even with `?m=1`. Use CSS for small screens, or `data:blog.isMobileRequest` on the server, see [Mobile requests](./blog.mdx#mobile-requests).
+
+## Title, description and URL
+
+### `data:view.title`
+
+The title of the page alone. On lists, archives and 404 pages it is the blog title; on a post or static page it is the title of that item, or the blog title again when the item has none. Since it never starts with the blog title, the theme decides the order:
+
+```xml
+<title>
+  <b:if cond='data:view.isSingleItem'>
+    <data:view.title.escaped/> | <data:blog.title/>
+  <b:else/>
+    <data:blog.pageTitle/>
+  </b:if>
+</title>
+```
+
+`data:view.title` holds `&` as typed, so it takes `.escaped`. `data:blog.title` and `data:blog.pageTitle` already hold `&amp;`: `.escaped` would print `&amp;amp;`. <BloggerSource kind="observed" /> See [the titles](./blog.mdx#titles). Titles per page type, including one that drops the blog title past 57 characters, are in [Title per page type](../guides/head-and-seo.mdx#title-per-page-type).
+
+### `data:view.description`
+
+A text for `<meta name="description">` and Open Graph, 500 characters at most. What it holds depends on the "Search descriptions" switch in Settings > Meta tags:
+
+| Search descriptions | Lists and 404 pages                                      | Posts and static pages                                   |
+| ------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| On                  | The search description of the blog, up to 150 characters | The search description of the item, up to 150 characters |
+| Off                 | The description of the blog, up to 500 characters        | An extract of the item, 143 characters                   |
+
+When the item has no search description of its own, the blog's is used. On a blog with no description at all, the lists had an empty description and posts had their extract.
+
+```xml
+<meta expr:content='data:view.description.escaped' name='description'/>
+<meta expr:content='data:view.description.escaped' property='og:description'/>
+```
+
+### `data:view.url`
+
+The address of the page, cleaned the same way as [`data:blog.url`](./blog.mdx#datablogurl). On 404 pages, it follows the host with a double slash, as in `https://example.blogspot.com//missing-page`, and so does `data:blog.url`. <BloggerSource kind="observed" /> It is a URL value:
+
+- `data:view.url.canonical` rewrites a country domain of Blogger, `example.blogspot.fr`, into `example.blogspot.com`, and keeps the scheme and the path. It removes `?m=1`. <BloggerSource kind="observed" /> Whether it keeps other query parameters, such as `?q=`, is not confirmed.
+- `params(data:view.url, { hl: "fr" })` adds `hl`, or replaces it when the URL has it, and keeps the other parameters. `appendParams` always adds, even a key the URL already has. <BloggerSource kind="observed" />
+- `snippet(data:view.url) contains "https://"` tests the scheme as plain text. <BloggerSource kind="observed" />
+
+```xml
+<link expr:href='data:view.url.canonical' rel='canonical'/>
+<meta expr:content='data:view.url.canonical' property='og:url'/>
+```
+
+## `data:view.featuredImage`
+
+The main image of a post or static page: its first image, or, for an item that starts with a YouTube video, the thumbnail of that video. An image uploaded to Blogger keeps its URL; an image of another site and a video thumbnail come through Blogger's image proxy, `https://lh3.googleusercontent.com/blogger_img_proxy/…`, and can be resized. <BloggerSource kind="observed" /> It is an image value, so `resizeImage` and `sourceSet` accept it, and it has the [image properties](../expressions/properties.mdx#images), `isResizable`, `isYoutube` and `youtubeMaxResDefaultUrl`. It is the same image as [`data:post.featuredImage`](./post.mdx#featuredimage) of the item.
+
+<CodeTabs>
+
+```xml title="Open Graph image" {4}
+<b:if cond='data:view.featuredImage'>
+  <b:with value='resizeImage(data:view.featuredImage, 1200, "1200:630")' var='ogImage'>
+    <meta expr:content='data:view.featuredImage.isYoutube ? data:view.featuredImage.youtubeMaxResDefaultUrl : data:ogImage' property='og:image'/>
+    <b:if cond='data:ogImage.width'>
+      <meta expr:content='data:ogImage.width' property='og:image:width'/>
+      <meta expr:content='data:ogImage.height' property='og:image:height'/>
+    </b:if>
+  </b:with>
+</b:if>
+```
+
+```html title="Rendered on a post with a photo"
+<meta content='https://blogger.googleusercontent.com/img/b/…/w1200-h630-p-k-no-nu/tram.jpg' property='og:image'/>
+<meta content='1200' property='og:image:width'/>
+<meta content='630' property='og:image:height'/>
+```
+
+</CodeTabs>
+
+`resizeImage` returns any URL it can not resize unchanged, without `.width`, which the inner condition relies on. See [`resizeImage`](../expressions/functions.mdx#resizeimage).
+
+`featuredImage` is never set on lists. There, use the image of each post, `data:post.featuredImage`, or the first post of the Blog widget from anywhere in the theme, `data:widgets.Blog.first.posts.first.featuredImage`.
+
+## `data:view.search`
+
+Set on every `/search` page. Which members it has depends on the URL:
+
+| URL                                                | Members                                                  |
+| -------------------------------------------------- | -------------------------------------------------------- |
+| `/search`, `/search?updated-max=…`                 | none, an empty map                                       |
+| `/search?q=tram`                                   | `query`, `resultsMessage`, `resultsMessageHtml`          |
+| `/search/label/Portugal`, `/search?label=Portugal` | `label`, `resultsMessage`, `resultsMessageHtml`          |
+| `/search/label/Portugal?q=tram`                    | `label`, `query`, `resultsMessage`, `resultsMessageHtml` |
+
+The headings are translated. In English:
+
+| Search | `resultsMessage`                             | `resultsMessageHtml`                                                           |
+| ------ | -------------------------------------------- | ------------------------------------------------------------------------------ |
+| Query  | `Showing posts matching the search for tram` | `Showing posts matching the search for <span class='search-query'>tram</span>` |
+| Label  | `Showing posts with the label Portugal`      | `Showing posts with the label <span class='search-label'>Portugal</span>`      |
+
+With both a label and a query, the label heading is used. `resultsMessageHtml` is HTML already: print it with a data tag, never inside an attribute.
+
+```xml title="A heading for every list"
+<b:if cond='data:view.isHomepage'>
+  <h2 class='list-title'><data:messages.latestPosts/></h2>
+<b:elseif cond='data:view.search.label'/>
+  <h1 class='list-title'><data:view.search.label/></h1>
+<b:elseif cond='data:view.search.query'/>
+  <h1 class='list-title'><data:messages.search/>: <data:view.search.query/></h1>
+<b:elseif cond='data:view.isArchive'/>
+  <h1 class='list-title'><data:view.archive.rangeMessage/></h1>
+<b:elseif cond='data:view.isMultipleItems'/>
+  <h1 class='list-title'><data:messages.posts/></h1>
+</b:if>
+```
+
+The query is what the reader typed. A data tag escapes it when printing; in an attribute, `expr:value='data:view.search.query.escaped'` keeps it safe as well. The empty search, `/search?q=`, is a 404 page.
+
+## `data:view.archive`
+
+Set on date archives. `year` and `month` are numbers read from the URL, `day` belongs to daily archives, and `rangeMessage` is a translated heading:
+
+| URL         | `archive` on a live blog                                               |
+| ----------- | ---------------------------------------------------------------------- |
+| `/2026/`    | `year: 2026`, `rangeMessage: Showing posts from 2026`                  |
+| `/2026/05/` | `year: 2026`, `month: 5`, `rangeMessage: Showing posts from May, 2026` |
+
+On a blog archived by month, the daily URLs such as `/2026_05_01_archive.html` showed the whole month. What daily archives show on a blog archived by day is not confirmed.
+
+## Compared with `data:blog`
+
+Several values exist in both dictionaries. The `data:blog` fields are older, and the 2017 themes read `data:view`:
+
+| `data:view`                     | `data:blog`                                                         | How they differ                                                                 |
+| ------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `type`: `feed`, `item`, `error` | `pageType`: `index`, `archive`, `item`, `static_page`, `error_page` | `type` does not separate archives from other lists, nor static pages from posts |
+| `postId`, `pageId`              | `postId`, `pageId`                                                  | Numbers here, strings in `data:blog`. Both print the same digits                |
+| `search.label`, `search.query`  | `searchLabel`, `searchQuery`                                        | Same values                                                                     |
+| `url`                           | `url`                                                               | Same value                                                                      |
+| `title`                         | `pageTitle`                                                         | `pageTitle` starts with the blog title                                          |
+| `featuredImage`                 | `postImageUrl`, `postImageThumbnailUrl`                             | An image value covering videos, against two plain URLs                          |
+| `description`                   | `metaDescription`                                                   | `description` falls back to an extract or the blog description                  |
+| `isMobile`                      | `isMobile`                                                          | Only `data:blog.isMobile` was seen true                                         |
+
+To compare a post id from one source with the other, use `==`: a number equals the string of its digits.
+
+## Undocumented keys
+
+The copy of the data in the page source also lists one entry per Dynamic View under `view`, such as `classic: { name: 'classic', url: '?view=classic' }`, and the same for `flipcard`, `magazine`, `mosaic`, `sidebar`, `snapshot` and `timeslide`. Nothing documents them.

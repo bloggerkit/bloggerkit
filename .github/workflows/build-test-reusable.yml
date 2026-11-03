@@ -1,4 +1,4 @@
-name: Reusable build and test workflow
+name: Build and test (reusable)
 
 on: [workflow_call]
 
@@ -9,15 +9,15 @@ on: [workflow_call]
 
 jobs:
   build_typecheck:
-    name: 🔎 Build and typecheck
+    name: Typecheck
     uses: ./.github/workflows/build-reusable.yml
     with:
-      afterBuild: pnpm check:types
+      afterBuild: pnpm run typecheck
       os: '["ubuntu-latest"]'
     secrets: inherit
 
   test:
-    name: ⚫️ Run Vitest tests
+    name: Test
     uses: ./.github/workflows/build-reusable.yml
     with:
       afterBuild: pnpm run test

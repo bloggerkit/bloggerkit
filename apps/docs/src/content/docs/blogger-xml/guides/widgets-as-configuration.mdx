@@ -1,0 +1,274 @@
+---
+title: Widgets as configuration
+description: Use LinkList, TextList, HTML and Image widgets as settings the blog owner edits, read them with lambdas, and turn features on and off with a widget.
+level: intermediate
+prerequisites:
+  - blogger-xml/layout/widgets
+  - blogger-xml/tags/loops
+published: 2026-10-26
+---
+
+A theme has two places where the blog owner can change it without editing the XML: the Theme Designer, through [skin variables](../styles/theme-designer.mdx), and the Layout editor, through widgets. The Theme Designer only offers colors, fonts, lengths and a few other types. Widgets hold anything a form can: lists of names and URLs, lists of words, blocks of HTML, uploaded images. Production themes use dozens of widgets that display nothing, only to store settings. <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="A LinkList holding three settings" {12}
+<b:widget id='LinkList61' locked='true' title='Theme settings' type='LinkList' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='sorting'>NONE</b:widget-setting>
+    <b:widget-setting name='text-0'>relatedCount</b:widget-setting>
+    <b:widget-setting name='link-0'>4</b:widget-setting>
+    <b:widget-setting name='text-1'>shareText</b:widget-setting>
+    <b:widget-setting name='link-1'>Read this on Field Notes</b:widget-setting>
+    <b:widget-setting name='text-2'>newsletterUrl</b:widget-setting>
+    <b:widget-setting name='link-2'>https://</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:with value='data:links filter (l => l.target not in ["", "#", "https://"])' var='set'>
+      <script id='theme-settings' type='application/json'>{<b:loop index='i' values='data:set' var='l'>"<data:l.name.jsonEscaped/>": "<data:l.target.jsonEscaped/>"<b:if cond='data:i &lt; data:set.length - 1'>, </b:if></b:loop>}</script>
+    </b:with>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget LinkList' data-version='2' id='LinkList61'><script id='theme-settings' type='application/json'>{"relatedCount": "4", "shareText": "Read this on Field Notes"}</script></div>
+```
+
+</CodeTabs>
+
+In the Layout editor, the owner sees a "Theme settings" Link List with three rows, and changes the values like any link. The empty `newsletterUrl`, still at its placeholder `https://`, is left out. A script reads the rest with `JSON.parse(document.getElementById('theme-settings').textContent)`.
+
+## Which widget for which setting
+
+| Widget                                    | Holds                                | In the XML                      | In the theme                                  | Good for                                    |
+| ----------------------------------------- | ------------------------------------ | ------------------------------- | --------------------------------------------- | ------------------------------------------- |
+| [LinkList](../widget-types/link-list.mdx) | ordered pairs of a name and a URL    | `text-N`, `link-N`              | `data:links`, each with `name` and `target`   | key and value settings, menus, social links |
+| [TextList](../widget-types/text-list.mdx) | an ordered list of short texts       | `item-N`                        | `data:items`, a list of strings               | lists of features, keywords, labels         |
+| [HTML](../widget-types/html.mdx)          | one block of HTML or text            | `content`                       | `data:content`                                | a notice, a footer text, ad code            |
+| [Image](../widget-types/image.mdx)        | an uploaded image, a link, a caption | `displayUrl`, `link`, `caption` | `data:sourceUrl`, `data:link`, `data:caption` | a logo, a share image, an icon              |
+
+Every widget also has a title, 100 characters at most, in `data:title`, see [`title`](../layout/widgets.mdx#title).
+
+- The "URL" of a LinkList row is not checked: any text works, `4`, `true`, `1970-01-01` or a sentence. <BloggerSource kind="observed" />
+- Keep `sorting` at `NONE`, so the rows stay in the order the owner gave them. The other values sort them by name. <BloggerSource kind="observed" />
+- `<b:widget-settings>` in the XML are the values the theme ships with. The owner's changes in the Layout editor are written back into the theme. See [widgets](../layout/widgets.mdx).
+- A widget's data is only readable inside the widget. Elsewhere, `data:widgets` only gives its id, type, section and title. <BloggerSource kind="observed" /> So a setting is used where its widget renders, or printed there for scripts.
+
+## Placeholders for "not set"
+
+Production themes ship every setting as a row, so the owner sees what can be set, with a placeholder value that the theme treats as "not set": <BloggerSource kind="observed" />
+
+| Placeholder                        | Seen in                       |
+| ---------------------------------- | ----------------------------- |
+| `#`                                | links that have no target yet |
+| `https://`                         | URL settings                  |
+| `custom_title`, `custom_text`      | text settings                 |
+| `apiKey_goes_here`, `id_goes_here` | keys the owner must paste     |
+
+Filter them out before using the values:
+
+```xml
+<b:with value='data:links filter (l => l.target not in ["#", "https://", "custom_text"] and (l.target + "") not contains "_goes_here")' var='set'>
+  …
+</b:with>
+```
+
+`l.target + ""` turns the value into a plain string for `contains`.
+
+## Reading one setting
+
+`filter` finds the row by its name; `.first` takes it, and `?:` gives a default when it is missing:
+
+```xml
+<b:with value='(data:links filter (l => l.name == "relatedCount" and l.target not in ["", "#"])).first.target ?: "4"' var='relatedCount'>
+  <div expr:data-max='data:relatedCount' id='related'/>
+</b:with>
+```
+
+- The parentheses around the `filter` are needed before `.first`. See [lambdas](../expressions/lambdas.mdx).
+- `.first` of an empty list is empty, and so is its `.target`, so a missing row falls through to the default.
+- Several rows with the same name are allowed. `.first` takes the top one, `.last` the bottom one.
+
+A theme can wrap this in one Common includable, called with the list, the name, a default and the output wanted: <BloggerSource kind="observed" />
+
+```xml title="A shorter version of the lookup" {4}
+<b:includable id='setting' var='s'>
+  <b:with value='(data:s.links filter (l => l.name == data:s.name and l.target not in (data:s.unset ?: ["", "#", "https://"]))).first.target ?: data:s.default' var='value'>
+    <b:if cond='data:s.attribute'>
+      <b:attr expr:name='data:s.attribute' expr:value='data:value'/>
+    <b:elseif cond='data:s.escape == "json"'/>
+      <data:value.jsonEscaped/>
+    <b:else/>
+      <data:value.escaped/>
+    </b:if>
+  </b:with>
+</b:includable>
+```
+
+```xml title="Calls, inside the LinkList"
+<div id='related'>
+  <b:include data='{ attribute: "data-max", default: "4", links: data:links, name: "relatedCount" }' name='setting'/>
+</div>
+<script>var shareText = "<b:include data='{ default: "", escape: "json", links: data:links, name: "shareText" }' name='setting'/>";</script>
+```
+
+A `<b:attr>` in an includable applies to the element the include sits in. See [attributes](../tags/attributes.mdx).
+
+## Printing settings for scripts
+
+Most settings serve a script: a share menu, a pager, a cookie notice. Print them as JSON once, in a `<script type='application/json'>` with an id, and let the script read it. The widget at the top of this page does that. Three rules:
+
+- every name and value goes through `.jsonEscaped`;
+- the comma goes after every item but the last: `data:i &lt; data:set.length - 1`;
+- values are strings. A script that needs a number or a boolean converts them, `Number(settings.relatedCount)`, `settings.enabled === "true"`.
+
+A theme can keep its Firebase keys, its share options and its PWA manifest values in LinkLists printed this way. <BloggerSource kind="observed" />
+
+## TextList: an ordered list of features
+
+A TextList is a list of words the owner reorders and edits. A theme can use one for the buttons of its header: each item names a button, and the order of the items is the order of the buttons. <BloggerSource kind="observed" />
+
+```xml title="Header buttons from a TextList" {11-12}
+<b:widget id='TextList62' locked='true' title='Header buttons' type='TextList' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='shownum'/>
+    <b:widget-setting name='sorting'>NONE</b:widget-setting>
+    <b:widget-setting name='item-0'>Search</b:widget-setting>
+    <b:widget-setting name='item-1'>Theme</b:widget-setting>
+    <b:widget-setting name='item-2'>Bookmarks</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <ul class='header-buttons'>
+      <b:loop index='i' values='data:items filter (item => item in ["Search", "Theme", "Bookmarks", "Translate"])' var='item'>
+        <b:if cond='data:i &lt; 4'>
+          <li>
+            <b:switch var='data:item'>
+              <b:case value='Search'/>
+              <button aria-label='Search' class='btn-search' type='button'>…</button>
+              <b:case value='Theme'/>
+              <button aria-label='Dark mode' class='btn-theme' type='button'>…</button>
+              <b:case value='Bookmarks'/>
+              <a aria-label='Bookmarks' class='btn-bookmarks' href='#bookmarks'>…</a>
+              <b:case value='Translate'/>
+              <button aria-label='Translate' class='btn-translate' type='button'>…</button>
+            </b:switch>
+          </li>
+        </b:if>
+      </b:loop>
+    </ul>
+  </b:includable>
+</b:widget>
+```
+
+- The `filter` drops any word the theme does not know, so a typo shows nothing rather than an empty item.
+- `data:i &lt; 4` caps the number of buttons, whatever the owner adds.
+- `b:switch` picks the markup of each item. See [conditionals](../tags/conditionals.mdx).
+
+A TextList also holds tokens the theme replaces. A theme's meta keywords can accept `[blogTitle]` and `[pageName]`:
+
+```xml
+<b:with value='data:items map (item => item == "[blogTitle]" ? data:blog.title : (item == "[pageName]" ? data:blog.pageName : item)) filter (item => item != "")' var='keywords'>
+  …
+</b:with>
+```
+
+## HTML: a block with a fallback
+
+An HTML widget holds one block the owner writes freely. The theme ships it with a placeholder, and shows its own markup until the owner replaces it: <BloggerSource kind="observed" />
+
+```xml {7}
+<b:widget id='HTML21' locked='true' title='Footer text' type='HTML' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='content'><![CDATA[<!-- Write the footer text here -->]]></b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <p class='footer-text'>
+      <b:if cond='data:content not in ["", "&lt;!-- Write the footer text here --&gt;"]'>
+        <data:content/>
+      <b:else/>
+        © <data:blog.title/>
+      </b:if>
+    </p>
+  </b:includable>
+</b:widget>
+```
+
+- `data:content` is HTML, printed as it is.
+- The comparison is with the exact placeholder text, `<` written `&lt;` because it is in an attribute.
+- In the setting, CDATA keeps the HTML readable in the XML. Blogger writes CDATA there itself when it saves the widget. See [HTML](../widget-types/html.mdx).
+
+## Image: an uploaded image as a setting
+
+An Image widget gives the owner an upload button, and the theme a Google-hosted URL it can resize. A theme can keep its favicon, its share image and its logo in Image widgets. For widgets meant for the head, see [Widgets in the head](./head-and-seo.mdx#widgets-in-the-head).
+
+A theme can also have an Image widget that only exists in the Layout editor, as an uploader: the owner uploads a picture, saves, opens the widget again and copies its URL, to paste in any other setting. <BloggerSource kind="observed" />
+
+```xml
+<b:widget cond='data:view.isLayoutMode' id='Image61' locked='true' title='Image uploader' type='Image' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='caption'>Upload an image, Save, then open this widget again to copy its URL.</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'/>
+</b:widget>
+```
+
+A widget whose `cond` is false on every public page never renders on the blog. See [An uploader in the Layout editor](../widget-types/image.mdx#an-uploader-in-the-layout-editor).
+
+## Turning features on and off
+
+### By showing or hiding the widget
+
+Each widget in the Layout editor has an eye icon, which sets `visible`. A widget with `visible='false'` is not rendered and is not in `data:widgets`. <BloggerSource kind="observed" /> A theme ships an optional feature as a hidden widget; the owner turns it on with one click:
+
+```xml
+<b:widget id='HTML61' locked='true' title='Maintenance notice' type='HTML' version='2' visible='false'>
+  …
+</b:widget>
+```
+
+A theme can ship its maintenance page, its credit text, its anchor ad and its carousel slides hidden this way. <BloggerSource kind="observed" />
+
+### By removing the widget
+
+`data:widgets.ID` is empty when the widget with that id is gone, hidden or excluded by its `cond`. Code outside the widget tests it, to fall back on defaults: <BloggerSource kind="observed" />
+
+```xml
+<b:if cond='!data:widgets.LinkList71'>
+  <title><data:view.title.escaped/></title>
+</b:if>
+```
+
+A theme can write its own titles from the `LinkList71` widget, and this default `<title>` only when the owner deleted it.
+
+### By words in the title
+
+The title is the one value readable outside the widget, through `data:widgets`, and inside its `cond`. A theme can read tags in titles: `[Mobile]` and `[Desktop]` to choose the device, `[NoTitle]` to hide the heading. <BloggerSource kind="observed" />
+
+```xml
+<b:include cond='data:title not contains "[NoTitle]"' name='widget-title'/>
+```
+
+The title shown in the Layout editor keeps the tag, which tells the owner what the widget does.
+
+## Where to put configuration widgets
+
+A widget renders inside its section, with Blogger's wrapper `<div>`s. For settings that display nothing:
+
+- Put them in a section of their own, with `showaddelement='false'` and a `maxwidgets` equal to their number, so the owner does not add unrelated widgets there. Give it a clear `name`: it is the title of its box in the Layout editor. See [`maxwidgets`](../layout/sections.mdx#maxwidgets).
+- Mark them `locked='true'`: a locked widget can not be deleted by mistake in the Layout editor. See [`locked`](../layout/widgets.mdx#locked).
+- Remove what they render: an empty `main`, or a `main` that only prints JSON. `<b:attr name='id' value=''/>`, `<b:attr name='class' value=''/>` and `<b:attr name='data-version' value=''/>` at the top of `main` remove the attributes of the wrapper too, see [Changing the element of the widget](../layout/widgets.mdx#changing-the-element-of-the-widget). <BloggerSource kind="observed" />
+- Hide the section with an element around it, `<div hidden=''>`: `hidden` written on `<b:section>` itself is not rendered. Or hide its wrappers in an HTML comment, see [Sections that render no wrapper](../layout/sections.mdx#sections-that-render-no-wrapper). A `<b:section>` written directly in `<head>` is refused, see [Widgets in the head](./head-and-seo.mdx#widgets-in-the-head). <BloggerSource kind="observed" />
+- Keep the ids. Scripts and `data:widgets.ID` tests depend on them, and a widget whose id changes is deleted and added again, see [Widget types and ids](../basics/saving.mdx#widget-types-and-ids). A theme can ask its users never to change an `id`. <BloggerSource kind="observed" />
+
+```xml title="A hidden section of settings"
+<div class='settings' hidden=''>
+  <b:section id='settings' maxwidgets='3' name='Theme settings (do not remove)' showaddelement='false'>
+    <b:widget id='LinkList61' locked='true' title='Theme settings' type='LinkList' version='2' visible='true'>
+      …
+    </b:widget>
+  </b:section>
+</div>
+```
+
+Blogger renders only `id`, `class`, `name` and `tag` of a `<b:section>`: `hidden`, `style` and every other attribute on it are dropped, so the `<div>` around it carries `hidden`. <BloggerSource kind="observed" /> See [Other attributes](../layout/sections.mdx#other-attributes). In the Layout editor, show it again with `body#layout [hidden] { display: block !important; }`, see [What the blog hides](./layout-editor.mdx#what-the-blog-hides).

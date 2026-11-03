@@ -1,0 +1,60 @@
+---
+import { Font } from 'astro:assets';
+import { ClientRouter } from 'astro:transitions';
+import '@/styles/globals.css';
+import Footer from '@/components/layout/Footer.astro';
+import Header from '@/components/layout/Header.astro';
+import PrintFooter from '@/components/layout/PrintFooter.astro';
+import PrintHeader from '@/components/layout/PrintHeader.astro';
+import SeoHead, {
+	type Props as SeoProps,
+} from '@/components/layout/SeoHead.astro';
+import WebMcp from '@/components/layout/WebMcp.astro';
+import { originTrialTokens } from '@/lib/site';
+import themeScript from '@/scripts/theme/init.ts?bundle';
+import { themeColors } from '@/scripts/theme/state';
+
+interface Props extends SeoProps {
+	/** Shows the header's sidebar toggle on small screens. */
+	hasSidebar?: boolean;
+}
+
+const { hasSidebar, ...seo } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+	<head>
+		<meta charset="utf-8" />
+		{/* Before any script that uses WebMCP. Production only: each token is tied to the deployed origin */}
+		{import.meta.env.PROD && originTrialTokens.map((token) => <meta http-equiv="origin-trial" content={token} />)}
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		{/* Matches the default dark theme; the theme script updates it */}
+		<meta name="theme-color" content={themeColors.dark} />
+		{/* Extra tags from the page, e.g. DocsLayout's search filters */}
+		<slot name="head" />
+		<SeoHead {...seo} />
+		{/* Only the body font is preloaded; the code font loads when a page uses it */}
+		<Font cssVariable="--typeface-dm-sans" preload={[{ subset: 'latin' }]} />
+		<Font cssVariable="--typeface-jetbrains-mono" />
+		{/* Inlined so the theme applies before first paint, with no flash (`src/scripts/theme/init.ts`) */}
+		<script is:inline set:html={themeScript} />
+		<ClientRouter />
+	</head>
+	<body>
+		<a
+			href="#content"
+			class="fixed inset-s-2 top-2 z-30 translate-y-[-200%] print:hidden rounded-lg bg-primary px-3 py-2 text-primary-foreground focus:translate-y-0"
+			>Skip to content</a
+		>
+		<PrintHeader />
+		<Header hasSidebar={hasSidebar} />
+		<slot />
+		<Footer />
+		<PrintFooter />
+		<WebMcp />
+		<script>
+			import '@/scripts/print';
+		</script>
+	</body>
+</html>

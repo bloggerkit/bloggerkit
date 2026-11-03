@@ -1,0 +1,206 @@
+---
+title: BlogArchive
+description: The Blog Archive widget, which lists the years, months, weeks or days of the blog with their post counts.
+published: 2026-10-26
+---
+
+The `BlogArchive` widget, "Blog Archive" in the Layout editor, lists the periods of the blog, years, months, weeks or days, with their number of posts and a link to their archive page. It has three styles: `HIERARCHY` (periods nested in years, optionally with post titles), `FLAT` (one list of periods) and `MENU` (a drop-down). Google recommends `FLAT` for new designs.
+
+## Quick example
+
+A hierarchy of years and months, each year a `details` element, the latest one open. The settings ask for `HIERARCHY` and `MONTHLY`, with month names in full.
+
+<CodeTabs>
+
+```xml title="theme.xml" /data:year.post-count/
+<b:widget id='BlogArchive1' locked='false' title='Archive' type='BlogArchive' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='chronological'>false</b:widget-setting>
+    <b:widget-setting name='dayPattern'>MMM dd</b:widget-setting>
+    <b:widget-setting name='frequency'>MONTHLY</b:widget-setting>
+    <b:widget-setting name='monthPattern'>MMMM</b:widget-setting>
+    <b:widget-setting name='showPosts'>false</b:widget-setting>
+    <b:widget-setting name='showStyle'>HIERARCHY</b:widget-setting>
+    <b:widget-setting name='showWeekEnd'>true</b:widget-setting>
+    <b:widget-setting name='weekPattern'>MM/dd</b:widget-setting>
+    <b:widget-setting name='yearPattern'>yyyy</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main' var='this'>
+    <b:include name='widget-title'/>
+    <b:loop index='i' values='data:data' var='year'>
+      <details class='archive-year'>
+        <b:attr cond='data:i == 0' name='open' value='open'/>
+        <summary><data:year.name/> <span class='count'><data:year.post-count/></span></summary>
+        <ul>
+          <b:loop values='data:year.data' var='month'>
+            <li><a expr:href='data:month.url'><data:month.name/></a> <span class='count'><data:month.post-count/></span></li>
+          </b:loop>
+        </ul>
+      </details>
+    </b:loop>
+  </b:includable>
+  <b:includable id='content'/>
+  <b:includable id='flat'/>
+  <b:includable id='hierarchy'/>
+  <b:includable id='interval'/>
+  <b:includable id='posts'/>
+</b:widget>
+```
+
+```html title="Rendered, on the homepage"
+<div class='widget BlogArchive' data-version='2' id='BlogArchive1'>
+  <h3 class='title'>Archive</h3>
+  <details class='archive-year' open='open'>
+    <summary>2026 <span class='count'>14</span></summary>
+    <ul>
+      <li><a href='https://example.blogspot.com/2026/10/'>October</a> <span class='count'>3</span></li>
+      <li><a href='https://example.blogspot.com/2026/09/'>September</a> <span class='count'>11</span></li>
+    </ul>
+  </details>
+  <details class='archive-year'>
+    <summary>2025 <span class='count'>27</span></summary>
+    …
+  </details>
+</div>
+```
+
+</CodeTabs>
+
+`post-count` has a hyphen; it is part of the path, `data:year.post-count`.
+
+## Placement and limits
+
+|                     |                                                                                                         | Source                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                | `BlogArchive`                                                                                           | <BloggerSource kind="official" /> |
+| Per blog            | 2. A third one is refused when saving, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Width               | 300 pixels or more                                                                                      | <BloggerSource kind="observed" /> |
+| Placement           | A sidebar in Blogger's themes, any section otherwise                                                    | <BloggerSource kind="observed" /> |
+| Locked              | Not usually. Blogger's responsive themes install it unlocked                                            | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                                                | <BloggerSource kind="observed" /> |
+| Classic mobile view | Hidden by default                                                                                       | <BloggerSource kind="official" /> |
+| Compatibility       | Not Mobile Default 2010 or Dynamic mobile. Dynamic Views show it in the side menu                       | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting         | Values                                                                                                           | Data                  | Meaning                                       | Source                            |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------- | --------------------------------- |
+| `showStyle`     | `HIERARCHY`, `FLAT`, `MENU`                                                                                      | `style`               | The style                                     | <BloggerSource kind="observed" /> |
+| `frequency`     | `MONTHLY`, `WEEKLY`, `DAILY`                                                                                     | the periods in `data` | The period of an item                         | <BloggerSource kind="observed" /> |
+| `chronological` | `true`, `false`                                                                                                  | the order of `data`   | Oldest first                                  | <BloggerSource kind="observed" /> |
+| `showPosts`     | `true`, `false`                                                                                                  | `posts`               | List the post titles, with `HIERARCHY` only   | <BloggerSource kind="observed" /> |
+| `showWeekEnd`   | `true`, `false`                                                                                                  | `name`                | Add the end date to weeks, with `WEEKLY` only | <BloggerSource kind="observed" /> |
+| `yearPattern`   | `yyyy`, `yy`                                                                                                     | `name` of years       | The format of years                           | <BloggerSource kind="observed" /> |
+| `monthPattern`  | `MMMM`, `MMM`, `MM`, `M`, `MMMM yyyy`, `MMM yyyy`                                                                | `name` of months      | The format of months                          | <BloggerSource kind="observed" /> |
+| `weekPattern`   | `MMMM d`, `MMM d`, `MM/dd`, `M/d`, `d MMMM`, `d MMM`, `dd/MM`, `d/M`, `M/d/yy`, `MM/dd/yy`, `d/M/yy`, `dd/MM/yy` | `name` of weeks       | The format of weeks                           | <BloggerSource kind="observed" /> |
+| `dayPattern`    | `d`, `dd`, `MMM dd`, `MM/dd`, `dd MMM`, `dd/MM`                                                                  | `name` of days        | The format of days                            | <BloggerSource kind="observed" /> |
+
+The Layout editor offers monthly, weekly and daily, and so does the theme file: `YEARLY` is refused when the theme is saved, "That is not one of the acceptable values". <BloggerSource kind="observed" /> Numeric patterns such as `M` and `d` give names that are plain numbers, which suits markup that formats dates itself.
+
+A BlogArchive written with no settings gets `showStyle` `HIERARCHY`, `yearPattern` `yyyy`, `showWeekEnd` `true`, `monthPattern` `MMMM`, `dayPattern` `MMM dd`, `weekPattern` `MM/dd`, `chronological` `false`, `showPosts` `true` and `frequency` `DAILY`, with an empty title. The values are case-sensitive. A pattern is checked: `yy` and `MMM yyyy` pass, `x` and `yyyy-MM-dd` are refused with "Update failed.", and an empty one is required. <BloggerSource kind="observed" />
+
+## Widget data
+
+The data is the same in both versions. Google lists `title`, `style` and `data`, with `name`, `url` and `post-count`.
+
+| Field                                               | Type   | Holds                                                                                          | Source                            |
+| --------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------- | --------------------------------- |
+| `title`                                             | string | The widget title, up to 100 characters                                                         | <BloggerSource kind="observed" /> |
+| `style`                                             | string | `HIERARCHY`, `FLAT` or `MENU`. It decides which levels exist                                   | <BloggerSource kind="official" /> |
+| `data`                                              | list   | The periods of the first level                                                                 | <BloggerSource kind="official" /> |
+| `data[i].name`                                      | string | The name of the period, formatted with the pattern settings                                    | <BloggerSource kind="official" /> |
+| `data[i].url`                                       | URL    | Its archive page. Takes `.canonical`, `.http`, `.https`                                        | <BloggerSource kind="official" /> |
+| `data[i].post-count`                                | number | Its number of posts, at least 1                                                                | <BloggerSource kind="official" /> |
+| `data[i].expclass`                                  | string | `expanded` or `collapsed`                                                                      | <BloggerSource kind="observed" /> |
+| `data[i].toggleId`                                  | string | An id for the period: `YEARLY-…`, `MONTHLY-…`, `WEEKLY-…` or `DAILY-…`                         | <BloggerSource kind="observed" /> |
+| `data[i].data`                                      | list   | The second level: up to 12 months or 52 weeks. `HIERARCHY` only                                | <BloggerSource kind="observed" /> |
+| `data[i].data[j].data`                              | list   | The third level: up to 31 days. `HIERARCHY` with `DAILY` only                                  | <BloggerSource kind="observed" /> |
+| `….posts`                                           | list   | The posts of the period, up to 100. `HIERARCHY` with `showPosts` only, and not on the 404 page | <BloggerSource kind="observed" /> |
+| `….posts[k].title`                                  | string | The post title, cut at 50 characters followed by "..."                                         | <BloggerSource kind="observed" /> |
+| `….posts[k].url`                                    | URL    | The post URL                                                                                   | <BloggerSource kind="observed" /> |
+| `toggleopen`                                        | string | The `toggleId` of the period last opened                                                       | <BloggerSource kind="observed" /> |
+| `name`, `url`, `post-count`, `expclass`, `toggleId` |        | The root itself, an "All Posts" item with the fields of a period. No theme uses it             | <BloggerSource kind="observed" /> |
+
+### Levels
+
+| Style          | `data`                                  | `data[i].data`                                  | `data[i].data[j].data` |
+| -------------- | --------------------------------------- | ----------------------------------------------- | ---------------------- |
+| `HIERARCHY`    | years                                   | months (`MONTHLY`, `DAILY`) or weeks (`WEEKLY`) | days (`DAILY` only)    |
+| `FLAT`, `MENU` | months, weeks or days, from `frequency` | none                                            | none                   |
+
+Every level has the fields of `data[i]`. With `HIERARCHY` and `DAILY`, the tree has three levels under the root, the deepest the widget offers.
+
+## Built-in includables
+
+| Includable  | V1                      | V2                   | Renders                                                                                                                                          | Source                            |
+| ----------- | ----------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| `main`      | ✓                       | ✓, `var='this'`      | Version 1: the title and `#ArchiveList > #BlogArchive1_ArchiveList` with `interval`, `flat` or `menu`. Version 2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`   |                         | ✓                    | `div.widget-content > #ArchiveList > #BlogArchive1_ArchiveList`, with `hierarchy` for `HIERARCHY` and `flat` for the two other styles            | <BloggerSource kind="observed" /> |
+| `flat`      | ✓, `var='data'`         | ✓                    | `ul.flat`, one `li.archivedate` link per period with the count in `span.post-count`                                                              | <BloggerSource kind="observed" /> |
+| `hierarchy` |                         | ✓                    | Includes `interval` with `data`                                                                                                                  | <BloggerSource kind="observed" /> |
+| `interval`  | ✓, `var='intervalData'` | ✓, `var='intervals'` | `ul.hierarchy`, one `li.archivedate` per period, then itself for the next level and `posts`                                                      | <BloggerSource kind="observed" /> |
+| `posts`     | ✓, `var='posts'`        | ✓, `var='posts'`     | `ul.posts` (version 1) or `ul.posts.hierarchy` (version 2), one link per post                                                                    | <BloggerSource kind="observed" /> |
+| `menu`      | ✓, `var='data'`         |                      | `select#BlogArchive1_ArchiveMenu`, a first option with the title, then one `option` per period with its URL as `value`                           | <BloggerSource kind="observed" /> |
+| `toggle`    | ✓, `var='interval'`     |                      | `a.toggle > span.zippy`, with ▼ for an open period and ► (◄ in right-to-left blogs) for a closed one                                             | <BloggerSource kind="observed" /> |
+
+`interval` includes itself for each deeper level: an includable may call itself, and the recursion stops where a period has no `data`. <BloggerSource kind="observed" />
+
+### Version 1
+
+`interval` wraps each period in its own `ul.hierarchy`, with `li.archivedate` and the class from `expclass`, the `toggle` when the period has a `toggleId`, `a.post-count-link`, and the count in parentheses in `span.post-count`. The toggles and the menu have no script in the theme; they rely on Blogger's widget script; that it finds them by these ids and classes is not confirmed.
+
+### Version 2
+
+Version 2 has no `menu` and no `toggle`. A version 2 widget set to `MENU` renders the flat list, unless the theme writes its own drop-down. In `interval`, each period is `li.archivedate` with `div.hierarchy-title` (the link and the count) and `div.hierarchy-content` (the next level and the posts).
+
+A drop-down for `MENU`, in a theme's `content`:
+
+```xml
+<b:includable id='content'>
+  <b:if cond='data:this.style == "MENU"'>
+    <select aria-label='Archive' onchange='location.href = this.value'>
+      <option value=''><data:messages.archive/></option>
+      <b:loop values='data:data' var='period'>
+        <option expr:value='data:period.url'><data:period.name/> (<data:period.post-count/>)</option>
+      </b:loop>
+    </select>
+  <b:else/>
+    <b:include name='super.content'/>
+  </b:if>
+</b:includable>
+```
+
+### What Blogger's themes change
+
+All five responsive themes: <BloggerSource kind="observed" />
+
+- `main` wraps `super.main` in `<details class='collapsible extendable'>`, open on archive pages, with `renderAsDetails` and the default title `data:messages.archive`.
+- `flat` and `hierarchy` hand `data:this.data` to `extendableItems` with `itemSet: "data"` and `itemsMarkup: "super.flat"` or `"super.hierarchy"`, so long lists get a "Show more" button. `hierarchy` passes `limit: 1`: only the latest year shows at first.
+
+## Writing your own markup
+
+### The whole tree as JSON
+
+With `HIERARCHY` and `DAILY`, three nested loops print every year, month and day with its count, for a script that draws a calendar or a sitemap.
+
+With `yearPattern` set to `yyyy`, `monthPattern` to `M` and `dayPattern` to `d`, every name is a number and the output is valid JSON:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:includable id='main' var='this'>
+  <script id='archive-json' type='application/json'>[<b:loop index='i' values='data:data' var='y'>[<data:y.name/>,<data:y.post-count/>,[<b:loop index='j' values='data:y.data' var='m'>[<data:m.name/>,<data:m.post-count/>,[<b:loop index='k' values='data:m.data' var='d'>[<data:d.name/>,<data:d.post-count/>]<b:if cond='data:k &lt; data:m.data.length - 1'>,</b:if></b:loop>]]<b:if cond='data:j &lt; data:y.data.length - 1'>,</b:if></b:loop>]]<b:if cond='data:i &lt; data:data.length - 1'>,</b:if></b:loop>]</script>
+</b:includable>
+```
+
+```html title="Rendered"
+<script id='archive-json' type='application/json'>[[2026,14,[[10,3,[[12,1],[4,2]]],[9,11,[[28,4],[15,7]]]]]]</script>
+```
+
+</CodeTabs>
+
+## Things to know
+
+- **Yearly.** `YEARLY` is neither offered by the Layout editor nor accepted in the theme file. <BloggerSource kind="observed" />
+- **`MENU` in version 2.** Renders as `FLAT` unless the theme handles it, as above.
+- **Legacy.** `quickedit` in the version 1 `main` is obsolete.

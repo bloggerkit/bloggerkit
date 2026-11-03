@@ -1,0 +1,206 @@
+---
+title: PageList
+description: The Pages widget, which lists static pages of the blog and custom links, in a chosen order, as a menu.
+published: 2026-10-26
+---
+
+The `PageList` widget, "Pages" in the Layout editor, lists static pages of the blog and links to any address, in the order the owner chooses, usually starting with a "Home" link. Themes turn it into a navigation bar, tabs or a drop-down. Unlike [LinkList](./link-list.mdx), it knows which item is the current page.
+
+## Quick example
+
+A navigation menu with an icon per item, picked from the item title with [`b:switch`](../tags/conditionals.mdx). The first four items are in the bar; the others go in a "More" drop-down.
+
+<CodeTabs>
+
+```xml title="theme.xml" {47-50}
+<b:widget id='PageList1' locked='true' title='Menu' type='PageList' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='homeTitle'>Home</b:widget-setting>
+    <b:widget-setting name='pageListJson'><![CDATA[{"home":{"href":"https://example.blogspot.com/","position":0,"title":"Home"},"7034928561230984417":{"href":"https://example.blogspot.com/p/about.html","position":1,"title":"About"},"5521098734412296601":{"href":"https://example.blogspot.com/p/contact.html","position":2,"title":"Contact"}}]]></b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <ul class='menu'>
+      <b:loop index='i' values='data:links' var='link'>
+        <b:include cond='data:i &lt; 4' name='pageLink'/>
+      </b:loop>
+      <b:if cond='data:links.length > 4'>
+        <li class='menu-more'>
+          <details>
+            <summary><data:messages.moreEllipsis/></summary>
+            <ul>
+              <b:loop index='i' values='data:links' var='link'>
+                <b:include cond='data:i >= 4' name='pageLink'/>
+              </b:loop>
+            </ul>
+          </details>
+        </li>
+      </b:if>
+    </ul>
+  </b:includable>
+  <b:includable id='pageLink'>
+    <li>
+      <b:class cond='data:link.isCurrentPage' name='current'/>
+      <a expr:href='data:link.href'>
+        <b:attr cond='data:link.isCurrentPage' name='aria-current' value='page'/>
+        <b:include data='link.title' name='linkIcon'/>
+        <span><data:link.title/></span>
+      </a>
+    </li>
+  </b:includable>
+  <b:includable id='linkIcon' var='title'>
+    <b:switch var='data:title'>
+      <b:case value='Home'/>
+      <b:include name='icon.home'/>
+      <b:case value='About'/>
+      <b:include name='icon.user'/>
+      <b:case value='Contact'/>
+      <b:include name='icon.mail'/>
+      <b:default/>
+      <b:include name='icon.folder'/>
+    </b:switch>
+  </b:includable>
+  <b:includable id='content'/>
+  <b:includable id='overflowButton'/>
+  <b:includable id='overflowablePageList'/>
+  <b:includable id='pageList'/>
+</b:widget>
+```
+
+```html title="Rendered, on the About page"
+<div class='widget PageList' data-version='2' id='PageList1'>
+  <ul class='menu'>
+    <li><a href='https://example.blogspot.com/'><svg class='icon'>…</svg><span>Home</span></a></li>
+    <li class='current'><a aria-current='page' href='https://example.blogspot.com/p/about.html'><svg class='icon'>…</svg><span>About</span></a></li>
+    <li><a href='https://example.blogspot.com/p/contact.html'><svg class='icon'>…</svg><span>Contact</span></a></li>
+  </ul>
+</div>
+```
+
+</CodeTabs>
+
+- `icon.home` and the other icons are Common includables of the theme.
+- `pageLink` reads `data:link` and `data:i` from the loop that includes it: an included includable sees the loop variables. <BloggerSource kind="observed" />
+- The four empty includables replace built-in ones the theme does not use.
+
+## Placement and limits
+
+|                     |                                                                                                                                                           | Source                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                | `PageList`                                                                                                                                                | <BloggerSource kind="official" /> |
+| Per blog            | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type)                                                                           |                                   |
+| Width               | 100 pixels or more                                                                                                                                        | <BloggerSource kind="observed" /> |
+| Placement           | Cross-column sections in older themes. The `page_list_top` section in Blogger's responsive themes, as tabs. The top menu, without title, in Dynamic Views | <BloggerSource kind="observed" /> |
+| Locked              | Not usually                                                                                                                                               | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                                                                                                  | <BloggerSource kind="observed" /> |
+| Classic mobile view | Shown by default                                                                                                                                          | <BloggerSource kind="official" /> |
+| Compatibility       | All themes                                                                                                                                                | <BloggerSource kind="observed" /> |
+
+Contempo and Essential hide the widget on post pages with `cond='!data:view.isPost'`. <BloggerSource kind="observed" />
+
+## Widget settings
+
+| Setting        | Values                            | Data                         | Meaning                                                               | Source                            |
+| -------------- | --------------------------------- | ---------------------------- | --------------------------------------------------------------------- | --------------------------------- |
+| `pageListJson` | a JSON object, in a CDATA section | `links`                      | The items, one key per item, each with `href`, `title` and `position` | <BloggerSource kind="observed" /> |
+| `homeTitle`    | text                              | the `title` of the home item | The text of the "Home" link                                           | <BloggerSource kind="observed" /> |
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A PageList written with no settings gets the title `Pages`, `homeTitle` `Home`, and a `pageListJson` holding the home link alone, `{"home":{"href":"http://BLOG.blogspot.com/","position":0,"title":"Home"}}`.
+- `pageListJson` `{}` is kept. An empty value, `x` or `[]` is refused "Page title is invalid."
+- `homeTitle` keeps 600 characters.
+
+The key of an item says what it is: `home` for the homepage, the page id for a static page, and `linkN` for an address typed by the owner. `position` gives the order, from `0`; the keys can be in any order.
+
+```json
+{
+  "home": { "href": "https://example.blogspot.com/", "position": 0, "title": "Home" },
+  "7034928561230984417": { "href": "https://example.blogspot.com/p/about.html", "position": 1, "title": "About" },
+  "link0": { "href": "https://shop.example.com/", "position": 2, "title": "Shop" }
+}
+```
+
+A theme that ships a PageList can write every item as a `linkN`, the homepage included, with relative or placeholder addresses such as `/` and `#`. The owner then edits them in the Layout editor. <BloggerSource kind="observed" />
+
+## Widget data
+
+| Field                    | V1  | V2            | Type          | Holds                                                                       | Source                            |
+| ------------------------ | --- | ------------- | ------------- | --------------------------------------------------------------------------- | --------------------------------- |
+| `title`                  | ✓   | ✓             | string        | The widget title, up to 100 characters                                      | <BloggerSource kind="observed" /> |
+| `links`                  | ✓   | ✓             | list          | The items, in order. No limit on their number                               | <BloggerSource kind="official" /> |
+| `links[i].href`          | ✓   | ✓             | URL or string | A URL for a page of the blog, the typed string for an address               | <BloggerSource kind="official" /> |
+| `links[i].title`         | ✓   | ✓             | string        | The page title, or the name given to the address                            | <BloggerSource kind="official" /> |
+| `links[i].id`            | ✓   | ✓             | string        | The page id, for static pages only                                          | <BloggerSource kind="observed" /> |
+| `links[i].isCurrentPage` | ✓   | ✓             | boolean       | `true` for the item of the page being viewed                                | <BloggerSource kind="observed" /> |
+| `mobile`                 | ✓   |               | boolean       | `true` in the classic mobile view, `?m=1`. Use `data:view.isMobile` instead | <BloggerSource kind="observed" /> |
+| `showPlaceholder`        | ✓   | not confirmed | boolean       | The mobile drop-down starts with a placeholder option. Not confirmed        | <BloggerSource kind="observed" /> |
+| `hasCurrentPage`         | ✓   | not confirmed | boolean       | One of the items is the current page. Not confirmed                         | <BloggerSource kind="observed" /> |
+
+The built-in includables of version 2 also read two names that Blogger does not set. `overflowablePageList` defines them with [`b:with`](../tags/variables.mdx) before including `pageList`:
+
+| Name            | Value    | Effect                                        |
+| --------------- | -------- | --------------------------------------------- |
+| `overflow`      | `true`   | Every item gets the class `overflowable-item` |
+| `pageListClass` | `"tabs"` | The class of the `ul`                         |
+
+A theme can set them the same way around its own `pageList` include.
+
+## Built-in includables
+
+| Includable             | V1  | V2  | Renders                                                                                                                                                                      | Source                            |
+| ---------------------- | --- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `main`                 | ✓   | ✓   | Version 1: everything. Version 2: `widget-title`, then `content`                                                                                                             | <BloggerSource kind="observed" /> |
+| `content`              |     | ✓   | `div.widget-content` with `pageList`                                                                                                                                         | <BloggerSource kind="observed" /> |
+| `pageList`             |     | ✓   | A `ul`, with the class `pageListClass` when it is set, and `pageLink` for each item                                                                                          | <BloggerSource kind="observed" /> |
+| `pageLink`             |     | ✓   | An `li`, with the class `overflowable-item` when `overflow` is set and `selected` for the current page, around `a[href]`                                                     | <BloggerSource kind="observed" /> |
+| `overflowablePageList` |     | ✓   | `div.overflowable-container > div.overflowable-contents > div.container` around `pageList` with the two names set, then a hidden `div.overflow-button` with `overflowButton` | <BloggerSource kind="observed" /> |
+| `overflowButton`       |     | ✓   | The content of the overflow button, the `verticalMoreIcon` icon                                                                                                              | <BloggerSource kind="observed" /> |
+
+The built-in `content` includes `pageList` only, so `overflowablePageList` renders only when a theme calls it.
+
+### Version 1
+
+The version 1 `main` writes the title as an `h2` and `div.widget-content`. In the classic mobile view, the items become a `select` with the id `PageList1_select` and one `option` per item, the current one selected; when `showPlaceholder` is true, a first disabled option shows `messages.moveToPage`, selected when no item is current; an arrow `span.pagelist-arrow` follows. Elsewhere it writes a `ul` of `li` elements, with the class `selected` on the current item. Then the obsolete `quickedit` include.
+
+### What Blogger's themes change
+
+- `content`, in all five responsive themes: `overflowablePageList` when `data:widget.sectionId` is `page_list_top`, `pageList` anywhere else. <BloggerSource kind="observed" />
+- `overflowButton`: a link with `data:messages.moreEllipsis` instead of the icon, except in Emporio. <BloggerSource kind="observed" />
+
+The section id `page_list_top` is a choice of those themes, not a Blogger rule.
+
+## Writing your own markup
+
+### The current item without a link
+
+A menu item for the page being viewed does not need to link to itself. [`b:tag`](../tags/dynamic-tags.mdx) switches the element:
+
+```xml
+<b:includable id='pageLink'>
+  <li>
+    <b:tag expr:name='data:link.isCurrentPage or data:link.href == "#" ? "span" : "a"'>
+      <b:attr cond='not data:link.isCurrentPage and data:link.href != "#"' expr:value='data:link.href' name='href'/>
+      <data:link.title/>
+    </b:tag>
+  </li>
+</b:includable>
+```
+
+`#` is the placeholder a theme ships for addresses the owner has not set yet, printed as plain text until it is replaced.
+
+### Navigation microdata
+
+```xml /itemscope='itemscope'/
+<ul class='menu' itemscope='itemscope' itemtype='https://schema.org/SiteNavigationElement'>
+  <b:loop values='data:links' var='link'>
+    <li><a expr:href='data:link.href' itemprop='url'><span itemprop='name'><data:link.title/></span></a></li>
+  </b:loop>
+</ul>
+```
+
+`itemscope` needs a value: the Blogger editor refuses attributes without one, so write `itemscope='itemscope'`. <BloggerSource kind="observed" />
+
+## Things to know
+
+- **Undocumented data.** `showPlaceholder` and `hasCurrentPage` are read by the version 1 `main`. Whether version 2 has them is not confirmed.
+- **Legacy.** `mobile` exists in version 1 only. `quickedit` in the version 1 `main` is obsolete.

@@ -1,0 +1,8 @@
+# Biome formats everything else. Prettier formats only what Biome can not: Markdown and MDX
+*
+!*/
+!*.md
+!*.mdx
+
+# Written by Changesets
+CHANGELOG.md

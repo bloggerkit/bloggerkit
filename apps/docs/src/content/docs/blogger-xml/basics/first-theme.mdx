@@ -1,0 +1,516 @@
+---
+title: Your first theme
+description: Build a small, complete Blogger theme step by step, with a header, a list of posts, a sidebar and page-type logic, then install it.
+level: beginner
+published: 2026-10-26
+---
+
+This page builds a working theme from an empty file. It is small enough to read in one sitting, and complete enough to run a real blog: a header with the blog title, cards for lists of posts, full posts and static pages, a sidebar where the owner adds widgets, a footer, Theme Designer colors, and a clean Layout editor.
+
+The theme is built in seven steps. Each step adds one part and explains it; the [complete theme](#the-complete-theme) follows in one block, ready to paste.
+
+<Steps>
+
+<Step>
+
+### The document
+
+Start with the two lines every theme begins with, and the `<html>` root:
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' b:templateVersion='1.0.0' expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+  <head>
+  </head>
+  <body>
+  </body>
+</html>
+```
+
+- `b:layoutsVersion='3'` and `b:defaultwidgetversion='2'` make it a theme of the current generation, with version 2 widgets.
+- `b:css='false'` keeps Blogger's widget stylesheets out of the page: this theme styles everything itself.
+- `expr:dir` and `expr:lang` give the page the direction and language of the blog, computed when the page renders.
+- The four `xmlns` declarations make the `b:`, `data:` and `expr:` prefixes valid XML.
+
+Every attribute is described in [Root attributes](../reference/root-attributes.mdx).
+
+</Step>
+
+<Step>
+
+### The head
+
+Fill `<head>` with the viewport, the title and Blogger's standard head tags:
+
+```xml
+<head>
+  <meta content='width=device-width, initial-scale=1' name='viewport'/>
+  <title><data:view.title.escaped/></title>
+  <b:include data='blog' name='all-head-content'/>
+</head>
+```
+
+`data:view.title` is the title of the page being rendered: the post or page title on a post or a static page, the blog title elsewhere. `.escaped` writes it safely as HTML text. `all-head-content` is a built-in includable: it writes the charset, the canonical link, the feed links, the favicon and the Open Graph tags, so the theme does not have to.
+
+</Step>
+
+<Step>
+
+### The skin
+
+The CSS goes in `<b:skin>`, after the head tags. Every theme must have exactly one. Write it in a CDATA section, so that CSS can use any character:
+
+```xml
+<b:skin><![CDATA[
+/*
+<Group description="Colors" selector="body">
+  <Variable name="body.text.color" description="Text" type="color" default="#1f2328"/>
+  <Variable name="body.background.color" description="Background" type="color" default="#ffffff"/>
+  <Variable name="link.color" description="Links" type="color" default="#1a7f37"/>
+</Group>
+<Group description="Layout" selector=".page">
+  <Variable name="page.width" description="Page width" type="length" default="1080px" min="720px" max="1400px"/>
+</Group>
+*/
+body { margin: 0; color: $(body.text.color); background: $(body.background.color); font: 17px/1.6 system-ui, sans-serif; }
+a { color: $(link.color); }
+.page { max-width: $(page.width); margin: 0 auto; padding: 0 1rem; }
+]]></b:skin>
+```
+
+The `<Group>` and `<Variable>` tags at the top are **Theme Designer variables**. Blogger reads them from the skin and shows them in the Theme Designer (**Theme** › **Customize**), where the owner can change the colors and the page width without touching the code. In the CSS, `$(body.text.color)` stands for the current value of the variable. The definitions sit in a CSS comment so the browser ignores them. Their attributes are in double quotes: Blogger does not read single-quoted ones, and refuses the variable. See [Theme Designer](../styles/theme-designer.mdx).
+
+Then add a `<b:template-skin>`, the CSS of the Layout editor. It only applies there, under `body#layout`, and arranges the boxes of the sections like the real page:
+
+```xml
+<b:template-skin><![CDATA[
+body#layout .columns { display: flex; gap: 16px; }
+body#layout .main { flex: 1; }
+body#layout .sidebar { width: 280px; }
+]]></b:template-skin>
+```
+
+</Step>
+
+<Step>
+
+### The header
+
+The body starts with a header holding a section, and a Header widget in it. The widget shows the title and description set in the blog's settings:
+
+```xml {5}
+<header class='site-header'>
+  <b:section id='header' maxwidgets='1' name='Header' showaddelement='no'>
+    <b:widget id='Header1' locked='true' title='Garden Notes (Header)' type='Header' version='2' visible='true'>
+      <b:includable id='main'>
+        <b:if cond='data:view.isSingleItem'>
+          <p class='site-title'><a expr:href='data:blog.homepageUrl'><data:title/></a></p>
+          <b:else/>
+          <h1 class='site-title'><a expr:href='data:blog.homepageUrl'><data:title/></a></h1>
+        </b:if>
+        <b:if cond='data:description'>
+          <p class='site-description'><data:description/></p>
+        </b:if>
+      </b:includable>
+    </b:widget>
+  </b:section>
+</header>
+```
+
+- The section `header` accepts one widget (`maxwidgets='1'`) and shows no "Add a Gadget" link in the Layout editor (`showaddelement='no'`).
+- The widget id is its type followed by a number, `Header1`. `locked='true'` stops it from being moved or removed in the Layout editor.
+- The includable `main` is what Blogger renders for the widget. Inside it, `data:title` and `data:description` are the data of the Header widget.
+- The first `<b:if>` is page-type logic: on a post or a static page, the post title will be the `<h1>`, so the blog title becomes a paragraph.
+
+</Step>
+
+<Step>
+
+### The posts
+
+Next comes the main column, with a section for the Blog widget. The Blog widget is the one that receives the posts of the page, in `data:posts`. Its `main` decides what kind of page it is rendering:
+
+```xml
+<main class='main'>
+  <b:section id='main' maxwidgets='1' name='Posts' showaddelement='no'>
+    <b:widget id='Blog1' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'>
+      <b:includable id='main'>
+        <b:if cond='data:view.isError'>
+          <div class='notice'><data:navMessage/></div>
+          <b:elseif cond='data:view.isMultipleItems'/>
+          <b:if cond='data:view.isLabelSearch'>
+            <h2 class='list-title'><data:view.search.label.escaped/></h2>
+          </b:if>
+          <b:if cond='data:posts.empty'>
+            <p class='notice'><data:messages.noResultsFound/></p>
+          </b:if>
+          <div class='cards'>
+            <b:loop values='data:posts' var='post'>
+              <b:include data='post' name='postCard'/>
+            </b:loop>
+          </div>
+          <b:include name='pager'/>
+          <b:else/>
+          <b:loop values='data:posts' var='post'>
+            <b:include data='post' name='postFull'/>
+          </b:loop>
+        </b:if>
+      </b:includable>
+    </b:widget>
+  </b:section>
+</main>
+```
+
+There are three cases. On the 404 page, `data:navMessage` holds the error text, which the owner can change in the blog settings. On a page that lists posts (home, label, search, archive), each post becomes a card, followed by links to the older and newer pages. On a post or a static page, the single item is shown in full.
+
+The markup of a card, of a full post and of the pager lives in more includables of the same widget. `<b:include data='post' name='postCard'/>` renders the includable `postCard` and passes it the current post, which that includable names `post` with its `var`:
+
+```xml {5,16}
+<b:includable id='postCard' var='post'>
+  <article class='card'>
+    <b:if cond='data:post.featuredImage'>
+      <a expr:href='data:post.url'>
+        <img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 640, "16:9")' loading='lazy'/>
+      </a>
+    </b:if>
+    <h2 class='card-title'><a expr:href='data:post.url'><data:post.title/></a></h2>
+    <p class='card-snippet'><data:post.snippets.short/></p>
+    <b:include data='post' name='postMeta'/>
+  </article>
+</b:includable>
+<b:includable id='postFull' var='post'>
+  <article class='post'>
+    <h1 class='post-title'><data:post.title/></h1>
+    <b:include cond='data:view.isPost' data='post' name='postMeta'/>
+    <div class='post-body'><data:post.body/></div>
+  </article>
+</b:includable>
+<b:includable id='postMeta' var='post'>
+  <p class='meta'>
+    <time expr:datetime='data:post.date.iso8601'><data:post.date/></time>
+    <b:loop values='data:post.labels' var='label'>
+      <a class='label' expr:href='data:label.url'><data:label.name/></a>
+    </b:loop>
+  </p>
+</b:includable>
+<b:includable id='pager'>
+  <nav class='pager'>
+    <b:if cond='data:newerPageUrl'>
+      <a expr:href='data:newerPageUrl' rel='prev'><data:messages.newerPosts/></a>
+    </b:if>
+    <b:if cond='data:olderPageUrl'>
+      <a expr:href='data:olderPageUrl' rel='next'><data:messages.olderPosts/></a>
+    </b:if>
+  </nav>
+</b:includable>
+```
+
+- `resizeImage(…, 640, "16:9")` asks Blogger's image server for a 640 pixels wide, 16:9 crop of the post's first image. See [Images](../guides/images.mdx).
+- `postMeta` has a `cond`: static pages have no date worth showing, so only posts get it.
+- `data:messages.newerPosts` and `data:messages.olderPosts` are Blogger's texts in the language of the blog.
+
+On the homepage, a card renders like this:
+
+```html title="Rendered"
+<article class='card'>
+  <a href='https://example.blogspot.com/2026/10/garlic.html'>
+    <img alt='Planting garlic in October' loading='lazy' src='https://blogger.googleusercontent.com/img/b/…/w640-h360-p-k-no-nu/garlic.jpg'/>
+  </a>
+  <h2 class='card-title'><a href='https://example.blogspot.com/2026/10/garlic.html'>Planting garlic in October</a></h2>
+  <p class='card-snippet'>Garlic goes in the ground before the first frost. Pick the largest cloves and plant them pointy end up…</p>
+  <p class='meta'>
+    <time datetime='2026-10-12T09:30:00+02:00'>October 12, 2026</time>
+      <a class='label' href='https://example.blogspot.com/search/label/Vegetables'>Vegetables</a>
+  </p>
+</article>
+```
+
+</Step>
+
+<Step>
+
+### The sidebar and the footer
+
+Next to the main column, add a sidebar section. This one is open: the owner adds any widget to it from the Layout editor. It starts with a Label widget listing the labels of the blog:
+
+```xml {2}
+<aside class='sidebar'>
+  <b:section id='sidebar' name='Sidebar' preferred='yes' showaddelement='yes'>
+    <b:widget id='Label1' locked='false' title='Topics' type='Label' version='2' visible='true'>
+      <b:includable id='main'>
+        <b:if cond='data:title'>
+          <h3 class='widget-title'><data:title/></h3>
+        </b:if>
+        <ul class='labels'>
+          <b:loop values='data:labels' var='label'>
+            <li><a expr:href='data:label.url'><data:label.name/></a> <span class='count'><data:label.count/></span></li>
+          </b:loop>
+        </ul>
+      </b:includable>
+    </b:widget>
+  </b:section>
+</aside>
+```
+
+`preferred='yes'` marks the sidebar as the main area for widgets. A widget the owner adds here gets Blogger's built-in markup for its type, inside the `widget` wrapper the skin styles.
+
+The footer gets an empty section, written self-closed, and a line of text:
+
+```xml {3}
+<footer class='site-footer'>
+  <b:section id='footer' name='Footer' showaddelement='yes'/>
+  <p>&#169; <data:blog.title/></p>
+</footer>
+```
+
+`&#169;` is the copyright sign. A theme is XML, so `&copy;` would be an error: only numeric references and five named entities exist.
+
+</Step>
+
+<Step>
+
+### Page-type logic on the body
+
+Last, give `<body>` a class for each kind of page, so the CSS can style them apart. `<b:class>` adds a class to the element it is in, when its `cond` is true:
+
+```xml
+<body>
+  <b:class cond='data:view.isHomepage' name='home-view'/>
+  <b:class cond='data:view.isMultipleItems' name='list-view'/>
+  <b:class cond='data:view.isSingleItem' name='item-view'/>
+  <b:class cond='data:view.isError' name='error-view'/>
+```
+
+On the homepage the body renders as `<body class='home-view list-view'>`, on a post as `<body class='item-view'>`. The skin can then center the header on the homepage only, with `.home-view .site-header { text-align: center; }`. [Page types](../data/page-types.mdx) lists every flag, and [Page layouts](../guides/page-layouts.mdx) goes further.
+
+</Step>
+
+</Steps>
+
+## The complete theme
+
+All the steps together, with the full CSS:
+
+```xml title="garden.xml"
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' b:templateVersion='1.0.0' expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+  <head>
+    <meta content='width=device-width, initial-scale=1' name='viewport'/>
+    <title><data:view.title.escaped/></title>
+    <b:include data='blog' name='all-head-content'/>
+    <b:skin><![CDATA[
+/*
+<Group description="Colors" selector="body">
+  <Variable name="body.text.color" description="Text" type="color" default="#1f2328"/>
+  <Variable name="body.background.color" description="Background" type="color" default="#ffffff"/>
+  <Variable name="link.color" description="Links" type="color" default="#1a7f37"/>
+</Group>
+<Group description="Layout" selector=".page">
+  <Variable name="page.width" description="Page width" type="length" default="1080px" min="720px" max="1400px"/>
+</Group>
+*/
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; color: $(body.text.color); background: $(body.background.color); font: 17px/1.6 system-ui, sans-serif; }
+a { color: $(link.color); }
+img { max-width: 100%; height: auto; display: block; }
+.page { max-width: $(page.width); margin: 0 auto; padding: 0 1rem; }
+.site-header { padding: 2rem 0 1rem; border-bottom: 1px solid #d0d7de; }
+.home-view .site-header { text-align: center; }
+.site-title { margin: 0; font-size: 2rem; line-height: 1.2; }
+.site-title a { color: inherit; text-decoration: none; }
+.site-description { margin: .25rem 0 0; opacity: .75; }
+.columns { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 2rem; padding: 2rem 0; }
+@media (max-width: 800px) { .columns { grid-template-columns: minmax(0, 1fr); } }
+.list-title { margin-top: 0; }
+.notice { padding: 1rem; border: 1px solid #d0d7de; border-radius: 8px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1.5rem; }
+.card { border: 1px solid #d0d7de; border-radius: 8px; overflow: hidden; }
+.card img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.card-title, .card-snippet, .card .meta { margin: .75rem 1rem; }
+.card-title { font-size: 1.15rem; line-height: 1.3; }
+.card-title a { color: inherit; text-decoration: none; }
+.post-title { margin-top: 0; font-size: 2.25rem; line-height: 1.2; }
+.meta { font-size: .875rem; opacity: .75; }
+.label { margin-left: .5rem; }
+.pager { display: flex; justify-content: space-between; margin-top: 2rem; }
+.pager a[rel=next] { margin-left: auto; }
+.widget { margin-bottom: 2rem; }
+.widget-title { margin: 0 0 .5rem; font-size: 1.1rem; }
+.labels { margin: 0; padding: 0; list-style: none; }
+.labels .count { opacity: .6; }
+.site-footer { padding: 2rem 0; border-top: 1px solid #d0d7de; font-size: .875rem; }
+]]></b:skin>
+    <b:template-skin><![CDATA[
+body#layout .columns { display: flex; gap: 16px; }
+body#layout .main { flex: 1; }
+body#layout .sidebar { width: 280px; }
+]]></b:template-skin>
+  </head>
+  <body>
+    <b:class cond='data:view.isHomepage' name='home-view'/>
+    <b:class cond='data:view.isMultipleItems' name='list-view'/>
+    <b:class cond='data:view.isSingleItem' name='item-view'/>
+    <b:class cond='data:view.isError' name='error-view'/>
+    <div class='page'>
+      <header class='site-header'>
+        <b:section id='header' maxwidgets='1' name='Header' showaddelement='no'>
+          <b:widget id='Header1' locked='true' title='Garden Notes (Header)' type='Header' version='2' visible='true'>
+            <b:includable id='main'>
+              <b:if cond='data:view.isSingleItem'>
+                <p class='site-title'><a expr:href='data:blog.homepageUrl'><data:title/></a></p>
+                <b:else/>
+                <h1 class='site-title'><a expr:href='data:blog.homepageUrl'><data:title/></a></h1>
+              </b:if>
+              <b:if cond='data:description'>
+                <p class='site-description'><data:description/></p>
+              </b:if>
+            </b:includable>
+          </b:widget>
+        </b:section>
+      </header>
+      <div class='columns'>
+        <main class='main'>
+          <b:section id='main' maxwidgets='1' name='Posts' showaddelement='no'>
+            <b:widget id='Blog1' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'>
+              <b:includable id='main'>
+                <b:if cond='data:view.isError'>
+                  <div class='notice'><data:navMessage/></div>
+                  <b:elseif cond='data:view.isMultipleItems'/>
+                  <b:if cond='data:view.isLabelSearch'>
+                    <h2 class='list-title'><data:view.search.label.escaped/></h2>
+                  </b:if>
+                  <b:if cond='data:posts.empty'>
+                    <p class='notice'><data:messages.noResultsFound/></p>
+                  </b:if>
+                  <div class='cards'>
+                    <b:loop values='data:posts' var='post'>
+                      <b:include data='post' name='postCard'/>
+                    </b:loop>
+                  </div>
+                  <b:include name='pager'/>
+                  <b:else/>
+                  <b:loop values='data:posts' var='post'>
+                    <b:include data='post' name='postFull'/>
+                  </b:loop>
+                </b:if>
+              </b:includable>
+              <b:includable id='postCard' var='post'>
+                <article class='card'>
+                  <b:if cond='data:post.featuredImage'>
+                    <a expr:href='data:post.url'>
+                      <img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 640, "16:9")' loading='lazy'/>
+                    </a>
+                  </b:if>
+                  <h2 class='card-title'><a expr:href='data:post.url'><data:post.title/></a></h2>
+                  <p class='card-snippet'><data:post.snippets.short/></p>
+                  <b:include data='post' name='postMeta'/>
+                </article>
+              </b:includable>
+              <b:includable id='postFull' var='post'>
+                <article class='post'>
+                  <h1 class='post-title'><data:post.title/></h1>
+                  <b:include cond='data:view.isPost' data='post' name='postMeta'/>
+                  <div class='post-body'><data:post.body/></div>
+                </article>
+              </b:includable>
+              <b:includable id='postMeta' var='post'>
+                <p class='meta'>
+                  <time expr:datetime='data:post.date.iso8601'><data:post.date/></time>
+                  <b:loop values='data:post.labels' var='label'>
+                    <a class='label' expr:href='data:label.url'><data:label.name/></a>
+                  </b:loop>
+                </p>
+              </b:includable>
+              <b:includable id='pager'>
+                <nav class='pager'>
+                  <b:if cond='data:newerPageUrl'>
+                    <a expr:href='data:newerPageUrl' rel='prev'><data:messages.newerPosts/></a>
+                  </b:if>
+                  <b:if cond='data:olderPageUrl'>
+                    <a expr:href='data:olderPageUrl' rel='next'><data:messages.olderPosts/></a>
+                  </b:if>
+                </nav>
+              </b:includable>
+            </b:widget>
+          </b:section>
+        </main>
+        <aside class='sidebar'>
+          <b:section id='sidebar' name='Sidebar' preferred='yes' showaddelement='yes'>
+            <b:widget id='Label1' locked='false' title='Topics' type='Label' version='2' visible='true'>
+              <b:includable id='main'>
+                <b:if cond='data:title'>
+                  <h3 class='widget-title'><data:title/></h3>
+                </b:if>
+                <ul class='labels'>
+                  <b:loop values='data:labels' var='label'>
+                    <li><a expr:href='data:label.url'><data:label.name/></a> <span class='count'><data:label.count/></span></li>
+                  </b:loop>
+                </ul>
+              </b:includable>
+            </b:widget>
+          </b:section>
+        </aside>
+      </div>
+      <footer class='site-footer'>
+        <b:section id='footer' name='Footer' showaddelement='yes'/>
+        <p>&#169; <data:blog.title/></p>
+      </footer>
+    </div>
+  </body>
+</html>
+```
+
+## Installing it
+
+<Callout type="warn">
+Installing a theme by pasting it replaces the current one, and every widget of the current theme that is not in the new file is deleted with its content. Try a new theme on a test blog first, and back up the current theme before you paste.
+</Callout>
+
+<Steps>
+
+<Step>
+
+### Back up the current theme
+
+In the Blogger dashboard, open **Theme**. Open the menu next to **Customize** and choose **Backup**, then download the file. It is the whole current theme, with every widget and its settings.
+
+</Step>
+
+<Step>
+
+### Open Edit HTML
+
+In the same menu, choose **Edit HTML**. The editor shows the XML of the current theme.
+
+</Step>
+
+<Step>
+
+### Paste and save
+
+Select everything in the editor, delete it, paste the complete theme above, and click **Save**.
+
+If Blogger refuses the file, it shows an error and keeps the current theme. [Saving a theme](./saving.mdx) lists the checks it makes, and the mistakes it saves that show only when a page renders. If the theme is accepted, reopen Edit HTML: Blogger has stored a rewritten copy, with a `<b:widget-settings>` element added to the widgets and the formatting described in [How Blogger rewrites the theme](./saving.mdx#how-blogger-rewrites-the-theme).
+
+</Step>
+
+<Step>
+
+### Check every kind of page
+
+Open the blog and visit the homepage, a post, a static page, a label (`/search/label/…`), a search (`/search?q=…`), and a URL that does not exist, for the 404 page. Then open the Layout editor: the header, the posts and the sidebar appear side by side, as the template skin arranges them. Last, open the Theme Designer: the groups **Colors** and **Layout** are there, with the four variables of the skin.
+
+</Step>
+
+</Steps>
+
+Instead of pasting, the file can also be uploaded with **Restore**, in the same menu. Blogger checks it in the same way.
+
+## Where to go next
+
+- Comments under posts: [Comments](../guides/comments.mdx).
+- Better head tags, descriptions and social previews: [Head and SEO](../guides/head-and-seo.mdx).
+- Markup for widgets the owner adds: [Default markups](../layout/default-markups.mdx).
+- Everything the Blog widget offers: [Blog widget](../widget-types/blog.mdx).

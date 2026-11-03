@@ -1,0 +1,348 @@
+---
+title: b:widget
+description: Declare a widget inside a section, with its type, its settings and its markup, and control how and when it renders.
+level: beginner
+published: 2026-10-26
+---
+
+A widget is one block of the blog: the list of posts, a search box, a list of labels, a block of the owner's HTML. Its type decides what data it gets. Its settings, made in the dashboard, are stored with it. Its markup is a set of [includables](./includables.mdx), and the one named `main` is what Blogger renders. Every widget sits in a [section](./sections.mdx). <BloggerSource kind="official" />
+
+A Label widget that prints the labels of the blog as links, with their post counts:
+
+<CodeTabs>
+
+```xml title="A Label widget"
+<b:widget id='Label01' locked='false' title='Topics' type='Label' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='sorting'>FREQUENCY</b:widget-setting>
+    <b:widget-setting name='display'>LIST</b:widget-setting>
+    <b:widget-setting name='showFreqNumbers'>false</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main' var='this'>
+    <b:class name='label-list'/>
+    <b:if cond='data:title != ""'>
+      <h2 class='title'><data:title/></h2>
+    </b:if>
+    <div class='labels'>
+      <b:loop values='data:labels' var='label'>
+        <a expr:data-count='data:label.count' expr:href='data:label.url'><data:label.name/></a>
+      </b:loop>
+    </div>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget Label label-list' data-version='2' id='Label01'>
+  <h2 class='title'>Topics</h2>
+  <div class='labels'>
+    <a data-count='4' href='https://example.blogspot.com/search/label/Recipes'>Recipes</a>
+    <a data-count='9' href='https://example.blogspot.com/search/label/Travel'>Travel</a>
+  </div>
+</div>
+```
+
+</CodeTabs>
+
+## How widgets work
+
+A widget has three parts, and each one comes from a different place:
+
+- **Its type**, `Label` here, chosen when the widget is added. It decides the data the includables receive: `data:labels` for a Label widget, `data:posts` for a Blog widget. Every type has a page in [Widget types](../widget-types/index.mdx).
+- **Its settings**, in `<b:widget-settings>`. The blog owner changes them in the widget's dialog in the Layout editor, and Blogger writes them into the XML. <BloggerSource kind="observed" />
+- **Its includables**, the markup. Blogger wrote them when the widget was added, from its built-in markup for the type and the theme's [default markups](./default-markups.mdx). They can be edited in the XML like the rest of the theme.
+
+When a page is served, Blogger renders `main` inside a `div` that it adds for the widget. The other includables only render when `main`, directly or not, includes them.
+
+## Attributes
+
+| Attribute  | Required | Value                                       | Default        | Description                                                | Source                              |
+| ---------- | -------- | ------------------------------------------- | -------------- | ---------------------------------------------------------- | ----------------------------------- |
+| `id`       | Yes      | the type followed by digits, like `Label01` |                | Identifies the widget, and becomes the `id` of its element | <BloggerSource kind="official" />   |
+| `type`     | Yes      | a widget type, like `Blog` or `Label`       |                | What kind of widget it is                                  | <BloggerSource kind="official" />   |
+| `title`    | No       | text, up to 100 characters                  |                | The title set in the widget's dialog                       | <BloggerSource kind="official" />   |
+| `locked`   | No       | `true` or `false`, in any case              | `false`        | Whether the widget can be removed in the Layout editor     | <BloggerSource kind="official" />   |
+| `visible`  | No       | `true` or `false`                           |                | Whether the widget is turned on                            | <BloggerSource kind="observed" />   |
+| `version`  | No       | `1` or `2`                                  | from the theme | The version of the widget's markup                         | <BloggerSource kind="observed" />   |
+| `cond`     | No       | expression                                  |                | Renders the widget only when the expression is true        | <BloggerSource kind="observed" />   |
+| `mobile`   | No       | `default`, `yes`, `no` or `only`            | `default`      | Whether a classic mobile template showed the widget        | <BloggerSource kind="deprecated" /> |
+| `pageType` | No       | `all`, `main`, `archive` or `item`          | `all`          | The pages that showed the widget                           | <BloggerSource kind="deprecated" /> |
+
+`expr:` does not work on `<b:widget>`: every `expr:` attribute of a widget saves, and is deleted when Blogger stores the theme, so a widget with `expr:visible='"false"'` still renders. `cond` is an expression already. <BloggerSource kind="observed" /> The full list is in [`expr:` forms of attributes](../basics/saving.mdx#expr-forms-of-attributes).
+
+Blogger also rewrites the attributes of a widget when it stores it: it drops unknown ones, adds `locked`, `title` and `visible` when they are missing, and empties a title over 100 characters. See [Widgets](../basics/saving.mdx#widgets). A widget already in the layout saves without `type`; a new one without `type` is refused, see [Required attributes](../basics/saving.mdx#required-attributes). <BloggerSource kind="observed" />
+
+### `id`
+
+The id of the widget is its type followed by digits: `Header1`, `HTML12`, `PopularPosts01`. <BloggerSource kind="observed" /> It is unique in the theme, and it can not be changed: a widget with a new id is a new widget, with new settings. <BloggerSource kind="official" />
+
+When a widget is added in the Layout editor, Blogger takes the type and the next free number: `HTML1`, then `HTML2`. A theme file can number its widgets as it likes, as long as the id starts with the exact type and goes on with a whole number of at most 1000, and no other widget has it. The rules and messages are in [Widget types and ids](../basics/saving.mdx#widget-types-and-ids). <BloggerSource kind="observed" />
+
+Production themes use the digits to group widgets by area: one numbers the widgets of its header `01` to `03`, those of its footer from `21`, and those of its head tags from `71`, so `LinkList71` is clearly a head widget. <BloggerSource kind="observed" />
+
+The id is the `id` of the rendered element, and `data:widget.instanceId` inside the widget. Use it to build ids that stay unique when a type is used several times:
+
+```xml
+<input class='toggle' expr:id='"for" + data:widget.instanceId' hidden='' type='checkbox'/>
+<label expr:for='"for" + data:widget.instanceId'><data:messages.showMore/></label>
+```
+
+Scripts and lookups such as `data:widgets.LinkList71` depend on the ids too. A theme that relies on them should tell its users not to change them.
+
+### `type`
+
+The kind of widget. It decides the data the widget receives, the settings of its dialog and its built-in includables. Types are case-sensitive: `HTML`, not `Html`.
+
+| Type                                                  | Widget                                       | Type                                                   | Widget                            |
+| ----------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------ | --------------------------------- |
+| [`Blog`](../widget-types/blog.mdx)                    | The posts, pages and comments                | [`PopularPosts`](../widget-types/popular-posts.mdx)    | The most viewed posts             |
+| [`Header`](../widget-types/header.mdx)                | The blog title, description and header image | [`FeaturedPost`](../widget-types/featured-post.mdx)    | One chosen post                   |
+| [`HTML`](../widget-types/html.mdx)                    | HTML and JavaScript written by the owner     | [`TextList`](../widget-types/text-list.mdx)            | A list of short texts             |
+| [`Text`](../widget-types/text.mdx)                    | Rich text                                    | [`BlogList`](../widget-types/blog-list.mdx)            | A list of other blogs             |
+| [`Image`](../widget-types/image.mdx)                  | An image with a link and a caption           | [`Feed`](../widget-types/feed.mdx)                     | The entries of a feed             |
+| [`Profile`](../widget-types/profile.mdx)              | The author or the authors                    | [`ContactForm`](../widget-types/contact-form.mdx)      | A contact form                    |
+| [`PageList`](../widget-types/page-list.mdx)           | Links to pages, as a menu                    | [`Followers`](../widget-types/followers.mdx)           | The followers of the blog         |
+| [`LinkList`](../widget-types/link-list.mdx)           | A list of links                              | [`FollowByEmail`](../widget-types/follow-by-email.mdx) | A subscription by email form      |
+| [`Label`](../widget-types/label.mdx)                  | The labels, as a list or a cloud             | [`Subscribe`](../widget-types/subscribe.mdx)           | Links to the feeds                |
+| [`BlogArchive`](../widget-types/blog-archive.mdx)     | The posts by date                            | [`Attribution`](../widget-types/attribution.mdx)       | The "Powered by Blogger" line     |
+| [`BlogSearch`](../widget-types/blog-search.mdx)       | A search form                                | [`ReportAbuse`](../widget-types/report-abuse.mdx)      | The report abuse link             |
+| [`AdSense`](../widget-types/adsense.mdx)              | An ad unit                                   | [`Stats`](../widget-types/stats.mdx)                   | The page view counter             |
+| [`Translate`](../widget-types/translate.mdx)          | Google Translate                             | [`Wikipedia`](../widget-types/wikipedia.mdx)           | A Wikipedia search                |
+| [`BloggerButton`](../widget-types/blogger-button.mdx) | A Blogger badge                              | [`Navbar`](../widget-types/navbar.mdx)                 | The Blogger bar of classic themes |
+
+A type that is not a widget type makes Blogger refuse the theme, see [Widget types and ids](../basics/saving.mdx#widget-types-and-ids). A `FollowByEmail` widget is deleted when saved: the type is retired. <BloggerSource kind="observed" /> Google's oldest examples also show `HeaderView` and `ListView`, types of the first layouts themes that no longer exist. <BloggerSource kind="deprecated" />
+
+### `title`
+
+The title of the widget, as typed in its dialog, up to 100 characters. In the includables it is `data:title`. <BloggerSource kind="observed" /> Google calls it optional. <BloggerSource kind="official" /> A widget without `title` saves. Blogger itself writes the attribute on every widget it creates, often empty, `title=''`. <BloggerSource kind="observed" />
+
+The theme decides whether and how the title shows: in a widget, `<data:title/>` is just text. Because the owner can edit it from the dashboard, a theme can read flags from it. A theme can hide the heading of any widget whose title contains `[NoTitle]`, and render ad widgets for one kind of device from `[Mobile]` and `[Desktop]`: <BloggerSource kind="observed" />
+
+```xml
+<b:include cond='data:title not contains "[NoTitle]"' name='widget-title'/>
+```
+
+### `locked`
+
+Google says a locked widget can not be moved or removed, and lists `yes` and `no` as well as `true` and `false`. Without the attribute, the widget is not locked. <BloggerSource kind="official" /> The Layout editor hides the Remove button of its dialog, and its settings can still be edited; whether it can still be moved is not confirmed. Blogger reads `true` in any case, `TRUE` is stored `true`, and stores other values tested, such as `maybe`, as `false`. Whether `yes` is stored as `true` is not confirmed. <BloggerSource kind="observed" />
+
+Lock the widgets the design depends on: the header, the posts, a search box built into the header, widgets that store the theme's configuration.
+
+### `visible`
+
+Whether the widget is turned on. In the Layout editor of a version 3 theme every widget box has an eye icon, which switches it. <BloggerSource kind="observed" />
+
+- A widget with `visible='true'` renders, and is listed in [`data:widgets`](../data/widgets.mdx).
+- A widget with `visible='false'` does not render on the blog, and is missing from `data:widgets`, as if it were not there. It keeps its settings and its place in the section.
+
+`FALSE` and `False` are stored `false`; another value, such as `maybe`, is stored `true`. <BloggerSource kind="observed" />
+
+That makes `visible='false'` the way to ship a feature turned off. A theme can include extra carousel slides, a maintenance notice and a credit line as hidden widgets; the owner turns them on from the Layout editor, and the theme's conditions on `data:widgets` take them into account at once. <BloggerSource kind="observed" />
+
+```xml
+<b:widget id='Image06' locked='true' title='Slide 6' type='Image' version='2' visible='false'>…</b:widget>
+```
+
+### `version`
+
+The version of the widget's markup, `1` or `2`. Blogger sets it when the widget is added: `2` in a theme with `b:defaultwidgetversion='2'` on `<html>`, `1` otherwise. It is output as the `data-version` attribute of the widget's element, and is `data:widget.version`. <BloggerSource kind="observed" />
+
+What Blogger stores is not always what was written. A new widget's `version='2'` is dropped when stored, and the widget still renders `data-version='2'`. An existing widget written with `1` or `3` is stored with `2`. With `b:defaultwidgetversion='3'` on `<html>`, a new widget renders `data-version='3'`. A new HTML widget written with `version='1'` was kept as `1` and rendered `data-version='1'`, while a new Navbar widget written with `version='1'` was stored without it; the exact rule is not confirmed. <BloggerSource kind="observed" />
+
+Version 2 widgets have the markup, the data and the `data:widgets` list of version 3 themes. Do not change the number by hand: the theme decides it. See [Versions](../basics/concepts.mdx#versions).
+
+### `cond`
+
+An [expression](../expressions/index.mdx). When it is false, the widget renders nothing, not even its `div`. <BloggerSource kind="observed" /> The condition sees the global data and the data of the widget itself, such as `data:title` or the `data:posts` of a PopularPosts widget.
+
+```xml {3}
+<b:widget cond='data:view.isHomepage' id='Profile01' locked='true' title='Contributors' type='Profile' version='2' visible='true'>…</b:widget>
+<b:widget cond='!data:view.isPreview' id='LinkList01' locked='true' title='Maintenance' type='LinkList' version='2' visible='false'>…</b:widget>
+<b:widget cond='data:view.isLayoutMode' id='Image61' locked='true' title='Image Uploader' type='Image' version='2' visible='true'>…</b:widget>
+```
+
+The last one only exists in the Layout editor, see [An uploader in the Layout editor](../widget-types/image.mdx#an-uploader-in-the-layout-editor).
+
+A condition can also read the title, so the owner shows a widget on phones or computers only by adding `[Mobile]` or `[Desktop]` to it, see [On phones or computers](../guides/page-layouts.mdx#on-phones-or-computers).
+
+`cond` also applies in the Layout editor, and a widget hidden there can not be edited. Add `data:view.isLayoutMode or` in front of conditions that should not hide it from the owner.
+
+### `mobile`
+
+Google documents `mobile` for the mobile template of layouts version 1 and 2 themes: `yes` showed the widget on mobile and desktop, `no` on desktop only, `only` on mobile only, and `default` only for some types. <BloggerSource kind="official" /> Blogger keeps the attribute when saving. In a version 3 theme, `mobile='only'` hides the widget: it was not rendered on `/`, nor on `/?m=1`. `yes` and `no` render it on both. <BloggerSource kind="observed" /> Version 3 themes are responsive: show widgets per device with `cond` and `data:blog.isMobileRequest`. <BloggerSource kind="deprecated" />
+
+### `pageType`
+
+Google documents `pageType` to show a widget only on some pages: `all`, `main`, `archive` or `item`. <BloggerSource kind="official" /> The attribute is deleted when saved. <BloggerSource kind="observed" /> Use `cond` with [`data:view`](../data/view.mdx): `cond='data:view.isPost'` for post pages. <BloggerSource kind="deprecated" />
+
+## Content
+
+A widget contains at most one `<b:widget-settings>`, then its `<b:includable>` elements, one of them `main`. Text or any other element directly in `<b:widget>`, a second `<b:widget-settings>`, and a widget anywhere else than directly in a section are refused; comments are deleted. The rules and messages are in [Layout nesting](../basics/saving.mdx#layout-nesting). <BloggerSource kind="observed" />
+
+A widget with no includables, even self-closed, saves:
+
+```xml
+<b:widget id='HTML2' type='HTML'/>
+```
+
+Google describes this form as a placeholder that Blogger fills with the widget's built-in markup. <BloggerSource kind="official" /> When it stores a new widget written without markup, Blogger adds its default `main` and the type's other includables, and the type's default settings and title. An HTML widget gets this `main`: <BloggerSource kind="observed" />
+
+```xml
+<b:includable id='main'>
+  <b:include name='widget-title'/>
+  <div class='widget-content'><data:content/></div>
+</b:includable>
+```
+
+A widget with includables but no `main` gets the default `main` added too. Themes as Blogger exports them always contain the includables of every widget.
+
+## `<b:widget-settings>` and `<b:widget-setting>`
+
+`<b:widget-settings>` holds the settings of the widget: the options of its dialog and, for some types, the content itself, such as the HTML of an HTML widget or the links of a LinkList. Since they are in the XML, a backup of the theme keeps them, and a theme file can ship widgets already configured. <BloggerSource kind="observed" />
+
+```xml title="An HTML widget and a LinkList widget"
+<b:widget id='HTML01' locked='false' title='Notice' type='HTML' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='content'><![CDATA[<p>New posts every <b>Monday</b>.</p>]]></b:widget-setting>
+  </b:widget-settings>
+  …
+</b:widget>
+<b:widget id='LinkList21' locked='true' title='Share Settings' type='LinkList' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='text-0'>facebook</b:widget-setting>
+    <b:widget-setting name='link-0'>true</b:widget-setting>
+    <b:widget-setting name='sorting'>NONE</b:widget-setting>
+  </b:widget-settings>
+  …
+</b:widget>
+```
+
+| Element               | Attribute                                 | Content                       | Source                            |
+| --------------------- | ----------------------------------------- | ----------------------------- | --------------------------------- |
+| `<b:widget-settings>` | none                                      | `<b:widget-setting>` elements | <BloggerSource kind="observed" /> |
+| `<b:widget-setting>`  | `name`, required: the name of the setting | the value, as text            | <BloggerSource kind="observed" /> |
+
+- `<b:widget-settings>` is only directly in a widget, and `<b:widget-setting>` only directly in `<b:widget-settings>`. Text, a `<div/>` or a comment between the settings saves, and Blogger deletes it. <BloggerSource kind="observed" />
+- The names are fixed for each type, and listed on the page of the type in [Widget types](../widget-types/index.mdx). A name the type does not have is refused: `The widget settings in widget with id HTML5 is not valid. 'nope' is not a valid setting name`. Two types are the exception: `Blog` drops an unknown name silently and saves, and `Header` refuses it with the first sentence only, without the name. <BloggerSource kind="observed" />
+- A widget written with no settings gets the default settings of its type; one written with some of its settings gets the others at their defaults. <BloggerSource kind="observed" />
+- A boolean is true when it reads `true` in any case, spaces trimmed; any other text, `yes` or an empty value, is stored `false`. <BloggerSource kind="observed" />
+- An enum value is case-sensitive: a wrong one is refused with `That is not one of the acceptable values`, and an empty one with `Required field must not be blank`. <BloggerSource kind="observed" />
+- Blogger stores the settings in an order fixed for each type, not in the order written. <BloggerSource kind="observed" />
+- An empty setting is an empty element: `<b:widget-setting name='selectedLabelsList'/>`. An empty `<b:widget-settings/>`, or one holding only an empty HTML `content`, is removed when stored. <BloggerSource kind="observed" />
+- A CDATA section can hold HTML, JSON or a CSS selector as it is. How Blogger stores the HTML `content` setting is in [HTML settings](../widget-types/html.mdx#widget-settings). <BloggerSource kind="observed" />
+- The values can be edited in the XML, which is how themes ship defaults.
+- Nothing is rendered. The includables receive the settings as data, under names that do not always match: a Label widget stores `display` as `LIST` and reads `data:this.display` as `list`. <BloggerSource kind="observed" />
+
+Google does not document these elements. Using LinkList and TextList settings as key and value pairs for a theme's options is described in [Widgets as configuration](../guides/widgets-as-configuration.mdx).
+
+## Rendered output
+
+On the blog a widget is a `div` with: <BloggerSource kind="observed" />
+
+- `id`: the id of the widget;
+- `class`: `widget` and the type, `widget Label`;
+- `data-version`: the version of the widget.
+
+Inside it is the output of `main`, and nothing more: no title and no inner wrapper unless `main` writes them. Google only says that a widget is replaced by a `div` with its id. <BloggerSource kind="official" />
+
+```html
+<div class='widget BlogSearch' data-version='2' id='BlogSearch01'>…</div>
+```
+
+### Changing the element of the widget
+
+A [`<b:class>`](../tags/attributes.mdx#bclass) or [`<b:attr>`](../tags/attributes.mdx#battr) written directly in `main`, outside any element, applies to the widget's `div`. <BloggerSource kind="observed" /> Blogger's own markup uses it to add classes, and themes use it to add classes and attributes from the widget's data:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:includable id='main' var='this'>
+  <b:class name='site-header'/>
+  <b:class expr:name='data:sourceUrl ? "has-image" : "no-image"'/>
+  <b:attr cond='data:description' expr:value='data:description' name='data-description'/>
+  <b:include name='title'/>
+</b:includable>
+```
+
+```html title="Rendered"
+<div class='widget Header site-header no-image' data-description='Recipes from my kitchen' data-version='2' id='Header01'>…</div>
+```
+
+</CodeTabs>
+
+An empty value removes an attribute. With the three attributes removed, the `div` is a bare `<div>`, which matters when the output must be as small as possible or sits inside a comment: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:includable id='main' var='this'>
+  <b:attr name='id' value=''/>
+  <b:attr name='class' value=''/>
+  <b:attr name='data-version' value=''/>
+  <b:class name='post-grid'/>
+  …
+</b:includable>
+```
+
+```html title="Rendered"
+<div class='post-grid'>…</div>
+```
+
+</CodeTabs>
+
+<Callout type="warn" title="Keep what Blogger needs">
+The `id` and the `widget` class are how Blogger finds a widget in the page. Its own widget scripts and the Layout editor may rely on them. Remove them only in a theme that does not load Blogger's widget scripts, for example one with `b:js='false'`, and keep them in the Layout editor with `cond='not data:view.isLayoutMode'`.
+</Callout>
+
+A widget can also hide itself when it has nothing to show, by adding a class and an attribute to its own element:
+
+```xml
+<b:if cond='data:posts.empty'>
+  <b:class name='hidden'/>
+  <b:attr name='aria-hidden' value='true'/>
+</b:if>
+```
+
+In the Layout editor the widget is not rendered. Blogger outputs a box with its title, a short description of its type, its visibility state and an edit link, see [What the editor renders](../guides/layout-editor.mdx#what-the-editor-renders).
+
+## `data:widget`
+
+Inside the includables of a widget, `data:widget` describes the widget being rendered: its `instanceId`, `sectionId`, `type` and `version`. It matters most in markup shared by several widgets, such as a Common includable, which does not know in advance where it is included. [`data:widgets`](../data/widgets.mdx#datawidgets) lists the widgets of the blog. Both are described in [`data:widget`](../data/widgets.mdx#datawidget). <BloggerSource kind="observed" />
+
+## Several widgets of one type
+
+A blog can have several widgets of most types, each with its own id, settings and markup. Each one gets the data of its type: two Blog widgets both receive the posts of the page. <BloggerSource kind="observed" /> Production themes use this to render the same posts in different ways, for example one Blog widget for the visible list and one in a hidden section that prints the posts as JSON for scripts.
+
+The number of widgets of each type a blog can have is listed in [Limits](../reference/limits.mdx#widgets-per-type).
+
+## Adding, moving and removing
+
+The Layout editor writes every change into the XML: <BloggerSource kind="official" />
+
+- **Adding** a widget with "Add a Gadget" inserts a `<b:widget>` in the section, with a new id, its settings and its includables. The includables are Blogger's built-in markup for the type, replaced or completed by the theme's [default markups](./default-markups.mdx). <BloggerSource kind="observed" />
+- **Moving** a widget moves its element to another place in the section, or to another section.
+- **Removing** a widget deletes its element, with its settings. Locked widgets can not be removed, see [`locked`](#locked).
+
+The same changes can be made in Edit HTML: deleting a `<b:widget>` element and saving deletes the widget and its settings. Moving one between sections moves it. Changing its id does not rename it: it removes the old widget and creates a new one.
+
+## Changing what a widget renders
+
+Three places decide the markup of a widget, from the narrowest to the widest:
+
+1. **The includables of the widget.** Edit them in the XML. The change applies to this widget only.
+2. **Blogger's original, called with `super.`.** An includable can render Blogger's built-in version of an includable, with options set around it, instead of copying it. See [`super.` includes](./includables.mdx#super-includes).
+3. **The default markup of the type.** [Default markups](./default-markups.mdx) give their includables to every widget of a type added or reset later.
+
+A theme that wants one markup for every widget of a type, including those already on the blog, keeps the markup in a Common includable and gives each widget a `main` that only includes it:
+
+```xml {6}
+<b:widget id='LinkList02' locked='false' title='Menu' type='LinkList' version='2' visible='true'>
+  …
+  <b:includable id='main'>
+    <b:include name='LinkList.main'/>
+  </b:includable>
+  <b:includable id='content'/>
+</b:widget>
+```
+
+The empty `content` replaces Blogger's built-in includable of that name, which this widget no longer uses. The pattern is described in [Default markups](./default-markups.mdx#one-markup-for-every-widget-of-a-type).

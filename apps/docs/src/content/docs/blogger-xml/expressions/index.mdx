@@ -1,0 +1,220 @@
+---
+title: Expressions
+description: The expression language Blogger evaluates in conditions, loops, variables and expr attributes, where it is read and how it is written inside XML.
+level: intermediate
+prerequisites:
+  - blogger-xml/tags/conditionals
+  - blogger-xml/tags/output
+published: 2026-10-26
+---
+
+An expression is a small formula Blogger evaluates on its servers while it renders a page. It decides whether a `<b:if>` shows its content, gives the list a `<b:loop>` repeats, and computes the value of an attribute. It reads the data of the page with `data:`, and combines it with literals, operators, lambdas and functions.
+
+This title keeps the page name and the blog title together when they are short, and drops the blog title when they would be too long for search results:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<title><b:eval expr='(data:blog.pageName + data:blog.title).length > 57 ? data:blog.pageName.escaped : data:blog.pageName.escaped + " - " + data:blog.title'/></title>
+```
+
+```html title="Rendered on a post called Planting garlic in October"
+<title>Planting garlic in October - Field Notes</title>
+```
+
+</CodeTabs>
+
+The expression reads two values with `data:`, joins them with `+`, takes the `.length` of the result, compares it with `>`, and picks one of two strings with the ternary `? :`. Every part has its own page in this section.
+
+Google describes a part of the language: the tags that take expressions, the operators added in 2015 and the lambdas added in 2016. <BloggerSource kind="official" /> The functions, the property suffixes, the exact syntax and the evaluation rules are not documented. They are known from Blogger's own themes and from building and testing themes. <BloggerSource kind="observed" />
+
+## Where Blogger reads an expression
+
+### Attributes that always hold one
+
+These attributes of `b:` tags are expressions as written. Their value is never plain text.
+
+| Attribute | Tag                                                                            | What the expression gives                         | Source                            |
+| --------- | ------------------------------------------------------------------------------ | ------------------------------------------------- | --------------------------------- |
+| `cond`    | [`<b:if>`, `<b:elseif>`](../tags/conditionals.mdx)                             | the condition of the branch                       | <BloggerSource kind="official" /> |
+| `cond`    | [`<b:include>`](../layout/includables.mdx)                                     | whether the include runs                          | <BloggerSource kind="official" /> |
+| `cond`    | [`<b:section>`](../layout/sections.mdx), [`<b:widget>`](../layout/widgets.mdx) | whether the section or the widget renders         | <BloggerSource kind="observed" /> |
+| `cond`    | [`<b:class>`](../tags/attributes.mdx), [`<b:attr>`](../tags/attributes.mdx)    | whether the class or the attribute is added       | <BloggerSource kind="observed" /> |
+| `cond`    | [`<b:tag>`](../tags/dynamic-tags.mdx)                                          | whether the element is written around its content | <BloggerSource kind="observed" /> |
+| `values`  | [`<b:loop>`](../tags/loops.mdx)                                                | the list to repeat over, or a range               | <BloggerSource kind="official" /> |
+| `value`   | [`<b:with>`](../tags/variables.mdx)                                            | the value stored under the name of `var`          | <BloggerSource kind="official" /> |
+| `expr`    | [`<b:eval>`](../tags/output.mdx)                                               | the value written as text                         | <BloggerSource kind="official" /> |
+| `var`     | [`<b:switch>`](../tags/conditionals.mdx)                                       | the value every `<b:case>` is compared with       | <BloggerSource kind="official" /> |
+| `data`    | [`<b:include>`](../layout/includables.mdx)                                     | the value the includable receives                 | <BloggerSource kind="official" /> |
+
+A condition can be any value, not only a boolean. Blogger turns it into true or false with the rules of [truthiness](./evaluation.mdx#truthiness), so `cond='data:post.featuredImage'` is true when the post has an image.
+
+A [data tag](../tags/output.mdx) such as `<data:post.title/>` is not an expression. It reads one path and nothing else. To write the result of an operator or a function, use `<b:eval expr='…'/>`.
+
+### The `expr:` prefix
+
+`expr:` in front of the name of any other attribute makes its value an expression. On an HTML element, Blogger evaluates it and writes the result under the name without the prefix. <BloggerSource kind="official" /> Without the prefix, the value is copied as it is: `href='data:blog.homepageUrl'` writes the text `data:blog.homepageUrl` into the page.
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<link expr:href='path(data:blog.homepageUrl.canonical, "sitemap.xml")' rel='sitemap' type='application/xml'/>
+<meta expr:content='data:blog.adultContent ? "adult" : "general"' name='rating'/>
+```
+
+```html title="Rendered"
+<link href='https://www.example.com/sitemap.xml' rel='sitemap' type='application/xml'/>
+<meta content='general' name='rating'/>
+```
+
+</CodeTabs>
+
+On a `b:` tag, `expr:` makes an attribute that takes text take an expression, as in `<b:include expr:name='…'/>`, and on an attribute that already holds an expression it evaluates twice: `<b:with expr:value='"1 + 2"' var='x'>` gives `3`. <BloggerSource kind="observed" /> When `title` and `expr:title` are both present, the `expr:` one usually wins, with exceptions on a few tags. The rules are in [`expr:` attributes](../tags/attributes.mdx#expr), what saving accepts in [`expr:` forms of attributes](../basics/saving.mdx#expr-forms-of-attributes), and double evaluation in [Dynamic paths](./data-paths.mdx#dynamic-paths).
+
+### `data` of `<b:include>` and ranges
+
+`data` of `<b:include>` takes a bare name or a path as a shorthand, `data='post'`, a map literal or a list in braces, and nothing else: see [Passing data](../layout/includables.mdx#passing-data). `values` of `<b:loop>` also accepts the ranges `1 to 5` and `1..5`, which are not expressions anywhere else: see [Ranges](../tags/loops.mdx#ranges).
+
+## Writing an expression inside XML
+
+A theme is an XML document. Blogger first reads the attribute as XML, decoding its entities, and then reads the decoded text as an expression. `cond='data:a &amp;&amp; data:b'` is the expression `data:a && data:b`. <BloggerSource kind="observed" />
+
+### Quotes
+
+Strings in an expression are always in double quotes. Put the attribute in single quotes and the strings need no escape:
+
+```xml
+<b:if cond='data:view.type == "item"'>
+```
+
+In a double-quoted attribute, each quote of a string is written `&quot;`. In a single-quoted attribute, an apostrophe is written `&apos;` or `&#39;`:
+
+```xml
+<b:include data='{ notice: (data:text ?: "The &apos;notice&apos; field is empty") }' name='banner'/>
+```
+
+Themes downloaded from Blogger often show the quotes of expressions as `&quot;` and the arrows of lambdas as `=&gt;`. After decoding it is the same expression, written either way.
+
+### Characters XML reserves
+
+| You mean                         | In an attribute, write | Or the word |
+| -------------------------------- | ---------------------- | ----------- |
+| `<`                              | `&lt;`                 | `lt`        |
+| `<=`                             | `&lt;=`                | `lte`       |
+| `>`, `>=`, `=>`                  | as they are            | `gt`, `gte` |
+| `&&`                             | `&amp;&amp;`           | `and`       |
+| `"` in a double-quoted attribute | `&quot;`               |             |
+| `'` in a single-quoted attribute | `&apos;`               |             |
+
+A raw `<` or `&` makes the document invalid XML, and the theme can not be saved. The words of [Operators](./operators.mdx) avoid the escapes: `and` and `or` are the usual way to write logic.
+
+```xml
+<b:if cond='data:i &lt; (data:post.labels.length - 1)'>,</b:if>
+<b:if cond='data:i lt data:post.labels.length - 1'>,</b:if>
+```
+
+### Spacing
+
+Spaces, tabs and line breaks between the parts of an expression are ignored, so a long expression can be split over several lines. <BloggerSource kind="observed" /> A string can not contain a raw line break.
+
+Whitespace matters in only four places: <BloggerSource kind="observed" />
+
+- **A `data:` path is one word.** Whitespace ends it, so `data: post.title` is an error. See [Data paths](./data-paths.mdx).
+- **A minus between two values needs whitespace.** `-` is also a character of names and the sign of numbers, so `data:i-1` reads a data called `i-1`. Write `data:i - 1`. See [Arithmetic](./operators.mdx#arithmetic).
+- **The `:` of a map key is followed by whitespace.** `{ size: 24 }` is a map, `{ size:24 }` is an error. See [Maps](./values.mdx#maps).
+- **A dot in a member touches the name after it.** `data:blog. title` is an error. A space before the dot is accepted, but the member then applies to everything on its left: `"x" + data:t .length` is `("x" + data:t).length`. See [Members](./data-paths.mdx#members).
+
+### Words and characters
+
+The boolean words ignore case: `TRUE` and `No` are booleans. <BloggerSource kind="observed" /> Whether the other words, such as `AND`, work in another case is not confirmed: write them lowercase. The properties of Blogger ignore case too, `.LENGTH` is `.length`, except `canonical`. Names of data and keys of maps do not: `data:blog.Title` reads nothing. <BloggerSource kind="observed" /> The words of the language are:
+
+```txt
+true false yes no not and or in contains eq neq lt gt lte gte
+any all none count filter where map select first take limit skip offset
+path params appendParams fragment format resizeImage sourceSet snippet
+```
+
+`ne` is not among them: it is an error. <BloggerSource kind="observed" /> The operators also have [function forms](./operators.mdx#operator-functions), `+(1, 2, 3)`, and so do `take` and `skip`.
+
+The symbols are `+ - * / % == != < > <= >= ! && || ? : ?: => ( ) [ ] { } , .` Any other character outside a string is an error, the single quote, `=` alone, `&` alone, `#`, `@` and `;` included. <BloggerSource kind="observed" /> A bare word that is not a keyword, a function or a lambda parameter is an error too: write `data:title`, not `title`.
+
+## The parts of an expression
+
+**Literals** are values written in the expression: strings, numbers, booleans, lists, in brackets or braces, and maps. See [Values](./values.mdx).
+
+```xml
+<b:with value='[{ id: "blogger", name: "Blogger" }, { id: "disqus", name: "Disqus" }]' var='platforms'>
+```
+
+**Data** is read along a path after `data:`, with members and indexes. See [Data paths](./data-paths.mdx).
+
+```xml
+<b:eval expr='data:widgets.Blog.first.posts.first.featuredImage'/>
+<b:eval expr='data:values[6]'/>
+```
+
+**Operators** compute, join, compare, test and choose. See [Operators](./operators.mdx).
+
+```xml
+<span class='sr-only'><b:eval expr='"Slide " + (data:i + 1)'/></span>
+<svg expr:width='data:props.size ?: 24' viewBox='0 0 24 24'/>
+```
+
+**Lambdas** test, count, filter or transform every item of a list. See [Lambdas](./lambdas.mdx).
+
+```xml
+<b:with value='data:widgets.FeaturedPost filter (w => w.sectionId == "top_widgets") map (w => w.postId)' var='featuredPostIds'>
+```
+
+**Functions** change URLs, write dates, resize images and cut text. See [Functions](./functions.mdx).
+
+```xml
+<a expr:href='fragment(data:post.url.canonical, "comment")'>Comment</a>
+<b:eval expr='format(data:post.date, "MMM d, yyyy")'/>
+```
+
+**Properties** read something about a value, its length, an escaped form, a canonical URL. See [Properties](./properties.mdx).
+
+```xml
+<script type='application/ld+json'>{"headline":"<data:post.title.jsonEscaped/>","datePublished":"<data:post.date.iso8601/>"}</script>
+```
+
+The rules behind all of them, what is true, what is equal, how values convert and what happens when data is missing, are in [Evaluation](./evaluation.mdx).
+
+## When an expression is checked
+
+Saving a theme checks its XML, not its expressions: an expression that does not parse is saved without a message. <BloggerSource kind="observed" /> Blogger reads an expression only when a page renders and reaches it. A wrong one then fails the widget that holds it, or the whole page with a 500 error outside widgets, while a path that leads nowhere is not an error. See [Errors](./evaluation.mdx#errors).
+
+An expression has at most 40 nodes: each literal, data path, operator, list or call counts, and characters do not. <BloggerSource kind="observed" /> See [Size limit](./evaluation.mdx#size-limit). Long expressions are easier to read, and to keep under the limit, split into named steps with [`<b:with>`](../tags/variables.mdx):
+
+```xml
+<b:with value='data:widgets.Blog.first.posts filter (p => p.featuredImage)' var='withImage'>
+  <b:if cond='data:withImage.notEmpty'>
+    <img expr:src='resizeImage(data:withImage.first.featuredImage, 1280, "16:9")'/>
+  </b:if>
+</b:with>
+```
+
+## History
+
+| Date        | Change                                                                                                                                                                                                         | Source                            |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Before 2015 | The only operators are `+`, `-`, `==`, `!=`, `<`, `>`, `<=` and `>=`                                                                                                                                           | <BloggerSource kind="official" /> |
+| May 2015    | [Adding new expressions to Blogger templates](https://blogger.googleblog.com/2015/05/adding-new-expressions-to-blogger.html): `!` and `not`, the ternary, `in` and `contains`, `and` and `or`, and parentheses | <BloggerSource kind="official" /> |
+| June 2015   | [Even more expansions to the Blogger template language](https://blogger.googleblog.com/2015/06/even-more-expansions-to-blogger.html): `<b:elseif>`, `<b:switch>`, `<b:eval>` and `<b:with>`                    | <BloggerSource kind="official" /> |
+| April 2016  | URL values and their `.canonical` property, in place of `data:blog.canonicalUrl` and similar data                                                                                                              | <BloggerSource kind="observed" /> |
+| May 2016    | [More custom template flexibility](https://blogger.googleblog.com/2016/05/more-custom-template-flexibility.html): lambdas, with `data:post.labels any (l => l.name == "Flower")`                               | <BloggerSource kind="official" /> |
+
+The 2015 post points to a help article, [answer 6214580](https://support.google.com/blogger/answer/6214580), for a full specification of the operators. The article no longer contains it. The 2016 post points to a forum thread for the list of lambda operators, which is offline. Google has never published the list of functions or of property suffixes.
+
+## Pages
+
+<Cards>
+  <Card title="Values" href="/docs/blogger-xml/expressions/values">Strings, numbers, booleans, lists, maps and the types of Blogger data</Card>
+  <Card title="Data paths" href="/docs/blogger-xml/expressions/data-paths">data:, members, indexes, names from tags, lambda parameters and dynamic paths</Card>
+  <Card title="Operators" href="/docs/blogger-xml/expressions/operators">Arithmetic, joining, comparison, logic, membership, ternary, elvis and precedence</Card>
+  <Card title="Lambdas" href="/docs/blogger-xml/expressions/lambdas">any, all, none, count, filter, map, first, take and skip</Card>
+  <Card title="Functions" href="/docs/blogger-xml/expressions/functions">path, params, appendParams, fragment, format, resizeImage, sourceSet and snippet</Card>
+  <Card title="Properties" href="/docs/blogger-xml/expressions/properties">Suffixes of strings, URLs, images, dates, locales, lists, widgets and skin variables</Card>
+  <Card title="Evaluation" href="/docs/blogger-xml/expressions/evaluation">Truthiness, equality, conversions, missing data, errors and the size limit</Card>
+</Cards>

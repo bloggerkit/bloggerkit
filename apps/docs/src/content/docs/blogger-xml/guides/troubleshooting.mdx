@@ -1,0 +1,40 @@
+---
+title: Troubleshooting
+description: Problems seen while building a Blogger theme, what causes them and how to fix them, each with the page that explains the rule.
+level: beginner
+published: 2026-10-26
+---
+
+Each problem below starts from what you see, gives the cause, and the fix. The rule behind it is explained on the page linked from each one. When Blogger refuses to save a theme, start with [Saving a theme](../basics/saving.mdx), which lists every error message. When a widget disappears with a comment in its place, see [Markup errors](../basics/saving.mdx#markup-errors).
+
+## The Layout editor shows no widgets
+
+**Symptom.** The Layout editor of the dashboard shows the sections of the theme, but no widgets in them.
+
+**Cause.** Every `<b:section>` of the theme has a `maxwidgets` attribute.
+
+**Fix.** Remove `maxwidgets` from at least one section, usually the main one:
+
+```xml {3}
+<b:section id='header' maxwidgets='1'/>
+<b:section id='sidebar' maxwidgets='2'/>
+<b:section id='main'/>
+```
+
+See [`maxwidgets`](../layout/sections.mdx#maxwidgets).
+
+## `contains` fails on a value that looks like a number
+
+**Symptom.** `data:n contains "9"` breaks the widget, or the page, although `data:n` holds `"9999"`.
+
+**Cause.** A string written like a number becomes a number when it is read from a variable of `<b:with>`, `<b:loop>` or `<b:include>`, from a list or a map, or as a lambda parameter. `contains` and `not contains` need strings. Blogger's own text follows the same rule: a post titled `2024` gives a number.
+
+**Fix.** Join the value with an empty string where it is used, `(data:n + "")`. Storing that result with `<b:with>` does not help: the new variable is converted again.
+
+```xml {2}
+<b:with value='"9999"' var='n'>
+  <b:eval expr='(data:n + "") contains "9"'/>
+</b:with>
+```
+
+See [Strings read from data](../expressions/evaluation.mdx#strings-read-from-data).

@@ -1,0 +1,197 @@
+---
+title: Data paths
+description: Read Blogger data in expressions with data:, along members and indexes, from names given by tags and lambdas, and from paths built at render time.
+level: intermediate
+published: 2026-10-26
+---
+
+`data:` followed by a path reads a value from the data Blogger gives the page. Each dot goes one level down:
+
+```xml {3}
+<b:eval expr='data:blog.title'/>
+<b:eval expr='data:post.author.name'/>
+<b:eval expr='data:widgets.Blog.first.posts.first.featuredImage'/>
+```
+
+The last line starts from the list of widgets of the page, takes the Blog widgets, the first of them, its posts, the first post, and its featured image. The head can use it to build an Open Graph image from the post, outside the Blog widget.
+
+The first name of a path is data that exists where the expression is: global data such as `data:blog`, data of the current widget, or a name given by a loop, a variable, an includable or a lambda. Every name after it is a member of the value before it.
+
+## Where the first name comes from
+
+| Path                                                        | Exists                                             | Reference                                                    |
+| ----------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------ |
+| `data:blog`, `data:view`                                    | everywhere                                         | [data:blog](../data/blog.mdx), [data:view](../data/view.mdx) |
+| `data:messages`                                             | everywhere                                         | [data:messages](../data/messages.mdx)                        |
+| `data:skin`                                                 | everywhere                                         | [data:skin](../data/skin.mdx)                                |
+| `data:widgets`                                              | everywhere                                         | [data:widgets](../data/widgets.mdx)                          |
+| `data:widget`, `data:title` and the data of the widget type | in a widget                                        | [Widget types](../widget-types/index.mdx)                    |
+| `data:posts`, `data:post`                                   | in the Blog widget, and in widgets that list posts | [data:post](../data/post.mdx)                                |
+| `data:` + a name                                            | inside the tag that gave the name                  | [Names given by tags](#names-given-by-tags)                  |
+
+The [data reference](../data/index.mdx) lists every path and where it exists.
+
+## How a path is written
+
+`data:` is one token: `data` and the colon, with nothing between them. The path runs from there to the first character that can not be part of it. <BloggerSource kind="observed" />
+
+- **Characters.** A path is made of letters, digits, `_`, `$`, `-` and dots. A segment, the part between two dots, can start with a digit and can contain dashes: `data:display-name` of the Profile widget, `data:i.post-count` for an entry of the BlogArchive widget. <BloggerSource kind="observed" />
+- **Whitespace ends it.** `data: blog.title` is the empty path `data:` followed by a stray word, an error. <BloggerSource kind="observed" />
+- **A dash is part of a name.** `data:i-1` reads the data named `i-1`. Subtract with spaces: `data:i - 1`. See [Minus signs](./operators.mdx#minus-signs).
+- **Empty segments are skipped**, and so are dots at the end. `data:post..title` and `data:post.title.` are `data:post.title`. <BloggerSource kind="observed" />
+- **A space after a dot is an error.** `data:blog. title` and `data:blog . title` fail. A space before the dot is accepted, but changes what the member applies to, see [What a member applies to](#what-a-member-applies-to). <BloggerSource kind="observed" />
+- **`data:` alone** reads nothing outside a widget. Inside a widget, it is the data of the widget, a map that prints `[Object]` and is true, but none of whose members can be read through it: write `data:title`, not `data:.title`. <BloggerSource kind="observed" />
+- **Bare words are not data.** `title` alone is an error: write `data:title`. The only bare words are keywords, function names before `(`, the parameter of a [lambda](#lambda-parameters), and a loop index inside brackets, `data:names[i]`. <BloggerSource kind="observed" />
+
+## Members
+
+`.name` reads a member of a value. A member is a field of the data, `title` of a post, or a [property](./properties.mdx) of the value's type, `length` of a list or `canonical` of a URL. Both are read the same way, and chain: `data:post.url.canonical.https`.
+
+Members also apply to the result of other expressions: <BloggerSource kind="observed" />
+
+| Written on                             | Example                                                         |
+| -------------------------------------- | --------------------------------------------------------------- |
+| an expression in parentheses           | `(data:blog.pageName + data:blog.title).length`                 |
+| the result of a lambda, in parentheses | `(data:links filter (l => l.name == "favicon")).last.target`    |
+| a function call, directly              | `snippet(data:post.snippets.long, { length: 400 }).jsonEscaped` |
+| a list literal, directly               | `[240, 320, 480].first`                                         |
+| a conversion to text                   | `(data:blog.blogId + "").jsonEscaped`                           |
+
+A member of nothing is nothing: when `data:post.author` does not exist, `data:post.author.name` reads nothing as well, without an error.
+
+### What a member applies to
+
+A `.name` written right after a data path, or after `)`, `]` or `}`, applies to that part only. After a string literal, or after a space, it applies to everything on its left, and the expression then goes on: <BloggerSource kind="observed" />
+
+| Expression                 | Is read as                   | Result                |
+| -------------------------- | ---------------------------- | --------------------- |
+| `"x" + data:t.length`      | `"x" + (data:t.length)`      | `x2`                  |
+| `"x" + data:t .length`     | `("x" + data:t).length`      | `3`                   |
+| `"x" + "ab".length`        | `("x" + "ab").length`        | `3`                   |
+| `1 + "abc".length * 2`     | `((1 + "abc").length) * 2`   | `8`                   |
+| `true ? "ab" : "c".length` | `(true ? "ab" : "c").length` | `2`                   |
+| `"x" + ("abc") .length`    | `"x" + (("abc").length)`     | `x3`                  |
+| `"x" + [1, 2] .length`     | `"x" + ([1, 2].length)`      | `x2`                  |
+| `data:url path "x".length` | `(data:url path "x").length` | the length of the URL |
+
+Here `data:t` holds `"ab"`. Write a member right after the value it reads, with no space, and put a string literal that takes a member in parentheses: `"Read " + ("abc".length)` is `Read 3`.
+
+## Indexes
+
+`[index]` reads an item of a list by its position, counted from `0`: <BloggerSource kind="official" />
+
+```xml title="A web app manifest built from the links of a LinkList"
+<b:eval expr='(data:values[2] ?: data:blog.title).jsonEscaped'/>
+<b:eval expr='(data:values[6] in ["auto", "ltr", "rtl"] ? data:values[6] : data:blog.languageDirection).jsonEscaped'/>
+```
+
+### What can be indexed
+
+An index applies to data only: a `data:` path, or a chain of its members and indexes, `data:post.labels[0].name`. An index on anything else, a list literal, a call, or a member of a map literal, is an error. <BloggerSource kind="observed" /> Whether parentheses around a path keep it indexable, `(data:labels)[0]`, is not confirmed. To read one item of such a value, use [`.first` and `.last`](./properties.mdx#lists), or store the value with [`<b:with>`](../tags/variables.mdx) and index the variable.
+
+An index reads lists only. A map is read with `.key`: an index on a map, `data:icon["size"]`, reads nothing, without an error. <BloggerSource kind="observed" />
+
+An index right after a widget type never reads: `data:widgets.HTML[0]` is nothing. `data:widgets[0]` and `data:widgets.HTML.first` work, and so does an index on the same list stored with `<b:with>`. <BloggerSource kind="observed" />
+
+### What the index can be
+
+| Index                              | Example                   | Source                            |
+| ---------------------------------- | ------------------------- | --------------------------------- |
+| a number                           | `data:post.labels[0]`     | <BloggerSource kind="official" /> |
+| data holding a number              | `data:links[data:i]`      | <BloggerSource kind="observed" /> |
+| an expression, without parentheses | `data:slides[data:i - 1]` | <BloggerSource kind="observed" /> |
+| a string of digits                 | `data:links["1"]`         | <BloggerSource kind="observed" /> |
+
+The index must be a whole number, or a string of digits. Any other index reads nothing, without an error: a decimal, `data:items[1.5]` and even `data:items[1.0]`, a word, `data:items["first"]`, or digits with a space, `data:items[" 1"]`. <BloggerSource kind="observed" /> A loop index is read like any other data, `data:items[data:i]`, and inside brackets its bare name works too: `data:items[i]`. <BloggerSource kind="observed" />
+
+A segment of digits in the path is not an index: `data:links.1` reads nothing. It reads a key named `1` of a map, `{ 1: "x" }.1`. <BloggerSource kind="observed" />
+
+### Out of range
+
+An index past the end of the list reads nothing, as a missing path does. So does a negative index: `data:links[-1]` is nothing, not the last item. <BloggerSource kind="observed" /> Nothing else happens, the rest of the includable renders normally. Test the position first when the result matters:
+
+```xml
+<b:loop index='i' values='data:slides' var='slide'>
+  <b:if cond='data:i > 0'>
+    <a expr:href='"#slide-" + data:slides[data:i - 1].id'>Previous</a>
+  </b:if>
+</b:loop>
+```
+
+## Names given by tags
+
+Several tags give a value a name. Inside the tag, the value is read with `data:` and that name:
+
+| Tag                                           | Gives                                                       | Example                                                                                       |
+| --------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| [`<b:loop>`](../tags/loops.mdx)               | `var`, the current item, and `index`, its position from `0` | `<b:loop index='i' values='data:posts' var='post'>` gives `data:post` and `data:i`            |
+| [`<b:with>`](../tags/variables.mdx)           | `var`, the value of `value`                                 | `<b:with value='data:skin.vars' var='vars'>` gives `data:vars`                                |
+| [`<b:includable>`](../layout/includables.mdx) | `var`, the value passed by `data` of `<b:include>`          | `<b:includable id='postCard' var='post'>` gives `data:post`                                   |
+| [`<b:include>`](../layout/includables.mdx)    | every key of a map passed as `data`                         | `data='{ title: data:post.title, first: (data:i == 0) }'` gives `data:title` and `data:first` |
+
+- A name exists only inside its tag.
+- A name hides data of the same name. Inside `<b:with value='data:posts filter (p => p.featuredImage)' var='posts'>`, `data:posts` is the filtered list, and the original list can not be reached any more. <BloggerSource kind="observed" />
+- `data` of `<b:include>` takes a bare name or path as a shorthand: `data='post'` passes `data:post`. <BloggerSource kind="official" /> Besides names and paths, `data` takes only a map literal or a list in braces, `{1, 2}`, see [Passing data](../layout/includables.mdx#passing-data).
+
+```xml title="Names from three tags"
+<b:loop index='i' values='data:posts' var='post'>
+  <b:with value='data:post.featuredImage ?: data:skin.vars.default_thumbnail' var='cover'>
+    <b:include data='{ post: data:post, cover: data:cover, first: (data:i == 0) }' name='card'/>
+  </b:with>
+</b:loop>
+
+<b:includable id='card'>
+  <article expr:class='data:first ? "card first" : "card"'>
+    <img expr:alt='data:post.title' expr:src='resizeImage(data:cover, 640, "16:9")'/>
+    <h2><data:post.title/></h2>
+  </article>
+</b:includable>
+```
+
+## Lambda parameters
+
+Inside the body of a [lambda](./lambdas.mdx), the parameter is the current item, written as a bare word, `l.name`, or read as data, `data:l.name`. Like the names given by tags, it hides data of the same name. The rules are in [The parameter](./lambdas.mdx#the-parameter).
+
+A bare parameter takes only plain members. An index or a member with a dash or digits does not: write `data:l[0]` and `data:l.post-count`, not `l[0]` or `l.post-count`, which are errors. <BloggerSource kind="observed" />
+
+## Dynamic paths
+
+`expr:` on an attribute that already holds an expression evaluates it twice. When the first result is a string, Blogger reads that string as an expression: `<b:with expr:value='"1 + 2"' var='x'>` gives `3`. When it is anything else, it is used as it is: Blogger's own Notable theme computes a boolean this way. <BloggerSource kind="observed" /> A theme can so evaluate a path written in a widget setting, for example a page title template that the blog owner types in a LinkList:
+
+```xml title="A title typed in a widget setting" {2}
+<b:if cond='["data:blog.", "data:view.", "data:messages."] any (prefix => data:input contains prefix)'>
+  <b:with expr:value='data:input' var='evaluated'>
+    <title><data:evaluated/></title>
+  </b:with>
+<b:else/>
+  <title><data:input.escaped/></title>
+</b:if>
+```
+
+When `data:input` is the text `data:view.title`, the `<b:with>` evaluates it, and the title is the title of the page. Any other text is written as it is.
+
+A path can also be assembled from parts:
+
+```xml
+<b:with value='data:view.isPost ? "view.postId" : "blog.blogId"' var='idPath'>
+  <b:with expr:value='"data:" + data:idPath' var='id'>
+    <meta expr:content='data:id' name='page-id'/>
+  </b:with>
+</b:with>
+```
+
+The string evaluated must be a valid expression. Check what it contains first, as the first example does: a misused `expr:` on a `b:` tag is a [markup error](../basics/saving.mdx#markup-errors). <BloggerSource kind="observed" />
+
+## Missing data
+
+A path that leads nowhere reads nothing. It is not an error, it renders as nothing, and it is false as a condition: <BloggerSource kind="observed" />
+
+```xml
+<b:eval expr='data:post.notAField'/>
+<b:if cond='data:post.featuredImage'>
+<a expr:href='data:post.link ?: data:post.url'>
+```
+
+The first line renders nothing, the second is false for a post without an image, and the third falls back to the URL of the post when it has no link. The rules, and how missing differs from empty, are in [Missing data](./evaluation.mdx#missing-data).
+
+Some data only exists on some pages: `data:post` outside a post, `data:view.search.query` outside a search. The [data reference](../data/index.mdx) says where each path is available.

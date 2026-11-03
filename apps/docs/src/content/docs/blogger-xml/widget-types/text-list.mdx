@@ -1,0 +1,181 @@
+---
+title: TextList
+description: The List widget, an ordered list of plain text items that themes also use as an editable list of words.
+published: 2026-10-26
+---
+
+`TextList` is the widget the Layout editor calls "List". Each item is a short piece of plain text, with no link. Out of the box it renders a bulleted list. Because the items are plain strings that the owner can add, remove and reorder from the dashboard, themes also use it as an editable list of options: the items become words the theme reacts to, and nothing of the default list is shown.
+
+## Quick example
+
+<CodeTabs>
+
+```xml title="theme.xml" {13}
+<b:widget id='TextList1' locked='false' title='Currently reading' type='TextList' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='item-0'>The Left Hand of Darkness</b:widget-setting>
+    <b:widget-setting name='item-1'>Piranesi</b:widget-setting>
+    <b:widget-setting name='item-2'>A Psalm for the Wild-Built</b:widget-setting>
+    <b:widget-setting name='shownum'/>
+    <b:widget-setting name='sorting'>NONE</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:include name='widget-title'/>
+    <ol class='reading'>
+      <b:loop values='data:items' var='item'>
+        <li><data:item/></li>
+      </b:loop>
+    </ol>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget TextList' data-version='2' id='TextList1'>
+<h3 class='title'>
+Currently reading
+</h3>
+<ol class='reading'>
+<li>The Left Hand of Darkness</li>
+<li>Piranesi</li>
+<li>A Psalm for the Wild-Built</li>
+</ol>
+</div>
+```
+
+</CodeTabs>
+
+Every item is a string, so `<data:item/>` prints it, and string properties such as `.escaped` or `.length` work on it.
+
+## Placement and limits
+
+| Property                 | Value                                                                           | Source                            |
+| ------------------------ | ------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `TextList`                                                                      | <BloggerSource kind="official" /> |
+| Per blog                 | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) |                                   |
+| Suggested width          | 100px                                                                           | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | Any section; no official theme ships one                                        | <BloggerSource kind="observed" /> |
+| Locked                   | Not by default                                                                  | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                        | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                           | <BloggerSource kind="official" /> |
+| Not available in         | Mobile Default 2010, Dynamic Views on mobile                                    | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting   | Values                                         | Read as    | Meaning                                      | Source                            |
+| --------- | ---------------------------------------------- | ---------- | -------------------------------------------- | --------------------------------- |
+| `item-N`  | text                                           | `items[N]` | One item. `N` counts from `0`                | <BloggerSource kind="observed" /> |
+| `shownum` | a number, or empty                             | `shownum`  | How many items to show. Empty shows them all | <BloggerSource kind="observed" /> |
+| `sorting` | `NONE`, `ALPHABETICAL`, `REVERSE_ALPHABETICAL` | `sorting`  | The order of the items                       | <BloggerSource kind="observed" /> |
+
+Blogger stores the settings in no particular order: `item-6` can come before `item-0` in the file. The number in the name is what orders the items.
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A TextList written with no settings saves, with none added and an empty title.
+- An `item-N` keeps the settings; an `item-0` gets `shownum`, empty, and `sorting` `NONE` added. An `item-5` alone stores nothing.
+- `sorting` is case-sensitive: `ALPHA`, `ASCENDING` and `DESCENDING` are refused. `shownum` must be 1 or more; a number above the count is kept, and an empty one is stored empty.
+
+Sorting is not applied on each page view. Choosing an alphabetical order in the editor rewrites the items in that order, and the original order is lost. No maximum number of items is documented.
+
+## Widget data
+
+The data is the same in both widget versions.
+
+| Field     | Type            | Content                                    | Source                            |
+| --------- | --------------- | ------------------------------------------ | --------------------------------- |
+| `title`   | string          | Widget title, up to 100 characters         | <BloggerSource kind="observed" /> |
+| `items`   | list of strings | The items, cut to `shownum` when it is set | <BloggerSource kind="official" /> |
+| `shownum` | number or empty | The `shownum` setting                      | <BloggerSource kind="observed" /> |
+| `sorting` | string          | The sort order                             | <BloggerSource kind="observed" /> |
+
+Whether `data:sorting` gives the setting values (`NONE`…) or the lowercase forms used by [LinkList](./link-list.mdx) (`none`, `alpha`, `reversealpha`) is not confirmed. Since the items are already stored in order, a theme rarely needs it.
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders                                                                                                      | Source                            |
+| ---------- | --- | --- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `main`     | Yes | Yes | v1: an `h2` with the title, then `.widget-content` with the list and `quickedit`. v2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`  | No  | Yes | `.widget-content` holding a `ul` with one `li` per item                                                              | <BloggerSource kind="observed" /> |
+
+The version 1 `main` writes its `<h2>` even when the title is empty, unlike most other version 1 widgets, which test the title first. Version 2 goes through `widget-title`, which skips an empty title. No official theme overrides either includable.
+
+## Writing your own markup
+
+### Items as switches
+
+A list of words is an easy way to let the owner pick and order features. The theme loops over the items it knows, and turns each word into a piece of markup with [`b:switch`](../tags/conditionals.mdx). Unknown words are dropped by the filter, so a typo in the dashboard renders nothing instead of breaking the header.
+
+```xml
+<b:widget id='TextList1' locked='true' title='Header buttons' type='TextList' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='item-0'>Search</b:widget-setting>
+    <b:widget-setting name='item-1'>Theme</b:widget-setting>
+    <b:widget-setting name='item-2'>Share</b:widget-setting>
+    <b:widget-setting name='shownum'/>
+    <b:widget-setting name='sorting'>NONE</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <ul class='header-buttons'>
+      <b:loop values='data:items filter (i => i in ["Search", "Theme", "Share"])' var='item'>
+        <b:switch var='data:item'>
+          <b:case value='Search'/>
+          <b:include name='searchButton'/>
+          <b:case value='Theme'/>
+          <b:include name='themeButton'/>
+          <b:default/>
+          <b:include name='shareButton'/>
+        </b:switch>
+      </b:loop>
+    </ul>
+  </b:includable>
+  <b:includable id='searchButton'>
+    <li><label class='btn' for='search-toggle'><span class='sr-only'><data:item/></span></label></li>
+  </b:includable>
+  <b:includable id='themeButton'>
+    <li><button class='btn' data-action='theme' type='button'><span class='sr-only'><data:item/></span></button></li>
+  </b:includable>
+  <b:includable id='shareButton'>
+    <li><button class='btn' data-action='share' type='button'><span class='sr-only'><data:item/></span></button></li>
+  </b:includable>
+</b:widget>
+```
+
+The included includables still see the loop variable `item`, so each button can use the word as its accessible label. Reordering the items in the dashboard reorders the buttons.
+
+To test for one word outside the loop, use `contains` on the list: `<b:if cond='data:items contains "Theme"'>`.
+
+### A list of keywords for the head
+
+Items can mix fixed words with placeholders the theme fills in. This widget writes a `<meta name='keywords'>` tag where `[blogTitle]` and `[pageName]` are replaced with the blog title and the page name:
+
+```xml {10,12}
+<b:widget cond='not data:view.isError' id='TextList2' locked='true' title='Meta keywords' type='TextList' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='item-0'>[blogTitle]</b:widget-setting>
+    <b:widget-setting name='item-1'>[pageName]</b:widget-setting>
+    <b:widget-setting name='item-2'>travel</b:widget-setting>
+    <b:widget-setting name='shownum'/>
+    <b:widget-setting name='sorting'>NONE</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:with value='data:items map (k => k == "[blogTitle]" ? data:blog.title : (k == "[pageName]" ? data:blog.pageName : k)) filter (k => k != "")' var='keywords'>
+      <b:if cond='data:keywords.length > 0'>
+        <b:eval expr='"&lt;meta content=&apos;"'/><b:loop index='i' values='data:keywords' var='k'><data:k.escaped/><b:if cond='data:i &lt; (data:keywords.length - 1)'>, </b:if></b:loop><b:eval expr='"&apos; name=&apos;keywords&apos;/&gt;"'/>
+      </b:if>
+    </b:with>
+  </b:includable>
+</b:widget>
+```
+
+- `map` swaps the placeholders, and `filter` drops the ones that came out empty (`data:blog.pageName` is empty on the homepage).
+- A `b:loop` can not run inside an attribute value, so the tag is printed in pieces with [`b:eval`](../tags/output.mdx): the opening text, the joined keywords, the closing text.
+- `data:i < (data:keywords.length - 1)` writes the comma between items but not after the last one.
+
+A widget lives in a section, and Blogger wraps it in `div` elements, which are not valid in `<head>`. Themes that put widgets in the head hide those wrappers, see [Sections that render no wrapper](../layout/sections.mdx#sections-that-render-no-wrapper) and [Widgets in the head](../guides/head-and-seo.mdx#widgets-in-the-head).
+
+## Things to know
+
+- **No links.** Items are text. For a list of links, use [LinkList](./link-list.mdx).
+- **Empty `shownum`** is saved as a self-closed `<b:widget-setting name='shownum'/>`.
+- **`quickedit`** in the version 1 `main` no longer does anything.

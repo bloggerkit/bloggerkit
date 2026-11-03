@@ -1,0 +1,172 @@
+---
+title: Introduction
+description: What a Blogger theme is, the language it is written in, and how this guide is organized.
+icon: Info
+level: beginner
+published: 2026-10-26
+---
+
+Every Blogger blog has a theme, and the theme is a single XML file. That file decides the HTML of every page of the blog: the homepage, each post, the label and search pages, the archive and the 404 page. It also holds the CSS, the areas where widgets can be placed, the widgets themselves with their settings, and the markup each widget renders.
+
+Blogger keeps the file and renders it again for every visit. It reads the theme together with the data of the requested page (the blog, its posts, comments and widgets), runs the logic written in the theme, and sends plain HTML to the browser.
+
+## A first look
+
+This is the part of a theme that lists posts. The posts come from a Blog widget, and the theme writes the markup of each one. Next to it, what Blogger sends on the homepage of a blog with two posts:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:section class='posts' id='main' maxwidgets='1' name='Posts' showaddelement='no'>
+  <b:widget id='Blog1' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'>
+    <b:includable id='main'>
+      <b:loop values='data:posts' var='post'>
+        <article class='card'>
+          <h2><a expr:href='data:post.url'><data:post.title/></a></h2>
+          <p><data:post.snippets.short/></p>
+        </article>
+      </b:loop>
+    </b:includable>
+  </b:widget>
+</b:section>
+```
+
+```html title="Rendered"
+<div class='posts section' id='main' name='Posts'><div class='widget Blog' data-version='2' id='Blog1'>
+  <article class='card'>
+    <h2><a href='https://example.blogspot.com/2026/10/autumn-notes.html'>Autumn notes</a></h2>
+    <p>The leaves came down early this year, and the garden needs a plan…</p>
+  </article>
+  <article class='card'>
+    <h2><a href='https://example.blogspot.com/2026/09/first-post.html'>First post</a></h2>
+    <p>Welcome to the blog. Here is what to expect from the next months…</p>
+  </article>
+</div></div>
+```
+
+</CodeTabs>
+
+Three things in the theme are not HTML, and they make the whole language:
+
+| Syntax                 | Example                                           | What it does                                                                         |
+| ---------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `b:` elements          | `<b:section>`, `<b:widget>`, `<b:loop>`, `<b:if>` | Structure the page and add logic. Blogger replaces them with their output            |
+| `data:` tags and paths | `<data:post.title/>`, `data:posts`                | Read the data of the page: write a value, or pass it to a tag                        |
+| `expr:` attributes     | `expr:href='data:post.url'`                       | Compute the value of an HTML attribute from an [expression](./expressions/index.mdx) |
+
+Everything else is ordinary HTML, written as XML: every element closed, every attribute quoted.
+
+## Where to start
+
+You do not need to read everything. Pick the path that matches what you want to do. Every page shows its level under its title, **Beginner**, **Intermediate** or **Advanced**, and the harder pages list what to read first. The [Glossary](./basics/glossary.mdx) explains each term in a sentence.
+
+### New to Blogger themes
+
+Start with how a theme works, then build one:
+
+1. [How themes work](./basics/concepts.mdx): what Blogger does with a theme on every visit.
+2. [Structure of a theme](./basics/document.mdx): the parts of the file, in order.
+3. [Your first theme](./basics/first-theme.mdx): a small, complete theme, built step by step and installed.
+4. [Saving a theme](./basics/saving.mdx): what to do when Blogger refuses to save.
+
+Then learn the three tags almost every theme uses: [b:if](./tags/conditionals.mdx), [b:loop](./tags/loops.mdx) and [data tags](./tags/output.mdx).
+
+### Changing a theme you already have
+
+1. [Back up the current theme](./basics/first-theme.mdx#back-up-the-current-theme) before you change anything.
+2. [Structure of a theme](./basics/document.mdx), to find your way around the file in Edit HTML.
+3. [b:skin](./styles/skin.mdx) for the CSS, and [Page layouts](./guides/page-layouts.mdx) to change one kind of page.
+4. [Saving a theme](./basics/saving.mdx), when Blogger shows an error.
+
+### Building a theme from scratch
+
+After the Basics, read [Layout](./layout/sections.mdx) for sections, widgets and includables, then the guides in order: [Head and SEO](./guides/head-and-seo.mdx), [Page layouts](./guides/page-layouts.mdx), [Posts and pagination](./guides/posts-and-pagination.mdx), [Images](./guides/images.mdx) and [Comments](./guides/comments.mdx). Finish with [Performance](./guides/performance.mdx).
+
+### Looking something up
+
+[Elements](./reference/elements.mdx) lists every tag, [Page types](./data/page-types.mdx) every kind of page, and [Widget types](./widget-types/index.mdx) every widget type with its data. Search, with <kbd>Ctrl</kbd> <kbd>K</kbd> or <kbd>/</kbd>, finds any tag, data or attribute.
+
+## How the guide is organized
+
+The guide has three parts. **Start here** explains how a theme works and walks through common tasks. **Language** describes the theme language from the outside of a theme to the inside. **Reference** has a page per widget type and tables to look things up.
+
+**[Basics](./basics/concepts.mdx).** Start here.
+
+- [How themes work](./basics/concepts.mdx): the stored XML and the rendered HTML, one theme for every page, sections, widgets and includables, the Layout editor, versions, and what Blogger adds to every page.
+- [Structure of a theme](./basics/document.mdx): the document part by part, from the XML declaration to `</html>`.
+- [Your first theme](./basics/first-theme.mdx): build a small, complete theme step by step and install it.
+- [Saving a theme](./basics/saving.mdx): every check Blogger makes when a theme is saved, and how it rewrites the file it keeps.
+- [Glossary](./basics/glossary.mdx): the words of the guide, each in a sentence or two.
+
+**[Guides](./guides/head-and-seo.mdx).** Tasks across many tags.
+
+- [Head and SEO](./guides/head-and-seo.mdx): title, description, canonical URL, Open Graph and structured data.
+- [Page layouts](./guides/page-layouts.mdx): different markup for the homepage, posts, static pages and the 404 page.
+- [Images](./guides/images.mdx): resized, cropped and responsive images from Blogger's image servers.
+- [Posts and pagination](./guides/posts-and-pagination.mdx): post lists, single posts, older and newer pages.
+- [Comments](./guides/comments.mdx): listing comments, threads and the comment form.
+- [Feeds](./guides/feeds.mdx): reading the blog's feeds from JavaScript.
+- [Widgets as configuration](./guides/widgets-as-configuration.mdx): settings the blog owner edits in the Layout editor.
+- [The Layout editor](./guides/layout-editor.mdx): making the Layout editor clear and usable.
+- [Performance](./guides/performance.mdx): keeping the rendered page small and fast.
+
+**[Layout](./layout/sections.mdx).** The parts of a theme that Blogger manages.
+
+- [Sections](./layout/sections.mdx): `<b:section>`, the areas that hold widgets.
+- [Widgets](./layout/widgets.mdx): `<b:widget>` and its `<b:widget-settings>`.
+- [Includables](./layout/includables.mdx): `<b:includable>` and `<b:include>`, the named blocks of markup, and the built-in ones.
+- [Default markups](./layout/default-markups.mdx): `<b:defaultmarkups>`, markup shared by every widget of a type, and Common includables.
+
+**[Tags](./tags/conditionals.mdx).** Logic and output.
+
+- [Conditionals](./tags/conditionals.mdx): `<b:if>`, `<b:elseif>`, `<b:else>`, `<b:switch>`, `<b:case>` and `<b:default>`.
+- [Loops](./tags/loops.mdx): `<b:loop>`, over lists and ranges.
+- [Variables](./tags/variables.mdx): `<b:with>`.
+- [Data output](./tags/output.mdx): `<data:x/>` and `<b:eval>`.
+- [Attributes](./tags/attributes.mdx): `expr:`, `<b:attr>` and `<b:class>`.
+- [Dynamic tags](./tags/dynamic-tags.mdx): `<b:tag>`.
+- [Messages](./tags/messages.mdx): `<b:message>` and `<b:param>`.
+- [Comments](./tags/comments.mdx): `<b:comment>` and HTML comments.
+
+**[Expressions](./expressions/index.mdx).** The small language of `cond`, `values`, `expr:` and the other computed attributes: [values](./expressions/values.mdx), [data paths](./expressions/data-paths.mdx), [operators](./expressions/operators.mdx), [lambdas](./expressions/lambdas.mdx), [functions](./expressions/functions.mdx), [properties](./expressions/properties.mdx) and [evaluation rules](./expressions/evaluation.mdx).
+
+**[Data](./data/index.mdx).** Everything a theme can read: [data:blog](./data/blog.mdx), [data:view](./data/view.mdx), [posts](./data/post.mdx), [comments](./data/comments.mdx), [data:widget and data:widgets](./data/widgets.mdx), [data:messages](./data/messages.mdx), [data:skin](./data/skin.mdx), and how to tell [page types](./data/page-types.mdx) apart.
+
+**[Styles](./styles/skin.mdx).** CSS and the Theme Designer: [`<b:skin>` and `<b:template-skin>`](./styles/skin.mdx), and [Theme Designer variables](./styles/theme-designer.mdx), `<Variable>`, `<Group>` and `$(…)`.
+
+**[Widget types](./widget-types/index.mdx).** One page per type, with its data, settings and built-in includables: [Blog](./widget-types/blog.mdx), [Header](./widget-types/header.mdx), [HTML](./widget-types/html.mdx), [Text](./widget-types/text.mdx), [Image](./widget-types/image.mdx), [Profile](./widget-types/profile.mdx), [PageList](./widget-types/page-list.mdx), [LinkList](./widget-types/link-list.mdx), [Label](./widget-types/label.mdx), [BlogArchive](./widget-types/blog-archive.mdx), [BlogSearch](./widget-types/blog-search.mdx), [PopularPosts](./widget-types/popular-posts.mdx), [FeaturedPost](./widget-types/featured-post.mdx), [TextList](./widget-types/text-list.mdx), [BlogList](./widget-types/blog-list.mdx), [Feed](./widget-types/feed.mdx), [ContactForm](./widget-types/contact-form.mdx), [Followers](./widget-types/followers.mdx), [FollowByEmail](./widget-types/follow-by-email.mdx), [Subscribe](./widget-types/subscribe.mdx), [Attribution](./widget-types/attribution.mdx), [ReportAbuse](./widget-types/report-abuse.mdx), [AdSense](./widget-types/adsense.mdx), [Stats](./widget-types/stats.mdx), [Translate](./widget-types/translate.mdx), [Wikipedia](./widget-types/wikipedia.mdx), [BloggerButton](./widget-types/blogger-button.mdx) and [Navbar](./widget-types/navbar.mdx).
+
+**[Reference](./reference/elements.mdx).** Tables to look things up.
+
+- [Elements](./reference/elements.mdx): every tag, where it can be, and what it can contain.
+- [Root attributes](./reference/root-attributes.mdx): the `b:` attributes of `<html>`.
+- [Limits](./reference/limits.mdx): sizes and depths Blogger enforces.
+- [Classic themes](./reference/classic-themes.mdx): layouts versions 1 and 2, `macro:` tags and `<b:section-contents>`.
+- [Sources](./reference/sources.mdx): Google's documentation of the theme language.
+
+## Reading the guide
+
+Read the four Basics pages in order. They set up the vocabulary the rest of the guide uses: section, widget, includable, page type, saving, and the [Glossary](./basics/glossary.mdx) keeps it at hand. After that, each page stands on its own: an Intermediate or Advanced page names the pages it builds on under its title, after **Read first**.
+
+Pages about a tag share one plan: what the tag does, a first example, how it works, a table of its attributes and a section for each, then patterns and edge cases. The rendered HTML is shown next to the theme when it helps.
+
+The guide describes themes of the current generation: layouts version 3 with version 2 widgets, the generation of Contempo, Soho, Emporio, Notable and Essential, and of most themes written since. Where an older theme behaves differently, the page says so, and [Classic themes](./reference/classic-themes.mdx) covers the older generations.
+
+### How examples are written
+
+The examples follow one style, close to the way Blogger keeps a theme after saving it:
+
+- attributes sorted by name and quoted with single quotes, as Blogger stores them: `<b:include data='post' name='postMeta'/>`;
+- elements with nothing inside them closed in place, as Blogger stores them: `<b:else/>`, `<b:section id='footer'/>`;
+- every expression on one line, with `"` for strings inside the single quotes: `cond='data:view.type == "item"'`. Blogger stores that `"` as `&quot;`, and `>` as `&gt;`; both spellings are the same XML;
+- `and` and `or` rather than `&amp;&amp;` and `||`, and `&lt;` for the `<` operator, which XML does not allow in an attribute.
+
+The last two are the guide's choices. Blogger stores expressions exactly as written, apart from that escaping: `&amp;&amp;`, `eq` or extra spaces stay as you type them. [Saving a theme](./basics/saving.mdx#how-blogger-rewrites-the-theme) lists the rewrites Blogger makes.
+
+## Where facts come from
+
+Every attribute, value and data field in the guide carries a badge saying where it comes from:
+
+<BloggerSourceLegend />
+
+Where a behavior could not be settled, the page says it is not confirmed. Google has never published a full description of the theme language: [Sources](./reference/sources.mdx#status-badges) explains each badge and what the facts are based on, and Blogger can change its behavior at any time, without notice.

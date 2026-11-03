@@ -1,0 +1,178 @@
+---
+title: AdSense
+description: The AdSense widget, which places an ad unit from the AdSense account linked to the blog.
+published: 2026-10-26
+---
+
+`AdSense` shows an ad from the AdSense account connected to the blog in the Earnings page of the dashboard. The ad code itself never lives in the theme: Blogger and AdSense produce it, and the widget only remembers the ad format. The theme decides where the ad goes and what wraps it. In version 2, when Blogger has no ready-made code for the slot, the widget falls back to a responsive ad unit of its own.
+
+Ads only appear on a public blog, linked to AdSense, and not marked as adult content.
+
+## Quick example
+
+An ad slot with a fixed minimum height, so the page does not jump when the ad loads:
+
+<CodeTabs>
+
+```xml title="theme.xml" {15-16}
+<b:widget id='AdSense1' locked='false' title='' type='AdSense' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='style.layout'>1x1</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <div class='ad-slot'>
+      <b:if cond='data:adCode'>
+        <data:adCode/>
+      <b:else/>
+        <b:include name='defaultAdUnit'/>
+      </b:if>
+    </div>
+  </b:includable>
+  <b:includable id='defaultAdUnit'>
+    <b:with value='"display: block; min-height: 280px;"' var='style'>
+      <b:include name='super.defaultAdUnit'/>
+    </b:with>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered, with the default unit"
+<div class='widget AdSense' data-version='2' id='AdSense1'>
+<div class='ad-slot'>
+<ins class='adsbygoogle' data-ad-client='ca-pub-1234567890123456' data-ad-format='auto' data-ad-host='ca-host-pub-1556223355139109' style='display: block; min-height: 280px;'>
+</ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+</div>
+</div>
+```
+
+</CodeTabs>
+
+`defaultAdUnit` reads a variable named `style` for the inline style of the `<ins>`. Setting it with [`b:with`](../tags/variables.mdx), then calling `super.defaultAdUnit`, changes the style without rewriting Blogger's unit.
+
+## Placement and limits
+
+| Property                 | Value                                                                                                  | Source                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| Type                     | `AdSense`                                                                                              | <BloggerSource kind="official" /> |
+| Per blog                 | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type)                        |                                   |
+| Suggested width          | 120px                                                                                                  | <BloggerSource kind="observed" /> |
+| Title                    | None; the editor does not offer one                                                                    | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | Contempo, Essential, Emporio and Soho ship it, in the posts section and in a section with the id `ads` | <BloggerSource kind="observed" /> |
+| Locked                   | Added locked by Contempo, Essential and Emporio (10 of the 32 AdSense widgets in official exports)     | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                                               | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Shown unless disabled                                                                                  | <BloggerSource kind="official" /> |
+| Not available in         | Dynamic Views                                                                                          | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting                                                                                      | Values                       | Read as          | Meaning                | Source                              |
+| -------------------------------------------------------------------------------------------- | ---------------------------- | ---------------- | ---------------------- | ----------------------------------- |
+| `style.layout`                                                                               | a format, see below          | through `adCode` | The size of the ad     | <BloggerSource kind="observed" />   |
+| `style.unittype`                                                                             | `TextAndImage`               |                  | An old ad-type option  | <BloggerSource kind="deprecated" /> |
+| `style.bgcolor`, `style.bordercolor`, `style.linkcolor`, `style.textcolor`, `style.urlcolor` | hex colors such as `#ffffff` |                  | Colors of old text ads | <BloggerSource kind="deprecated" /> |
+
+The formats `style.layout` accepts:
+
+| Group       | Values                                      |
+| ----------- | ------------------------------------------- |
+| Recommended | `300x250`, `336x280`, `728x90`, `160x600`   |
+| Horizontal  | `970x250`, `970x90`, `468x60`, `234x60`     |
+| Vertical    | `120x600`, `120x240`, `300x600`, `300x1050` |
+| Square      | `250x250`, `200x200`, `180x150`, `125x125`  |
+| Responsive  | `1x1`                                       |
+
+Official exports use `1x1` and `160x600`.
+
+In a custom theme, an AdSense widget written with no settings saves, with an empty title and a default `main`: `<div class='widget-content'><b:if cond='data:adCode'><data:adCode/><b:else/><b:include name='defaultAdUnit'/></b:if></div>`. It accepts a `style.layout` setting but stores nothing, and on a blog without AdSense it rendered nothing. <BloggerSource kind="observed" />
+
+The retired `style.*` settings still appear in exports, in this widget and in the [Blog](./blog.mdx) widget, which can show ads between posts.
+
+## Widget data
+
+| Field        | v1  | v2  | Type   | Content                                                                                      | Source                            |
+| ------------ | --- | --- | ------ | -------------------------------------------------------------------------------------------- | --------------------------------- |
+| `adCode`     | Yes | Yes | string | The HTML of the ad unit, generated by Blogger and AdSense. Can be empty in version 2         | <BloggerSource kind="observed" /> |
+| `adClientId` | No  | Yes | string | The publisher id, such as `ca-pub-0123456789`. The same value as `data:blog.adsenseClientId` | <BloggerSource kind="observed" /> |
+
+The Blog widget has the same two fields. The blog-wide values live in [`data:blog`](../data/blog.mdx):
+
+| Field                              | Content                                          |
+| ---------------------------------- | ------------------------------------------------ |
+| `data:blog.adsenseClientId`        | Publisher id of the linked account               |
+| `data:blog.adsenseHostId`          | Host id provided by Blogger                      |
+| `data:blog.adsenseHasAds`          | Ads are on                                       |
+| `data:blog.adsenseAutoAds`         | Auto ads are on                                  |
+| `data:blog.analyticsAccountNumber` | The Google Analytics id from the blog settings   |
+| `data:blog.analytics4`             | Whether that id is a Google Analytics 4 property |
+
+## Built-in includables
+
+| Includable      | v1  | v2  | What it renders                                                                                                | Source                            |
+| --------------- | --- | --- | -------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `main`          | Yes | Yes | v1: `div.widget-content` with `adCode` and `quickedit`. v2: `adCode` when it is set, `defaultAdUnit` otherwise | <BloggerSource kind="observed" /> |
+| `defaultAdUnit` | No  | Yes | A responsive ad unit and the script line that fills it. The Blog widget has the same includable                | <BloggerSource kind="observed" /> |
+
+What `defaultAdUnit` writes:
+
+| Part                   | Content                                                                                |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| `ins.adsbygoogle`      | `data-ad-format='auto'`                                                                |
+| `data-ad-client`       | `adClientId`, or `data:blog.adsenseClientId` when it is empty                          |
+| `data-ad-host`         | `data:blog.adsenseHostId`                                                              |
+| `style`                | The `style` variable, or `display: block;` when it is not set                          |
+| `data-analytics-uacct` | `data:blog.analyticsAccountNumber`, only when the blog does not use Google Analytics 4 |
+| `script`               | `(adsbygoogle = window.adsbygoogle \|\| []).push({});`                                 |
+
+The `style` variable only replaces the default when it is a non-empty string. To leave all styling to the stylesheet, give it a CSS comment, which is not empty and does nothing: `<b:with value='"/* styled in CSS */"' var='style'>`. Blogger's 2017 themes do exactly this, for AdSense and Blog together, in a `<b:defaultmarkup type='AdSense,Blog'>`.
+
+## Writing your own markup
+
+### Load the AdSense script once
+
+The default unit pushes into `adsbygoogle`, but the AdSense library has to be on the page. Load it in the head only when the layout has an ad widget and Auto ads are off, the same test Blogger's themes make:
+
+```xml
+<b:if cond='data:blog.adsenseClientId and not data:widgets.AdSense.empty and not data:blog.adsenseAutoAds'>
+  <script async='async' crossorigin='anonymous' expr:src='"https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=" + data:blog.adsenseClientId'/>
+</b:if>
+```
+
+### One style for every ad unit
+
+Put the override in a default markup instead of each widget:
+
+```xml
+<b:defaultmarkups>
+  <b:defaultmarkup type='AdSense,Blog'>
+    <b:includable id='defaultAdUnit'>
+      <b:with value='"/* styled in CSS */"' var='style'>
+        <b:include name='super.defaultAdUnit'/>
+      </b:with>
+    </b:includable>
+  </b:defaultmarkup>
+</b:defaultmarkups>
+```
+
+```css
+ins.adsbygoogle { display: block; min-height: 250px; }
+```
+
+### Count the ads
+
+Other widgets can see the AdSense widgets through `data:widgets`. Blogger's Blog widget uses this to limit its ads between posts, counting the AdSense widgets outside the `ads` section: `data:widgets.AdSense count (w => w.sectionId != "ads")`.
+
+## Things to know
+
+- **Saving can fail.** The widget settings are checked against the AdSense link when the theme is saved. If the blog is no longer public or no longer linked, saving can stop with:
+
+  ```txt
+  The widget settings in widget with id AdSense1 is not valid. An internal error occurred. Please try again.
+  ```
+
+  Remove every AdSense widget, or restore the link, to save again.
+
+- **No required ad section.** Nothing obliges a custom theme to have an `ads` section; it is only where Blogger's themes put their side ads.
+- **Retired parts.** The `style.*` color and type settings, and `quickedit` in the version 1 `main`.

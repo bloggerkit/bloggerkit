@@ -1,0 +1,8 @@
+{/* The number sits on the line, centered on the heading's first line (`h3`: 1.25rem, line height 1.25).
+    Its ring is the page color, so the line stops at it.
+    The wrapper keeps `.markdown li > ul` rules off lists inside the step */}
+<li
+	class="relative my-0 [counter-increment:step] not-last:pb-8 before:absolute before:-inset-s-[calc(var(--step-gap)+var(--step-size)/2+0.5px)] before:top-[calc((1.5625rem-var(--step-size))/2)] before:flex before:size-(--step-size) before:items-center before:justify-center before:rounded-full before:border-4 before:border-background before:bg-secondary before:text-sm before:font-medium before:text-secondary-foreground before:content-[counter(step)]"
+>
+	<div class="*:first:mt-0"><slot /></div>
+</li>

@@ -1,0 +1,236 @@
+---
+title: Layout editor
+description: How Blogger renders a theme in the Layout editor, detecting it with data:view.isLayoutMode, styling it with b:template-skin, and keeping sections clear.
+level: advanced
+prerequisites:
+  - blogger-xml/layout/sections
+  - blogger-xml/layout/widgets
+  - blogger-xml/styles/skin
+published: 2026-10-26
+---
+
+The Layout tab of the dashboard opens the Layout editor, where the blog owner adds, moves, edits and removes widgets. Blogger builds it from the theme itself: it renders the page with `data:view.isLayoutMode` true and `<body id='layout'>`, draws every section as a box titled with its `name`, and every widget as a box in it. <BloggerSource kind="observed" /> What the owner sees is the theme's own markup and CSS, plus the CSS of `<b:template-skin>`.
+
+```xml title="Two columns in the Layout editor"
+<b:template-skin><![CDATA[
+body#layout .page { display: flex; gap: 16px; }
+body#layout .content { width: 64%; }
+body#layout .sidebar { width: 36%; }
+body#layout .sidebar[hidden], body#layout .is-empty { display: block; }
+]]></b:template-skin>
+```
+
+Without these rules, a theme whose columns are placed by a grid, a media query or a script often shows its sections stacked, or not at all.
+
+## What the editor renders
+
+| Element                                                                            | What it is                                                                        | Source                            |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------- |
+| `body#layout`                                                                      | the body, with the class `ltr` or `rtl` from the blog language                    | <BloggerSource kind="observed" /> |
+| `div.section`                                                                      | a section, with its `id`, `class` and `name`                                      | <BloggerSource kind="observed" /> |
+| `div.section h4`                                                                   | the title of the section, from `name`                                             | <BloggerSource kind="observed" /> |
+| `div.section.activated-section`                                                    | the section a widget is being dragged over                                        | <BloggerSource kind="observed" /> |
+| `div.widget`                                                                       | a widget box, with the type as a class: `div.widget.Blog`, `div.widget.LinkList`… | <BloggerSource kind="observed" /> |
+| `div.widget.locked-widget`                                                         | a locked widget, drawn with a lock                                                | <BloggerSource kind="observed" /> |
+| `.widget-wrap1`, `.widget-wrap2`, `.widget-wrap3`, `.widget-content`               | the nested wrappers of a widget box                                               | <BloggerSource kind="observed" /> |
+| `.layout-title`, `.layout-widget-description`                                      | the title of the widget and the short description under it                        | <BloggerSource kind="observed" /> |
+| `.widget-content.visibility` with `.layout-widget-state.visible` or `.not-visible` | the eye icon, for `visible`                                                       | <BloggerSource kind="observed" /> |
+| `a.editlink.icon`                                                                  | the pencil that opens the widget's settings                                       | <BloggerSource kind="observed" /> |
+| `div.add_widget`, with `a` and `div.add-icon`                                      | the "Add a Gadget" link of a section                                              | <BloggerSource kind="observed" /> |
+| `div.dropregion`, `.dropregion.dr_inactive`                                        | where a dragged widget can land                                                   | <BloggerSource kind="observed" /> |
+| `.widget.el_active`, `.draggable-widget`                                           | the widget being dragged                                                          | <BloggerSource kind="observed" /> |
+
+- A section box is a `div` with the classes of the section, even when the section has a `tag`, and the Layout attributes of the section, such as `maxwidgets` and `showaddelement`, are copied onto it. <BloggerSource kind="observed" /> Its "Add a Gadget" link is missing when `showaddelement` is off or `maxwidgets` is reached. <BloggerSource kind="official" />
+- Widgets are drawn as boxes: their own markup, their `main` and its includables, is not rendered in the editor. Each box has the widget's title, a description of its type and an edit link. <BloggerSource kind="observed" />
+- Everything outside the sections is rendered as on the blog: the theme's HTML, its `<b:skin>`, its `<style>` and `<script>` elements. The editor is a page of the theme, and it pays for whatever the theme loads there.
+- Blogger sets its own `max-width`, `padding`, `margin`, `background-color`, `text-align` and `border` on `body`, the height, background and radius of `div.section`, the backgrounds and margins of `.widget-wrap2` and `.widget-wrap3`, and the height and shadow of `.widget-content`. A rule that changes them needs `!important`. <BloggerSource kind="observed" />
+
+The Header1 widget, as the browser shows it in the editor's DOM:
+
+```html title="The Header1 widget in the Layout editor (browser DOM)"
+<div class="widget Header locked-widget" data-version="2" id="Header1">
+  <div class="widget-wrap1">
+    <div class="widget-wrap2">
+      <div class="widget-wrap3">
+        <div class="widget-content visibility">
+          <div class="layout-widget-state visible" title="Visible"></div>
+          <div class="layout-title">Garden Notes (Header)</div>
+          <div class="layout-widget-description" title="Blog title and description.">Page Header</div>
+          <a class="editlink icon" title="Edit">Edit</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+## Detecting the editor
+
+`data:view.isLayoutMode` is true in the Layout editor, and empty on the blog and in previews. <BloggerSource kind="observed" /> See [data:view](../data/view.mdx). A theme uses it for three things.
+
+**Keep conditional sections.** A section hidden by `cond` or `<b:if>` on some pages is hidden in the editor too, unless the condition lets it through:
+
+```xml
+<b:section cond='data:view.isLayoutMode or data:view.isSingleItem' id='after_post' name='After the post' showaddelement='true'/>
+```
+
+**Skip what the editor does not need.** Analytics, ads, a cookie notice and heavy scripts have no use in the Layout editor:
+
+```xml
+<b:if cond='!data:view.isLayoutMode and !data:view.isPreview'>
+  <script async='async' src='https://www.googletagmanager.com/gtag/js?id=G-0000000000'/>
+</b:if>
+```
+
+**Render a lighter document.** A theme can render a different document in the Layout editor: the skin and the editor CSS in `<head>`, and in `<body>` every section of the theme, including the ones it places in `<head>` on the blog. <BloggerSource kind="observed" />
+
+```xml title="One document for the editor, one for the blog"
+<b:if cond='data:view.isLayoutMode'>
+  <head>
+    <b:include name='site-skin'/>
+    <b:include name='layout-css'/>
+  </head>
+  <body>
+    <b:include name='head-sections'/>
+    <b:include name='body-sections'/>
+  </body>
+<b:else/>
+  <head>
+    <!-- meta tags, styles, scripts -->
+    <b:include name='site-skin'/>
+    <b:include name='head-sections'/>
+  </head>
+  <body>
+    <b:include name='body-sections'/>
+    <!-- scripts -->
+  </body>
+</b:if>
+```
+
+- The skin, the editor CSS and the sections live in Common includables, so each exists once in the file and both branches include it. See [default markups](../layout/default-markups.mdx).
+- A section in `<head>` is not displayed by the browser, so it would be invisible in the editor. Rendered in `<body>`, it is a box like any other. See [Widgets in the head](./head-and-seo.mdx#widgets-in-the-head).
+- A `<b:section>` written directly in `<head>` is refused when saving. Here the sections are only included in the head, from a Common includable, as production themes do; whether that passes the save check is not confirmed. See [Content and placement](../layout/sections.mdx#content-and-placement).
+
+## `<b:template-skin>`
+
+`<b:template-skin>` holds the CSS of the Layout editor, in one CDATA section after `<b:skin>`. Blogger renders it on every page of the blog, not only in the editor, so its rules start with `body#layout`; a theme can keep it off the blog by putting it in a Common includable included with `cond='data:view.isLayoutMode'`, the `layout-css` includable above. Its rules are on [`<b:template-skin>`](../styles/skin.mdx#btemplate-skin), the pattern on [Rendering it only in the Layout editor](../styles/skin.mdx#rendering-it-only-in-the-layout-editor).
+
+## Styling the editor
+
+### Columns
+
+Lay the sections out as on the blog, so the owner recognizes the page. Every column rule starts with `body#layout`, so it can never touch the blog:
+
+```css
+body#layout .site-header, body#layout .site-footer { width: 100%; }
+body#layout .page { display: flex; align-items: flex-start; gap: 16px; }
+body#layout .content { flex: 1 1 64%; }
+body#layout .sidebar { flex: 0 0 34%; }
+body#layout .footer-columns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+```
+
+### What the blog hides
+
+Elements the blog hides until a script or a screen size shows them must be shown in the editor, or the sections in them can not be reached:
+
+```css
+body#layout [hidden], body#layout .is-empty, body#layout .mobile-menu { display: block !important; }
+body#layout .sticky, body#layout .fixed-bar { position: static !important; }
+body#layout .lazy, body#layout .fade-in { opacity: 1 !important; transform: none !important; }
+```
+
+Blogger's own themes do the same, showing their `.hidden` and `.invisible` elements and hiding their navigation. <BloggerSource kind="observed" />
+
+### Sections and widget boxes
+
+```css {5}
+body#layout div.section { background: #fff !important; border: 1px solid #ddd !important; border-radius: 8px !important; }
+body#layout div.section h4 { margin: 0 0 8px; font: 600 13px/1.4 system-ui, sans-serif; color: #444; }
+body#layout div.section.activated-section { outline: 2px dashed #4a7; }
+body#layout div.widget.locked-widget div.widget-content { background-color: #fafafa !important; }
+body#layout div.widget.Blog div.layout-title::before { content: "Posts: "; }
+body#layout div.add_widget { border: 1px dashed #bbb !important; border-radius: 6px; }
+```
+
+The type class of a widget box, `div.widget.Blog`, lets each kind of widget get its own color or label.
+
+### Section options as classes
+
+The editor has no option to hide the description or the edit link of a widget. A theme adds its own, as classes on the section: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```css title="CSS"
+body#layout .section.no-desc .layout-widget-description { display: none; }
+body#layout .section.no-edit .editlink { display: none; }
+body#layout .section.no-title h4 { display: none; }
+body#layout .section.cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+body#layout .section.cols-3 h4, body#layout .section.cols-3 .add_widget { grid-column: 1 / -1; }
+```
+
+```xml title="Section"
+<b:section class='cols-3 no-desc' id='settings' maxwidgets='6' name='Theme settings' showaddelement='false'/>
+```
+
+</CodeTabs>
+
+The classes mean nothing to Blogger: they only match the theme's own `body#layout` rules. Production themes use classes of this kind on their configuration sections. <BloggerSource kind="observed" />
+
+### A banner
+
+`body#layout::before` and `::after` add text above and below the editor: the name and version of the theme, a link to its documentation. A theme can write them with CSS escapes, so the CDATA only holds ASCII: <BloggerSource kind="observed" />
+
+```css
+body#layout::before { content: "\00003e  Field Notes theme 2.1 \00003c"; display: block; padding: 8px; font-weight: 600; }
+body#layout::after { content: "\0000a9  2026 \002027  Read the theme guide before editing"; display: block; padding: 8px; }
+```
+
+`\00003e` is `>`, `\00003c` is `<`, `\0000a9` is `©` and `\002027` is `‧`. Shorter escapes, such as `\3e`, `\a9` and `\2014` (`—`), work as well.
+
+## Making sections usable
+
+The editor is the only place most owners ever change their blog. A few attributes and habits make it clear:
+
+| Do                                                                                                 | Why                                                          |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Give every section a `name` that says where it is: `Sidebar`, `Below the post`, `Footer, column 2` | The `name` is the title of the box                           |
+| Set `showaddelement='false'` on sections that must not grow                                        | No "Add a Gadget" link: the owner can not add a widget there |
+| Set `maxwidgets` to what the place can hold                                                        | The link disappears once the section is full                 |
+| Lock the widgets the theme needs, `locked='true'`                                                  | A locked widget can be edited, not removed                   |
+| Give widgets a title that explains them, even when the theme does not show it                      | The title is the label of the box                            |
+| Start every hiding condition with `data:view.isLayoutMode or`                                      | A hidden section can not be edited                           |
+| Show in `body#layout` what the blog hides                                                          | Sections in a closed menu or a hidden block stay reachable   |
+| Give empty sections a minimum height                                                               | An empty section must still be a drop target                 |
+
+<BloggerSource kind="observed" />
+
+See [sections](../layout/sections.mdx) and [widgets](../layout/widgets.mdx) for every attribute; what [`locked`](../layout/widgets.mdx#locked) prevents is there too.
+
+<CodeTabs>
+
+```xml title="A footer the owner understands"
+<footer class='site-footer'>
+  <div class='footer-columns'>
+    <b:section id='footer_1' maxwidgets='2' name='Footer, column 1' showaddelement='true'/>
+    <b:section id='footer_2' maxwidgets='2' name='Footer, column 2' showaddelement='true'/>
+    <b:section id='footer_3' maxwidgets='2' name='Footer, column 3' showaddelement='true'/>
+  </div>
+  <b:section class='no-desc' id='footer_credits' maxwidgets='1' name='Footer credits' showaddelement='false'>
+    <b:widget id='HTML21' locked='true' title='Copyright text' type='HTML' version='2' visible='true'/>
+  </b:section>
+</footer>
+```
+
+```css title="CSS"
+body#layout div.section { min-height: 64px; }
+```
+
+</CodeTabs>
+
+### Widgets for the editor only
+
+A widget with `cond='data:view.isLayoutMode'` exists only in the Layout editor. A theme can use one as an image uploader, so owners get a Google-hosted URL for any setting. See [An uploader in the Layout editor](../widget-types/image.mdx#an-uploader-in-the-layout-editor) and [Widgets as configuration](./widgets-as-configuration.mdx). <BloggerSource kind="observed" />
+
+## Blogger's scripts and the editor
+
+The Layout editor works with `b:js='false'` and `b:css='false'`: in a theme that sets both, the owner still adds, moves and edits widgets as usual. <BloggerSource kind="observed" /> What the two attributes remove from the blog's pages is on [Performance](./performance.mdx).

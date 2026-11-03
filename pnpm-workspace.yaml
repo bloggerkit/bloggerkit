@@ -24,3 +24,4 @@ catalog:
 allowBuilds:
   "@swc/core": true
   esbuild: true
+  workerd: true

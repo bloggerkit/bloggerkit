@@ -1,0 +1,300 @@
+---
+title: Properties
+description: The property suffixes of Blogger values, for strings, URLs, images, dates, locales, lists, widgets and Theme Designer variables.
+level: intermediate
+published: 2026-10-26
+---
+
+A property is a suffix that reads something about a value, rather than a field of the data: the length of a string, a form of it escaped for JSON, the canonical form of a URL, the first item of a list.
+
+<CodeTabs>
+
+```xml title="JSON-LD of a post"
+<script type='application/ld+json'>{"@type":"BlogPosting","headline":"<data:post.title.jsonEscaped/>","url":"<data:post.url.canonical.jsonEscaped/>","datePublished":"<data:post.date.iso8601/>","dateModified":"<data:post.lastUpdated.iso8601/>"}</script>
+```
+
+```html title="Rendered"
+<script type='application/ld+json'>{"@type":"BlogPosting","headline":"Dark mode in CSS","url":"https://www.example.com/2026/03/dark-mode-in-css.html","datePublished":"2026-03-09T08:30:00+05:30","dateModified":"2026-03-11T19:02:41+05:30"}</script>
+```
+
+</CodeTabs>
+
+Google documents none of the properties. They are known from Blogger's themes and from testing. <BloggerSource kind="observed" />
+
+## How properties are read
+
+A property is read with `.name`, like a field of the data, and both can follow each other: `data:post.labels.first.name.escaped`. Properties apply to data, to a call directly, and to any other expression in parentheses: <BloggerSource kind="observed" />
+
+```xml
+<b:eval expr='(data:blog.pageName + data:blog.title).length'/>
+<b:eval expr='(data:widgets filter (w => w.sectionId == "footer")).length'/>
+<b:eval expr='snippet(data:post.snippets.long, { length: 400 }).jsonEscaped'/>
+```
+
+- **Each type has its own properties.** A property the value does not have gives nothing, without an error: `.canonical` on a number, `.first` on a string.
+- **Typed values come from Blogger.** URLs, images, dates, locales and messages are strings with more properties, and have the [string properties](#strings) too. A string literal is a plain string, even when it holds a URL. See [Types](./values.mdx#types).
+- **Properties ignore case**: `.LENGTH`, `.First` and `.ISRESIZABLE` work, except `canonical`, which must be written so. Fields of the data and keys of maps do not: `data:blog.Title` reads nothing. <BloggerSource kind="observed" />
+- **Properties of lists win** over fields of the same name: on `data:widgets`, `.first` is the first widget, whatever the widgets are called. <BloggerSource kind="observed" />
+
+## Strings
+
+| Property                      | Gives                                        | Source                            |
+| ----------------------------- | -------------------------------------------- | --------------------------------- |
+| [`length`](#length)           | the number of characters                     | <BloggerSource kind="observed" /> |
+| `size`                        | the number of characters, as `length`        | <BloggerSource kind="observed" /> |
+| [`escaped`](#escaped)         | the text with the characters of HTML escaped | <BloggerSource kind="observed" /> |
+| [`jsEscaped`](#jsescaped)     | the text escaped for a JavaScript string     | <BloggerSource kind="observed" /> |
+| [`jsonEscaped`](#jsonescaped) | the text escaped for a JSON string           | <BloggerSource kind="observed" /> |
+| [`cssEscaped`](#cssescaped)   | the text escaped for a CSS string            | <BloggerSource kind="observed" /> |
+
+### `length`
+
+The number of characters:
+
+```xml
+<b:eval expr='(data:blog.pageName + data:blog.title).length > 57 ? data:blog.pageName.escaped : data:blog.pageName.escaped + " - " + data:blog.title'/>
+```
+
+### `escaped`
+
+The text with `<`, `>`, `&` and the quotes written as entities. Use it for text the visitor or the author typed, when it goes into an attribute or into markup:
+
+```xml
+<meta expr:content='data:view.title.escaped' property='og:title'/>
+<input expr:value='data:view.search.query.escaped' name='q' type='search'/>
+```
+
+A title `Tips & <tricks>` is written `Tips &amp; &lt;tricks&gt;`. Blogger escapes some data on its own, not all of it. <BloggerSource kind="observed" />
+
+### `jsEscaped`
+
+The text escaped for a JavaScript string. `"`, `'`, `&`, `<`, `>` and `=` become `\x22`, `\x27`, `\x26`, `\x3c`, `\x3e` and `\x3d`, a backslash is doubled, and a line break is written `\n`. A tab is kept: <BloggerSource kind="observed" />
+
+```xml
+<script>
+  window.blogTitle = '<data:blog.title.jsEscaped/>';
+</script>
+```
+
+### `jsonEscaped`
+
+The text escaped for a JSON string. `"` becomes `\"`, a backslash is doubled, a line break and a tab are written `\n` and `\t`, and `&`, `<`, `>` and `=` become `\u0026`, `\u003c`, `\u003e` and `\u003d`. `'` is kept. <BloggerSource kind="observed" /> Use it in JSON-LD and in JSON a script reads:
+
+```xml
+<script id='blog-data' type='application/json'>{"title":"<data:blog.title.jsonEscaped/>","id":"<b:eval expr='(data:blog.blogId + "").jsonEscaped'/>"}</script>
+```
+
+`data:blog.blogId` is not a plain string, so `+ ""` converts it before the property, see [Types](./values.mdx#types).
+
+### `cssEscaped`
+
+The text escaped for a CSS string. `"`, `'`, `/`, `:`, `(` and `)` get a backslash before them: `"a:b/c'd"` becomes `a\:b\/c\'d`. A backslash, `<`, `>` and `&` are kept, so the result is not safe inside a `<style>` element for any text: <BloggerSource kind="observed" />
+
+```xml
+<style>
+  .post-hero { background-image: url(<b:eval expr='resizeImage(data:post.featuredImage, 1280, "16:9").cssEscaped'/>); }
+  .badge-new::after { content: '<b:eval expr='(data:skin.vars.label_new + "").cssEscaped'/>'; }
+</style>
+```
+
+### Compared
+
+| Property      | `<b class='new'>Hi</b>` becomes                  |
+| ------------- | ------------------------------------------------ |
+| `escaped`     | `&lt;b class=&#39;new&#39;&gt;Hi&lt;/b&gt;`      |
+| `jsEscaped`   | `\x3cb class\x3d\x27new\x27\x3eHi\x3c/b\x3e`     |
+| `jsonEscaped` | `\u003cb class\u003d'new'\u003eHi\u003c/b\u003e` |
+| `cssEscaped`  | `<b class=\'new\'>Hi<\/b>`                       |
+
+### Escapes and values
+
+<BloggerSource kind="observed" />
+
+- **The escapes work on text**: strings, URLs, images, locales, and dates, which escape their printed text. Whether messages take them too is not confirmed. A number, a boolean, a list or a map gives nothing: `data:posts.length.escaped` is empty. Join it with `""` first: `(data:posts.length + "").escaped`.
+- **The result is read again, like data.** A result of digits is a number, and `true`, `false`, `yes` or `no` a boolean: `"yes".escaped` is `true`, and `"9999".escaped contains "9"` is an error. See [Strings read from data](./evaluation.mdx#strings-read-from-data).
+- **Blogger escapes some data on its own**, so an escape can escape it twice: a label name is already HTML text. Which title fields are escaped is in [Titles](../data/blog.mdx#titles).
+
+## URLs
+
+| Property    | Gives                                         | Source                            |
+| ----------- | --------------------------------------------- | --------------------------------- |
+| `canonical` | the URL without the `?m=1` of mobile requests | <BloggerSource kind="observed" /> |
+| `http`      | the URL with `http:`                          | <BloggerSource kind="observed" /> |
+| `https`     | the URL with `https:`                         | <BloggerSource kind="observed" /> |
+| `raw`       | the URL as plain text                         | <BloggerSource kind="observed" /> |
+
+```xml
+<link expr:href='data:view.url.canonical' rel='canonical'/>
+<link expr:href='params(data:blog.homepageUrl.canonical.https, { utm_source: "homescreen" })' rel='start'/>
+<b:if cond='data:view.url.canonical == path(data:blog.homepageUrl.canonical, "search")'>
+```
+
+- **`canonical`** removes `?m=1`: on `/?m=1`, `data:blog.url` is `https://name.blogspot.com/?m=1`, and `data:blog.url.canonical` is `https://name.blogspot.com/`. <BloggerSource kind="observed" /> Whether it also replaces a country domain of Blogger, `blogspot.co.uk`, with `blogspot.com` is not confirmed. It exists only on URLs Blogger gives, never on a string, and is read only in lowercase.
+- **`raw`** gives the URL as a plain string, without the URL properties. It exists only on URLs Blogger gives. <BloggerSource kind="observed" />
+- **`http` and `https`** replace an `http:` or `https:` scheme, or add one to a protocol-relative `//host/…` URL. Other schemes are left alone. <BloggerSource kind="observed" />
+- **Each result is a URL again**, so they chain: `data:blog.homepageUrl.canonical.https`.
+
+URLs and `.canonical` date from April 2016, when they replaced `data:blog.canonicalUrl`, `data:blog.canonicalHomepageUrl` and `data:post.canonicalUrl`. The URL data include `data:blog.url`, `data:blog.homepageUrl`, `data:blog.searchUrl`, `data:view.url`, `data:post.url` and `data:label.url`. The [URL functions](./functions.mdx#path) change the parts of a URL.
+
+## Images
+
+| Property                          | Gives                                                                                                           | Source                            |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `isResizable`                     | whether [`resizeImage`](./functions.mdx#resizeimage) and [`sourceSet`](./functions.mdx#sourceset) can resize it | <BloggerSource kind="observed" /> |
+| `isYoutube`                       | whether it is the thumbnail of a YouTube video                                                                  | <BloggerSource kind="observed" /> |
+| `youtubeMaxResDefaultUrl`         | the largest thumbnail of the video, `maxresdefault.jpg`, an image                                               | <BloggerSource kind="observed" /> |
+| `width`, `height`                 | on the result of `resizeImage`, the size asked for                                                              | <BloggerSource kind="observed" /> |
+| `originalWidth`, `originalHeight` | the size of the original file                                                                                   | <BloggerSource kind="observed" /> |
+
+```xml title="A larger thumbnail for videos"
+<b:with value='data:post.featuredImage.isYoutube ? data:post.featuredImage.youtubeMaxResDefaultUrl : data:post.featuredImage' var='thumbnail'>
+  <img expr:src='data:thumbnail.isResizable ? resizeImage(data:thumbnail, 640, "16:9") : data:thumbnail' loading='lazy'/>
+</b:with>
+```
+
+- **`featuredImage`** is the first image or video of the post. An image uploaded to Blogger is its URL as written. Any other image, and the image of a YouTube video, comes through Blogger's image proxy, `https://lh3.googleusercontent.com/blogger_img_proxy/…`. <BloggerSource kind="observed" />
+- **`isResizable`** is true for the images Blogger can resize: its own, and the images it shows through its proxy, YouTube ones included. On the result of `resizeImage` for a URL of another host, it is missing, not `false`. Theme Designer images have it too: `data:skin.vars.body_background.image.isResizable`. <BloggerSource kind="observed" />
+- **`isYoutube`** is true when a video comes first in the post. `youtubeMaxResDefaultUrl` is then another proxied image, and `false`, not missing, for an image that is not a video. <BloggerSource kind="observed" />
+- **A featured image never has `width` and `height`.** `originalWidth` and `originalHeight` are filled for an image uploaded to Blogger, from the `data-original-width` and `data-original-height` attributes the post editor adds, and missing for other images. <BloggerSource kind="observed" />
+- **On the result of `resizeImage`**, `width` and `height` are the size asked for. `height` gives nothing without a crop. <BloggerSource kind="observed" />
+
+The image data include `data:post.featuredImage`, `data:view.featuredImage`, `data:post.author.authorPhoto.image` and the image of the Image widget.
+
+## Dates
+
+| Property            | Gives                                          | Example                     | Source                            |
+| ------------------- | ---------------------------------------------- | --------------------------- | --------------------------------- |
+| `iso8601`           | the date and time in ISO 8601, with the offset | `2026-03-09T08:30:00+05:30` | <BloggerSource kind="observed" /> |
+| `year`              | the year                                       | `2026`                      | <BloggerSource kind="observed" /> |
+| `month`             | the month, `1` for January                     | `3`                         | <BloggerSource kind="observed" /> |
+| `day`, `dayOfMonth` | the day of the month                           | `9`                         | <BloggerSource kind="observed" /> |
+| `dayOfWeek`         | the day of the week, `1` for Monday            | `1`                         | <BloggerSource kind="observed" /> |
+| `dayOfYear`         | the day of the year, `1` for January 1         | `68`                        | <BloggerSource kind="observed" /> |
+
+```xml
+<time expr:datetime='data:post.date.iso8601'><data:post.date/></time>
+<b:if cond='data:post.lastUpdated != data:post.date'>
+  <time expr:datetime='data:post.lastUpdated.iso8601'>Updated</time>
+</b:if>
+```
+
+- **The members are numbers**, in the time zone of the blog: `data:post.date.year + 1` adds. A date has no `hour`, `minute` or `timestamp`: use [`format`](./functions.mdx#format), which writes UTC. <BloggerSource kind="observed" />
+- **A date joins, compares and prints as its text**, in the Timestamp format chosen in the settings of the blog: `<data:post.date/>` writes it so, and `.length` is the length of that text. See [Dates](./evaluation.mdx#dates). <BloggerSource kind="observed" />
+
+For another format, use [`format`](./functions.mdx#format). The date data are `data:post.date` and `data:post.lastUpdated`.
+
+## Locales
+
+`data:blog.locale` is the language of the blog, such as `en`, `fr-CA` or `pt-BR`. The `hl` parameter of the URL changes it for one page: `?hl=fr`.
+
+| Property            | Gives                                      | Example           | Source                            |
+| ------------------- | ------------------------------------------ | ----------------- | --------------------------------- |
+| `language`          | the language code                          | `fr`              | <BloggerSource kind="observed" /> |
+| `country`           | the country code                           | `CA`              | <BloggerSource kind="observed" /> |
+| `variant`           | the variant                                |                   | <BloggerSource kind="observed" /> |
+| `script`            | the script                                 |                   | <BloggerSource kind="observed" /> |
+| `name`              | the name of the language and the country   | `French (Canada)` | <BloggerSource kind="observed" /> |
+| `languageDirection` | `ltr` or `rtl`                             | `ltr`             | <BloggerSource kind="observed" /> |
+| `languageAlignment` | `left` or `right`, the side text starts on | `left`            | <BloggerSource kind="observed" /> |
+
+```xml
+<html expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale.language'>
+<meta expr:content='data:blog.locale.language' property='og:locale'/>
+```
+
+On a blog in `en-GB`, `data:blog.locale` prints `en-GB`, `language` is `en`, `country` is `GB`, and `name` is `English (United Kingdom)`. <BloggerSource kind="observed" /> `data:blog.localeUnderscoreDelimited` gives the code with an underscore, `fr_CA`.
+
+## Messages
+
+The texts of [`data:messages`](../data/messages.mdx) are strings, with the string properties only: `data:messages.search.escaped`, `data:messages.comments.jsonEscaped`. <BloggerSource kind="observed" />
+
+## Numbers, booleans and maps
+
+Numbers and booleans have no properties. A map has its keys only: `data:icon.size`. `.length`, `.size` and `.empty` on a map read a key of that name, and give nothing when there is none: they do not count the entries. <BloggerSource kind="observed" />
+
+## Lists
+
+| Property   | Gives                                         | Source                            |
+| ---------- | --------------------------------------------- | --------------------------------- |
+| `length`   | the number of items                           | <BloggerSource kind="observed" /> |
+| `size`     | the number of items, as `length`              | <BloggerSource kind="observed" /> |
+| `first`    | the first item                                | <BloggerSource kind="observed" /> |
+| `last`     | the last item                                 | <BloggerSource kind="observed" /> |
+| `empty`    | `true` when the list has no items             | <BloggerSource kind="observed" /> |
+| `notEmpty` | `true` when the list has items                | <BloggerSource kind="observed" /> |
+| `isEmpty`  | `true` when the list has no items, as `empty` | <BloggerSource kind="observed" /> |
+| `any`      | `true` when the list has items, as `notEmpty` | <BloggerSource kind="observed" /> |
+
+```xml
+<b:include cond='data:posts.empty' name='noPosts'/>
+<b:if cond='data:slides.notEmpty'>
+<b:if cond='data:slides.length > 1'>
+<label expr:for='"slide-" + data:slides.last.id'>Previous</label>
+<b:eval expr='(data:links filter (l => l.name == "icon")).last.target'/>
+<b:if cond='data:i &lt; (data:post.labels.length - 1)'>,</b:if>
+```
+
+- **`first` and `last` of an empty list** read nothing. <BloggerSource kind="observed" />
+- **`first` gives the item itself**: a post for a list of posts, a string for a list of strings.
+- **`any` tests the list, not its items**: `[false].any` is `true`. Use the lambda `data:list any (x => x)` to test the items. <BloggerSource kind="observed" />
+- **A string has none of these**, except `length` and `size`: `"abc".first` and `"abc".empty` read nothing. <BloggerSource kind="observed" />
+- **An empty list is true** as a condition. Test it with `.empty`, `.notEmpty` or `.any`, not with the list alone. See [Truthiness](./evaluation.mdx#truthiness).
+- **Followed by a lambda**, `any` and `first` are the [lambda operators](./lambdas.mdx). After a dot, they are these properties.
+- **On missing data**, `.length` and the others read nothing. Blogger's own themes test both: `data:post.labels and not data:post.labels.empty`.
+
+## Widgets
+
+`data:widgets` is the list of the widgets of the blog, without those whose `cond` is false, see [data:widgets](../data/widgets.mdx#datawidgets). Besides the list properties, it takes a widget type or a widget id as a property: <BloggerSource kind="observed" />
+
+| Property      | Gives                                | Example                                            |
+| ------------- | ------------------------------------ | -------------------------------------------------- |
+| a widget type | the list of the widgets of that type | `data:widgets.Blog`, `data:widgets.FeaturedPost`   |
+| a widget id   | that widget, or nothing              | `data:widgets.Image71`, `data:widgets.LinkList901` |
+
+```xml {1}
+<b:if cond='!data:widgets.Image71'>
+  <link expr:href='data:blog.blogspotFaviconUrl' rel='icon' type='image/x-icon'/>
+</b:if>
+<b:eval expr='data:widgets.Blog.first.posts.first.featuredImage'/>
+<b:if cond='data:widgets.AdSense.size > 0'>
+```
+
+A type with no widget on the page is an empty list. Types are case-sensitive, `data:widgets.html` reads nothing. An index right after a type never reads: `data:widgets.HTML[0]` is nothing, while `data:widgets.HTML.first` and `data:widgets[0]` work. <BloggerSource kind="observed" />
+
+The first line tests whether a widget exists: when the owner removes the Image widget that holds the favicon, the blog's own favicon is used. A widget type gives a list, with the [list properties](#lists) and the [lambdas](./lambdas.mdx): `data:widgets.HTML.size`, `data:widgets.FeaturedPost map (w => w.postId)`. The types are those of [Widget types](../widget-types/index.mdx). See [data:widgets](../data/widgets.mdx).
+
+### Byline items
+
+The byline lists of the Blog widget take the name of an item as a property: `author`, `timestamp`, `comments`, `labels`, `share`, `location` or `icons`. An item has a `name`, and a `label`, the text set for it in the Layout editor: <BloggerSource kind="observed" />
+
+```xml
+<b:if cond='data:widgets.Blog.first.allBylineItems.author'>
+  <span class='by'><b:eval expr='data:widgets.Blog.first.allBylineItems.author.label ?: "By"'/></span>
+</b:if>
+```
+
+They apply to `allBylineItems`, `headerByline.items` and the `items` of `footerBylines`. `label`, the text of an item, is not `labels`, the item for the labels of the post. See [Blog widget](../widget-types/blog.mdx).
+
+## Skin variables
+
+[Theme Designer variables](../styles/theme-designer.mdx) are read as `data:skin.vars.name`, with the dots of the variable's name written `_`: `body.background` is `data:skin.vars.body_background`, see [data:skin](../data/skin.mdx). Their types have properties: <BloggerSource kind="observed" />
+
+| Variable type | Property               | Gives                                            |
+| ------------- | ---------------------- | ------------------------------------------------ |
+| `background`  | `color`                | the color of the background                      |
+| `background`  | `image`                | the image of the background, an [image](#images) |
+| `font`        | `family`               | the font family                                  |
+| `font`        | `size`                 | the font size                                    |
+| `color`       | `red`, `green`, `blue` | a component of the color, `0` to `255`           |
+| `color`       | `alpha`                | the opacity, `0` to `1`                          |
+| `color`       | `transparent`          | the color with an opacity of `0`, as `rgba(…)`   |
+| `color`       | `inverse`              | the inverted color, as `rgba(…)`                 |
+
+```xml
+<b:if cond='data:skin.vars.body_background.image.isResizable'>
+  <style>body { background-image: url(<b:eval expr='resizeImage(data:skin.vars.body_background.image, 1600).cssEscaped'/>); }</style>
+</b:if>
+<meta expr:content='snippet(data:skin.vars.body_background.color)' name='theme-color'/>
+```
+
+The same properties are written in CSS as `$(body.text.color.red)` or `$(tabs.font.family)`, and Blogger's own themes use them there. See [Theme Designer](../styles/theme-designer.mdx).

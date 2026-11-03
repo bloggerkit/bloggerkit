@@ -1,0 +1,154 @@
+@import "tailwindcss";
+@import "./markdown.css";
+@import "./code-blocks.css";
+@import "./print.css";
+
+/* Never in print, which is always light. Done in CSS so it holds each time the print preview is laid out */
+@custom-variant dark {
+	@media not print {
+		&:where([data-theme="dark"], [data-theme="dark"] *) {
+			@slot;
+		}
+	}
+}
+
+/* Light: chosen, and always in print */
+:root {
+	--background: #f5f5f5;
+	--foreground: #0a0a0a;
+	--muted: #ececec;
+	--muted-foreground: #5e5e5e;
+	--popover: #fafafa;
+	--card: #f1f1f1;
+	--card-foreground: #0a0a0a;
+	--border: #cccccc80;
+	--primary: #171717;
+	--primary-foreground: #fafafa;
+	--secondary: #ededed;
+	--secondary-foreground: #171717;
+	--accent: #d1d1d180;
+	--code: #fafafa;
+
+	color-scheme: light;
+}
+
+/* Dark on screen unless light is chosen (`data-theme`, set before first paint, defaults to dark) */
+@media not print {
+	:root:not([data-theme="light"]) {
+		--background: #121212;
+		--foreground: #ebebeb;
+		--muted: #212121;
+		--muted-foreground: #b8b8b8;
+		--popover: #1e1e1e;
+		--card: #191919;
+		--card-foreground: #fafafa;
+		--border: #6663;
+		--primary: #fafafa;
+		--primary-foreground: #171717;
+		--secondary: #212121;
+		--secondary-foreground: #ebebeb;
+		--accent: #6868684d;
+		--code: #161616;
+
+		color-scheme: dark;
+	}
+}
+
+@theme inline {
+	--font-sans: var(--typeface-dm-sans);
+	--font-mono: var(--typeface-jetbrains-mono);
+
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-popover: var(--popover);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-border: var(--border);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-accent: var(--accent);
+	--color-code: var(--code);
+	--color-info: #3080ff;
+	--color-warning: #f99c00;
+	--color-error: #fb2c36;
+	--color-success: #00c758;
+	--color-idea: #ee7e00;
+
+	--text-meta: 0.8125rem;
+	--text-summary: 0.9375rem;
+}
+
+@layer base {
+	html {
+		scroll-padding-top: --spacing(20);
+
+		@variant max-xl {
+			scroll-padding-top: --spacing(31);
+		}
+	}
+
+	/* Lock page scroll under the mobile sidebar or a dialog. The gutter stops the layout from shifting */
+	html:has(body[data-sidebar-open], dialog[open]) {
+		overflow: hidden;
+		scrollbar-gutter: stable;
+	}
+
+	body {
+		@apply bg-background font-sans leading-7 text-foreground antialiased;
+	}
+
+	:focus-visible {
+		@apply outline-2 outline-offset-2 outline-primary;
+	}
+
+	svg {
+		flex-shrink: 0;
+	}
+
+	summary {
+		list-style: none;
+	}
+
+	summary::-webkit-details-marker {
+		display: none;
+	}
+}
+
+/*
+  Hides the native scrollbar so it takes no space. `overlay-scrollbar.ts` draws a thin thumb right after the
+  element instead. It shows on hover, focus, scroll and drag.
+*/
+@utility scrollbar-overlay {
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+
+	& + [data-scroll-thumb] {
+		opacity: 0;
+	}
+
+	&:hover + [data-scroll-thumb],
+	&:focus-within + [data-scroll-thumb],
+	&[data-scrolling] + [data-scroll-thumb],
+	& + [data-scroll-thumb]:hover,
+	& + [data-scroll-thumb][data-dragging] {
+		opacity: 1;
+	}
+}
+
+@utility scrollbar-subtle {
+	scrollbar-width: thin;
+	scrollbar-color: transparent transparent;
+
+	&:hover,
+	&:focus-within {
+		scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent)
+			transparent;
+	}
+}

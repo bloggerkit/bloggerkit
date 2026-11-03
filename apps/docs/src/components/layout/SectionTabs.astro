@@ -1,0 +1,227 @@
+---
+import ChevronDown from '@lucide/astro/icons/chevron-down';
+import LayoutGrid from '@lucide/astro/icons/layout-grid';
+import LucideIcon from '@/components/ui/LucideIcon.astro';
+import { getSections } from '@/lib/content/sections';
+import { docsRoute, normalizePath } from '@/lib/routes';
+import { menuItem, menuPanel } from '@/scripts/menu';
+
+/**
+ * The header's section tabs. Tabs that don't fit move into a "More" menu (the current section always stays a
+ * tab), and a highlight slides to the hovered or focused tab. Without JavaScript the row scrolls sideways.
+ */
+const sections = getSections();
+const path = normalizePath(Astro.url.pathname);
+const current = sections.find(
+	(section) =>
+		path === `${docsRoute}/${section.id}` ||
+		path.startsWith(`${docsRoute}/${section.id}/`),
+);
+const tabs = [
+	{
+		id: 'all',
+		name: 'All docs',
+		url: docsRoute,
+		icon: undefined,
+		description: 'Every section',
+		current: path === docsRoute,
+	},
+	...sections.map((section) => ({
+		id: section.id,
+		name: section.name,
+		url: section.url,
+		icon: section.icon,
+		description: section.description,
+		current: section === current,
+	})),
+];
+
+const tab =
+	'relative flex h-full shrink-0 items-center gap-1.5 border-y-2 border-transparent px-2.5 text-sm whitespace-nowrap text-muted-foreground no-underline transition-colors outline-none hover:text-foreground focus-visible:text-foreground aria-[current]:border-b-primary aria-[current]:font-medium aria-[current]:text-foreground';
+---
+
+<nav aria-label="Sections" class="hidden h-full min-w-0 items-center border-s border-border ps-2 lg:flex" data-section-tabs>
+	<div class="relative flex h-full min-w-0 items-center overflow-x-auto scrollbar-none" data-tabs-row>
+		{/* The hover highlight, moved and sized by the script */}
+		<span
+			class="pointer-events-none absolute top-1/2 left-0 h-8 w-(--w) translate-x-(--x) -translate-y-1/2 rounded-lg bg-accent opacity-0 data-moving:transition-[translate,width,opacity] data-moving:duration-200 data-moving:ease-out data-shown:opacity-100 motion-reduce:transition-none!"
+			aria-hidden="true"
+			data-tabs-highlight
+		></span>
+		{
+			tabs.map((item) => (
+				<a
+					href={item.url}
+					class={tab}
+					aria-current={item.current ? (item.id === 'all' ? 'page' : 'true') : undefined}
+					data-tab={item.id}
+				>
+					{item.icon && <LucideIcon name={item.icon} size={15} />}
+					{item.name}
+				</a>
+			))
+		}
+	</div>
+	<div class="group/menu relative h-full" data-tabs-more hidden>
+		<button
+			type="button"
+			class:list={[tab, 'cursor-pointer aria-expanded:text-foreground']}
+			aria-haspopup="menu"
+			aria-expanded="false"
+			aria-controls="sections-menu"
+			data-menu-button
+		>
+			More
+			{/* How many sections the menu holds, set by the script */}
+			<span class="rounded-full bg-accent px-1.5 text-xs leading-5 font-medium text-foreground tabular-nums" data-more-count></span>
+			<ChevronDown
+				size={14}
+				class="transition-transform duration-200 group-data-open/menu:rotate-180 motion-reduce:transition-none"
+				aria-hidden="true"
+			/>
+		</button>
+		<div id="sections-menu" role="menu" aria-label="More sections" class:list={[menuPanel, 'inset-s-0 w-72 origin-top-left']} data-menu>
+			{
+				tabs.map((item) => (
+					<a href={item.url} role="menuitem" tabindex="-1" class:list={[menuItem, 'items-start py-2']} data-menu-tab={item.id} hidden>
+						{item.icon ? (
+							<LucideIcon name={item.icon} size={16} class="mt-0.5 text-muted-foreground" />
+						) : (
+							<LayoutGrid size={16} class="mt-0.5 text-muted-foreground" aria-hidden="true" />
+						)}
+						<span class="flex min-w-0 flex-col">
+							<span class="font-medium">{item.name}</span>
+							{item.description && <span class="truncate text-xs text-muted-foreground">{item.description}</span>}
+						</span>
+					</a>
+				))
+			}
+		</div>
+	</div>
+</nav>
+
+<script>
+	import { setupMenu } from '@/scripts/menu';
+	import { onPage } from '@/scripts/page';
+	import { fitSectionTabs } from '@/scripts/section-tabs';
+
+	// The header is replaced on every navigation. Fit the new tabs as soon as they are in place, before the page is
+	// painted, so they don't show every tab for a frame and then jump
+	document.addEventListener('astro:after-swap', () => {
+		const nav = document.querySelector<HTMLElement>('[data-section-tabs]');
+		if (nav) {
+			fitSectionTabs(nav);
+		}
+	});
+
+	onPage((signal) => {
+		const nav = document.querySelector<HTMLElement>('[data-section-tabs]');
+		const row = nav?.querySelector<HTMLElement>('[data-tabs-row]');
+		const more = nav?.querySelector<HTMLElement>('[data-tabs-more]');
+		const highlight = nav?.querySelector<HTMLElement>('[data-tabs-highlight]');
+		if (!nav || !row || !more || !highlight) {
+			return;
+		}
+		const tabs = [...row.querySelectorAll<HTMLAnchorElement>('[data-tab]')];
+		const menu = setupMenu(more, signal);
+
+		const place = (tab: HTMLElement) => {
+			highlight.style.setProperty('--x', `${tab.offsetLeft}px`);
+			highlight.style.setProperty('--w', `${tab.offsetWidth}px`);
+		};
+		const showHighlight = (tab: HTMLElement) => {
+			// Appear on the first tab without sliding in from the side; slide between tabs after that
+			if (!highlight.hasAttribute('data-shown')) {
+				highlight.removeAttribute('data-moving');
+				place(tab);
+				highlight.getBoundingClientRect();
+				highlight.setAttribute('data-moving', '');
+				highlight.setAttribute('data-shown', '');
+				return;
+			}
+			place(tab);
+		};
+		const hideHighlight = () => highlight.removeAttribute('data-shown');
+
+		// Also refits after a resize or once the web font loads
+		const fit = () => {
+			fitSectionTabs(nav);
+			hideHighlight();
+		};
+
+		// With a mouse, "More" also opens on hover: after a short pause so passing over it doesn't, and it
+		// closes a moment after the pointer leaves, so it survives the gap between the button and the menu
+		let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+		let openedByHover = false;
+		more.addEventListener(
+			'pointerenter',
+			(event) => {
+				if (event.pointerType !== 'mouse') {
+					return;
+				}
+				clearTimeout(hoverTimer);
+				hoverTimer = setTimeout(() => {
+					if (!menu.isOpen()) {
+						menu.open('none');
+						openedByHover = true;
+					}
+				}, 120);
+			},
+			{ signal },
+		);
+		more.addEventListener(
+			'pointerleave',
+			(event) => {
+				if (event.pointerType !== 'mouse') {
+					return;
+				}
+				clearTimeout(hoverTimer);
+				if (openedByHover) {
+					hoverTimer = setTimeout(() => menu.close(false), 250);
+				}
+			},
+			{ signal },
+		);
+		// A click on a menu opened by hover keeps it open (the button would otherwise toggle it closed)
+		more.querySelector('[data-menu-button]')?.addEventListener(
+			'click',
+			(event) => {
+				if (openedByHover && menu.isOpen()) {
+					event.stopImmediatePropagation();
+				}
+				// Opened or pinned by a click: leaving no longer closes it
+				openedByHover = false;
+			},
+			{ capture: true, signal },
+		);
+		signal.addEventListener('abort', () => clearTimeout(hoverTimer));
+
+		for (const tab of tabs) {
+			tab.addEventListener('pointerenter', () => showHighlight(tab), {
+				signal,
+			});
+			tab.addEventListener(
+				'focus',
+				() => tab.matches(':focus-visible') && showHighlight(tab),
+				{ signal },
+			);
+		}
+		row.addEventListener('pointerleave', hideHighlight, { signal });
+		row.addEventListener(
+			'focusout',
+			(event) => {
+				if (!row.contains(event.relatedTarget as Node | null)) {
+					hideHighlight();
+				}
+			},
+			{ signal },
+		);
+
+		const observer = new ResizeObserver(fit);
+		observer.observe(nav.parentElement ?? nav);
+		signal.addEventListener('abort', () => observer.disconnect());
+		// Tab widths change once the web font loads
+		document.fonts.ready.then(() => !signal.aborted && fit());
+		fit();
+	});
+</script>

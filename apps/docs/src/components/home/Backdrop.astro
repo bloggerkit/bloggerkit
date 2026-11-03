@@ -1,0 +1,82 @@
+---
+interface Props {
+	/** `hero` for the home page (two drifting glows), `faint` for the 404 page (one centered glow). */
+	variant: 'hero' | 'faint';
+}
+
+interface Glow {
+	class: string;
+	/** Where the glow ends up after drifting. */
+	drift: string;
+	/** Slower and reversed, so two glows don't move in sync. */
+	slow?: boolean;
+}
+
+// Mask classes are written out in full so Tailwind can find them
+const variants: Record<Props['variant'], { mask: string; glows: Glow[] }> = {
+	hero: {
+		mask: '[mask-image:radial-gradient(ellipse_70%_60%_at_50%_0%,black,transparent)]',
+		glows: [
+			{ class: '-top-40 -left-24 size-96', drift: '60px, 40px' },
+			{ class: '-right-24 top-20 size-80', drift: '60px, 40px', slow: true },
+		],
+	},
+	faint: {
+		mask: '[mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]',
+		// Drifts 10% of its width right, on top of the `-translate-x-1/2` centering
+		glows: [
+			{
+				class: '-top-32 left-1/2 size-96 -translate-x-1/2',
+				drift: '10%, 30px',
+			},
+		],
+	},
+};
+
+const { variant } = Astro.props;
+const { mask, glows } = variants[variant];
+---
+
+{/* The parent must be `relative` */}
+<div
+	class:list={[
+		'pointer-events-none absolute inset-0 [background-image:linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-size-[48px_48px]',
+		mask,
+	]}
+	aria-hidden="true"
+>
+</div>
+{
+	glows.map((glow) => (
+		<div
+			class:list={[
+				'glow pointer-events-none absolute rounded-full bg-primary/10 blur-3xl',
+				glow.class,
+				glow.slow && 'slow',
+			]}
+			style={`--drift: ${glow.drift}`}
+			aria-hidden="true"
+		/>
+	))
+}
+
+<style>
+	.glow {
+		animation: drift 18s ease-in-out infinite alternate;
+	}
+	.slow {
+		animation-duration: 22s;
+		animation-direction: alternate-reverse;
+	}
+	/* Animate `transform`: it adds to Tailwind's `translate` instead of replacing it */
+	@keyframes drift {
+		to {
+			transform: translate(var(--drift)) scale(1.15);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.glow {
+			animation: none;
+		}
+	}
+</style>
