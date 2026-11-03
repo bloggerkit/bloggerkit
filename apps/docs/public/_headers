@@ -26,5 +26,5 @@
 /docs/*.md
   Content-Type: text/markdown; charset=utf-8
 
-/skills/*
+/skills/*.md
   Content-Type: text/markdown; charset=utf-8
