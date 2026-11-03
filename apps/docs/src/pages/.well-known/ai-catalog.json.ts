@@ -1,2 +1,2 @@
-/** Legacy name of `ard.json`, kept for older tools. */
+/** `ard.json` under the name PageSpeed Insights reads. */
 export { GET } from './ard.json';

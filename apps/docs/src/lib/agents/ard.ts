@@ -1,20 +1,22 @@
+import { getLatestUpdate, getPages } from '../content/pages';
 import { getSections } from '../content/sections';
 import { appName, author, publisher, site } from '../site';
 import { skillDescription, skillName, skillPath } from './skill';
 import { webMcpToolNames } from './webmcp';
 
-// Build time (server start time in `astro dev`), so `ard.json` and `ai-catalog.json` match
-const updatedAt = new Date().toISOString();
-
-/** Also served at its former name, `ai-catalog.json`, for older tools. */
+/** Also served as `ai-catalog.json`, the name PageSpeed Insights reads. */
 export const ardPath = '/.well-known/ard.json';
 
 /**
  * Agentic Resource Discovery manifest (https://agenticresourcediscovery.org/spec/). It lists only the Agent Skill,
  * which points agents to `llms.txt`, the page Markdown and the WebMCP tools. ARD has no media type for those.
  */
-export function getArdManifest() {
+export async function getArdManifest() {
 	const sections = getSections().map((section) => section.name);
+	// The latest page date, so the manifest changes only when the docs do
+	const updatedAt = (
+		await getLatestUpdate((await getPages()).keys())
+	)?.toISOString();
 	return {
 		// Required by the previous spec version, which PageSpeed Insights still checks
 		specVersion: '1.0',

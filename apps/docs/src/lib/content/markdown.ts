@@ -11,7 +11,7 @@ type Line = { text: string; kind: 'text' | 'open' | 'code' | 'close' };
  * As in CommonMark, a fence closes only on a line of the same character, at least as long, with nothing after it.
  * So a fence shown inside a longer one stays code.
  */
-function* readLines(markdown: string): Generator<Line> {
+export function* readLines(markdown: string): Generator<Line> {
 	let fence: string | undefined;
 	for (const text of markdown.split('\n')) {
 		const [, marker, after = ''] = FENCE.exec(text) ?? [];
