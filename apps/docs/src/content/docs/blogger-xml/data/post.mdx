@@ -1,0 +1,393 @@
+---
+title: Posts
+description: 'The post object of the Blog, FeaturedPost and PopularPosts widgets: every field of widget versions 1 and 2, where each is filled, and how themes read it.'
+level: intermediate
+published: 2026-10-26
+---
+
+A post object carries everything about one post or static page: its title and content, author, dates, labels, images, comment settings and share links. The Blog widget receives the posts of the page as the list `data:posts`. A loop or an includable then gives the current one a name, by convention `post`:
+
+<CodeTabs>
+
+```xml title="A list of post cards"
+<b:loop values='data:posts' var='post'>
+  <article class='post-card'>
+    <b:if cond='data:post.featuredImage'>
+      <img expr:alt='data:post.title.escaped' expr:src='resizeImage(data:post.featuredImage, 640, "16:9")' height='360' loading='lazy' width='640'/>
+    </b:if>
+    <h2><a expr:href='data:post.url'><data:post.title/></a></h2>
+    <time expr:datetime='data:post.date.iso8601'><b:eval expr='format(data:post.date, "MMM d, yyyy")'/></time>
+    <p><data:post.snippets.short/></p>
+  </article>
+</b:loop>
+```
+
+```html title="Rendered, one card"
+<article class='post-card'>
+  <img alt='Un week-end à Lisbonne' height='360' loading='lazy' src='https://blogger.googleusercontent.com/img/b/…/w640-h360-p-k-no-nu/tram.jpg' width='640'/>
+  <h2><a href='https://example.blogspot.com/2026/05/week-end-lisbonne.html'>Un week-end à Lisbonne</a></h2>
+  <time datetime='2026-05-17T09:30:00+01:00'>May 17, 2026</time>
+  <p>Three days, two hills, one yellow tram. What I would do again, and what I would skip…</p>
+</article>
+```
+
+</CodeTabs>
+
+`data:post` is a variable, not a dictionary: it only exists inside the element that names it, see [variables](../tags/variables.mdx). Includables pass it on by name, `<b:include data='post' name='post-card'/>`, and receive it with `<b:includable id='post-card' var='post'>`.
+
+## Where posts come from
+
+| Data                            | Widget                  | Fields                                                | Which posts                                     | Page                                              |
+| ------------------------------- | ----------------------- | ----------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------- |
+| `data:posts`                    | Blog                    | All the fields on this page                           | The posts of the page. None on 404 pages        | [Blog](../widget-types/blog.mdx)                  |
+| `data:posts`                    | FeaturedPost, version 2 | A subset, see [below](#featuredpost-and-popularposts) | The chosen post                                 | [FeaturedPost](../widget-types/featured-post.mdx) |
+| `data:posts`                    | PopularPosts, version 2 | The same subset                                       | 10 at most                                      | [PopularPosts](../widget-types/popular-posts.mdx) |
+| `data:widgets.Blog.first.posts` | any, global             | `id`, `title`, `featuredImage`, `showInlineAds`       | The posts of the Blog widget. None on 404 pages | [Widgets](./widgets.mdx#blog-entries)             |
+| `data:post` in the head         | none                    | See [below](#outside-the-blog-widget)                 | The current post or page, on single items       |                                                   |
+
+The Blog widget holds one post on posts and static pages, the number set in "Number of posts on the main page" on the homepage and on `/search` pages, and the posts of the period on archives. FeaturedPost and PopularPosts version 1 use other names for the same values, such as `postTitle` and `postUrl`; their pages list them.
+
+### Outside the Blog widget
+
+On single items, a theme can read `data:post` in the head as well, where it is the post or static page being shown. Themes commonly build their description tag from `data:post.snippet` there. <BloggerSource kind="observed" /> On lists it holds nothing useful: read the posts from the Blog widget, or from `data:widgets.Blog.first.posts` anywhere.
+
+## Versions
+
+The fields depend on the version of the widget: `version='1'` in classic themes, `version='2'` in the 2017 themes. Most fields are in both. Version 2 dropped the texts that [`data:messages`](./messages.mdx) now provides, grouped some fields into maps, and turned `author` from a name into a map:
+
+| Version 1                                   | Version 2                                                                |
+| ------------------------------------------- | ------------------------------------------------------------------------ |
+| `author`, a name                            | `author.name`                                                            |
+| `authorProfileUrl`, `authorAboutMe`         | `author.profileUrl`, `author.aboutMe`                                    |
+| `authorPhoto.url`, `authorPhoto.thumbUrl`   | `author.authorPhoto.image`                                               |
+| `snippet`, `longSnippet`                    | `snippets.short`, `snippets.long`                                        |
+| `firstImageUrl`                             | `featuredImage`                                                          |
+| `timestamp`, `timestampISO8601`             | `date`, `date.iso8601`                                                   |
+| `lastUpdatedISO8601`                        | `lastUpdated`, `lastUpdated.iso8601`                                     |
+| `dateHeader`                                | `date` with the `isDateStart` flag                                       |
+| `numComments`                               | `numberOfComments`                                                       |
+| `addCommentUrl`, `addCommentOnclick`        | `commentsUrl`, `commentsUrlOnclick`                                      |
+| `sharePostUrl`                              | `shareUrl`                                                               |
+| `commentLabelFull`                          | `numberOfComments` with `messages.numberOfComments`                      |
+| `jumpText`                                  | `data:blog.jumpLinkMessage`                                              |
+| `labels[i].isLast`                          | `labels.last`, or the loop index                                         |
+| `oldestLinkText` and the other paging texts | `messages.oldest`, `messages.older`, `messages.newer`, `messages.newest` |
+
+The **Versions** column of the tables below says which versions have a field.
+
+## Content
+
+| Field            | Type    | Versions | Meaning                                                                                                    | Source                            |
+| ---------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `id`             | number  | 1, 2     | The id of the post. A number: it has no `.length`, and `id + 1` adds. `id + ""` makes it a string          | <BloggerSource kind="official" /> |
+| `title`          | string  | 1, 2     | The title, of any length, as typed: tags kept, `&` not escaped. Empty when the post has none               | <BloggerSource kind="official" /> |
+| `body`           | HTML    | 1, 2     | The content. Cut at the jump break on lists                                                                | <BloggerSource kind="official" /> |
+| `snippet`        | string  | 1        | Plain text of the start of the post, 140 characters then `…`, without line breaks, before the jump break   | <BloggerSource kind="observed" /> |
+| `longSnippet`    | string  | 1        | Plain text of the post, 1,000 characters at most, line breaks kept, the part after the jump break included | <BloggerSource kind="observed" /> |
+| `snippets.short` | string  | 2        | Plain text, 140 characters then `…`, without line breaks, before the jump break                            | <BloggerSource kind="observed" /> |
+| `snippets.long`  | string  | 2        | Plain text, 1,000 characters at most, without line breaks, before the jump break                           | <BloggerSource kind="observed" /> |
+| `hasJumpLink`    | boolean | 1, 2     | The post has a jump break and the body shown is cut. Always false on posts                                 | <BloggerSource kind="observed" /> |
+| `jumpText`       | string  | 1        | The text of the link to the full post, from the Blog widget                                                | <BloggerSource kind="observed" /> |
+| `isFirstPost`    | boolean | 1, 2     | The first post of the list. Always true on single items                                                    | <BloggerSource kind="observed" /> |
+| `isDateStart`    | boolean | 1, 2     | The newest post of its day in the list, where a date heading goes. Always true on single items             | <BloggerSource kind="observed" /> |
+
+### `body`
+
+On posts and static pages, the whole HTML of the item. On lists, and in widgets other than Blog, it stops at the jump break and `hasJumpLink` is true. A theme often prints the body on single items only, and a link elsewhere:
+
+```xml
+<div class='post-body'><data:post.body/></div>
+<b:if cond='data:post.hasJumpLink'>
+  <a class='jump-link' expr:href='fragment(data:post.url, "more")'><data:blog.jumpLinkMessage/></a>
+</b:if>
+```
+
+The `#more` fragment is where the jump break was in the full post.
+
+To know whether a post object is the item the page shows, compare its id with the page: a theme can write `data:view.isPost ? data:post.id == data:view.postId : (data:view.isPage ? data:post.id == data:view.pageId : false)`, and only then add the full content and the author's bio to its JSON. <BloggerSource kind="observed" />
+
+### `snippets`
+
+Plain text, safe in an attribute. The `snippet` function cuts any text to another length:
+
+```xml
+<meta expr:content='snippet(data:post.snippets.long, { length: 160, links: false, linebreaks: false })' property='og:description'/>
+```
+
+`longSnippet` of version 1 keeps line breaks and the text after the jump break, while `snippets.long` of version 2 drops both: the two are close but not the same. <BloggerSource kind="observed" />
+
+## Addresses and images
+
+| Field           | Type   | Versions | Meaning                                                                                                                                                                                                       | Source                              |
+| --------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `url`           | URL    | 1, 2     | The permalink                                                                                                                                                                                                 | <BloggerSource kind="official" />   |
+| `link`          | string | 1, 2     | The title link set in the post editor, an outside URL, not the permalink. Needs Settings > "Title links and enclosure links". Not on static pages                                                             | <BloggerSource kind="observed" />   |
+| `featuredImage` | image  | 2        | The first image of the post, or the thumbnail of its first YouTube video. Only a Blogger upload keeps its URL; any other image comes through the image proxy, `lh3.googleusercontent.com/blogger_img_proxy/…` | <BloggerSource kind="observed" />   |
+| `firstImageUrl` | string | 1        | The first image at the size chosen in the editor, or the thumbnail of a video                                                                                                                                 | <BloggerSource kind="observed" />   |
+| `thumbnailUrl`  | string | 1, 2     | The first image as a 72 px square, `/s72-c/`, when it is a Blogger upload. With an image of another site before a YouTube video, it was the video's `https://i.ytimg.com/vi/VIDEO_ID/default.jpg`             | <BloggerSource kind="observed" />   |
+| `enclosures`    | list   | 1, 2     | The files attached to the post, each with `url` and `mimeType`. Needs the same setting as `link`                                                                                                              | <BloggerSource kind="observed" />   |
+| `canonicalUrl`  | URL    | 1        | Older canonical permalink. Replaced by `url.canonical`                                                                                                                                                        | <BloggerSource kind="deprecated" /> |
+| `absoluteUrl`   | URL    | 1, 2     | Older absolute permalink, from the star ratings removed in 2013                                                                                                                                               | <BloggerSource kind="deprecated" /> |
+
+### `url` and `link`
+
+`url` is where the post lives. `link` is another address the author can attach to the title when the title links setting is on; it is empty otherwise. Linking the title to the one that exists:
+
+```xml
+<h2 class='post-title'>
+  <a expr:href='data:post.link ?: data:post.url'><data:post.title/></a>
+</h2>
+```
+
+`url` is a URL value: `data:post.url.canonical` for structured data and share links, `fragment(data:post.url, "comments")` for a link to the comments.
+
+### `featuredImage`
+
+An image value with the [image properties](../expressions/properties.mdx#images): `.isResizable`, `.isYoutube` and `.youtubeMaxResDefaultUrl`. On a single item, it is the same image as [`data:view.featuredImage`](./view.mdx#dataviewfeaturedimage). It has no `.width` or `.height`. An image uploaded to Blogger has `.originalWidth` and `.originalHeight`, read from the `data-original-width` and `data-original-height` attributes the post editor writes on its `<img>`; a proxied image has neither. <BloggerSource kind="observed" />
+
+| First media of the post      | `featuredImage`                                         | `.isResizable` | `.isYoutube` | `.youtubeMaxResDefaultUrl`                |
+| ---------------------------- | ------------------------------------------------------- | -------------- | ------------ | ----------------------------------------- |
+| An image uploaded to Blogger | its URL, `…/s1600/name.png`                             | true           | false        | `false`                                   |
+| An image of another site     | `https://lh3.googleusercontent.com/blogger_img_proxy/…` | true           | false        | `false`                                   |
+| A YouTube video              | the video's thumbnail, through the same proxy           | true           | true         | a larger thumbnail, proxied and resizable |
+
+<BloggerSource kind="observed" />
+
+Themes swap a video thumbnail for the largest one before resizing it, see [Images](../expressions/properties.mdx#images). How the image is resized, and how to test whether it can be, is in [`resizeImage`](../expressions/functions.mdx#resizeimage).
+
+## Dates
+
+| Field                | Type   | Versions | Meaning                                                                                                                       | Source                            |
+| -------------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `date`               | date   | 1, 2     | The publication date. Prints in the Timestamp format of Settings, in the blog's time zone. On static pages, the creation date | <BloggerSource kind="observed" /> |
+| `lastUpdated`        | date   | 2        | The date of the last change                                                                                                   | <BloggerSource kind="observed" /> |
+| `timestamp`          | string | 1        | The publication time, in the time format of the Blog widget. Set on every post                                                | <BloggerSource kind="official" /> |
+| `timestampISO8601`   | string | 1        | The publication time in ISO 8601, `2026-05-17T09:30:00+01:00`                                                                 | <BloggerSource kind="observed" /> |
+| `lastUpdatedISO8601` | string | 1        | The time of the last change in ISO 8601, `2026-05-19T18:02:41Z`                                                               | <BloggerSource kind="observed" /> |
+| `dateHeader`         | string | 1        | The date, only on the first post of each day in the list                                                                      | <BloggerSource kind="official" /> |
+
+A date prints in the Timestamp format of Settings > Formatting, in the blog's time zone: with the format `18.10.26`, a post prints `17.10.26`. `+` joins and `==` compares that text too. <BloggerSource kind="observed" /> It has the members `.year`, `.month`, `.day`, `.dayOfMonth`, `.dayOfWeek` (Monday is 1) and `.dayOfYear`, all numbers (`.dayOfYear` was read in the blog's time zone), and `.iso8601`, a string with the offset, for machines. <BloggerSource kind="observed" />
+
+`format` writes any other pattern, but in UTC: a post published on October 17 at 21:16, `-07:00`, gives `2026-10-18` with `format(data:post.date, "yyyy-MM-dd")`. Write the year `yyyy`. <BloggerSource kind="observed" />
+
+Comparing the two dates shows whether a post was edited after publication: <BloggerSource kind="observed" />
+
+```xml {3}
+<time class='published' expr:datetime='data:post.date.iso8601'><b:eval expr='format(data:post.date, "MMMM d, yyyy")'/></time>
+<b:if cond='data:post.lastUpdated != data:post.date'>
+  <time class='updated' expr:datetime='data:post.lastUpdated.iso8601'><b:eval expr='format(data:post.lastUpdated, "MMM d")'/></time>
+</b:if>
+```
+
+The date type is on [values](../expressions/values.mdx), and `format` on [functions](../expressions/functions.mdx).
+
+`dateHeader` groups the posts of a day in classic themes: only the first post of each day has it. Version 2 dropped it, and `isDateStart` still marks that first post.
+
+## Author
+
+| Field                | Type                  | Versions | Meaning                                                                                                                  | Source                              |
+| -------------------- | --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| `author`             | string in 1, map in 2 | 1, 2     | Version 1: the display name. Version 2: a map with the fields below                                                      | <BloggerSource kind="official" />   |
+| `author.name`        | string                | 2        | The display name                                                                                                         | <BloggerSource kind="observed" />   |
+| `author.profileUrl`  | string                | 2        | The Blogger profile, `https://www.blogger.com/profile/…`. Only with a public profile                                     | <BloggerSource kind="observed" />   |
+| `author.aboutMe`     | string                | 2        | "About me" from the profile, 1,200 characters at most                                                                    | <BloggerSource kind="observed" />   |
+| `author.authorPhoto` | map                   | 2        | The profile photo: `image`, an image value of 113 × 113; `width` and `height`, `113`; `alt`, `My photo` translated       | <BloggerSource kind="observed" />   |
+| `authorProfileUrl`   | string                | 1        | Same as `author.profileUrl`                                                                                              | <BloggerSource kind="observed" />   |
+| `authorAboutMe`      | string                | 1        | Same as `author.aboutMe`                                                                                                 | <BloggerSource kind="observed" />   |
+| `authorPhoto`        | map                   | 1        | The profile photo: `url`, 113 × 113, with `width` and `height`; `thumbUrl`, 50 × 50, with `thumbWidth` and `thumbHeight` | <BloggerSource kind="observed" />   |
+| `postAuthorClass`    | string                | 2        | A class that depends on the visitor, such as `pid-123456`, to show elements to the author only                           | <BloggerSource kind="observed" />   |
+| `adminClass`         | string                | 1, 2     | The class of the old quick edit link, such as `blog-admin pid-123456`                                                    | <BloggerSource kind="deprecated" /> |
+| `editUrl`            | string                | 1        | The editor of the post, for the old quick edit pencil                                                                    | <BloggerSource kind="deprecated" /> |
+
+```xml title="A byline" {5}
+<span class='byline'>
+  <b:if cond='data:post.author.authorPhoto.image'>
+    <img expr:alt='data:post.author.name.escaped' expr:src='resizeImage(data:post.author.authorPhoto.image, 40, "1:1")' height='40' width='40'/>
+  </b:if>
+  <b:tag class='author-name' expr:name='data:post.author.profileUrl ? "a" : "span"'>
+    <b:attr cond='data:post.author.profileUrl' expr:value='data:post.author.profileUrl' name='href'/>
+    <data:post.author.name/>
+  </b:tag>
+</span>
+```
+
+`<b:tag>` writes a link when the author has a public profile and a plain `<span>` otherwise, with the same content. See [dynamic tags](../tags/dynamic-tags.mdx).
+
+Google lists `editUrl` without a warning. In practice the quick edit link stopped working with the 2020 dashboard. A link to the editor can be built from `data:blog.bloggerUrl`, see [data:blog](./blog.mdx#datablogsharingplatforms), and Blogger shows elements with the class `blog-admin` only to the owners once its admin stylesheet is loaded.
+
+## Labels and location
+
+| Field              | Type    | Versions | Meaning                                                                                  | Source                            |
+| ------------------ | ------- | -------- | ---------------------------------------------------------------------------------------- | --------------------------------- |
+| `labels`           | list    | 1, 2     | The labels of the post, 20 at most, sorted by name                                       | <BloggerSource kind="official" /> |
+| `labels[i].name`   | string  | 1, 2     | The text of the label, 200 characters at most, HTML-escaped: `a&b` is `a&amp;b`          | <BloggerSource kind="official" /> |
+| `labels[i].url`    | URL     | 1, 2     | The page of the posts with this label                                                    | <BloggerSource kind="official" /> |
+| `labels[i].isLast` | boolean | 1        | True on the last label, to place commas                                                  | <BloggerSource kind="official" /> |
+| `location`         | map     | 1, 2     | The place of the post. Needs the location option of the Blog widget. Not on static pages | <BloggerSource kind="observed" /> |
+| `location.name`    | string  | 1, 2     | The name of the place                                                                    | <BloggerSource kind="observed" /> |
+| `location.mapsUrl` | string  | 1, 2     | The Google Maps address of the place                                                     | <BloggerSource kind="observed" /> |
+
+With an index, a loop can put a separator between items. This form writes the labels as a JSON array:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+"labels":[<b:loop index='i' values='data:post.labels' var='label'>"<data:label.name.jsonEscaped/>"<b:if cond='data:i &lt; (data:post.labels.length - 1)'>,</b:if></b:loop>]
+```
+
+```txt title="Rendered"
+"labels":["Portugal","Trams","Weekend"]
+```
+
+</CodeTabs>
+
+A label name is HTML text: `&`, `<`, `>`, `"` and `'` are already escaped, `a&amp;b`, and `.jsonEscaped` keeps that `&amp;` in the JSON. <BloggerSource kind="observed" /> Its `url` is built from the name as typed.
+
+Titles and labels written like a number, or as `yes`, `no`, `true` or `false` in any case, are read as numbers and booleans: a post titled `2024` gives `2025` for `data:post.title + 1`, and a label `yes` is the boolean `true`, which can not be got back as `"yes"`. `+ ""` turns a number back into text, `007` stays `007`. <BloggerSource kind="observed" />
+
+`labels` is a list, so lambdas apply to it: `data:post.labels any (l => l.name == "News")` chooses `NewsArticle` over `BlogPosting` in structured data. <BloggerSource kind="observed" /> See [lambdas](../expressions/lambdas.mdx).
+
+```xml
+<b:if cond='data:post.location'>
+  <a class='post-location' expr:href='data:post.location.mapsUrl' rel='nofollow' target='_blank'><data:post.location.name/></a>
+</b:if>
+```
+
+## Sharing and email
+
+| Field                            | Type   | Versions | Meaning                                                                                                                                 | Source                              |
+| -------------------------------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `shareUrl`                       | string | 2        | The Blogger share URL of the post, `https://www.blogger.com/share-post.g?blogID=…&postID=…`. Works only with a `target` parameter added | <BloggerSource kind="observed" />   |
+| `sharePostUrl`                   | string | 1        | Same as `shareUrl`                                                                                                                      | <BloggerSource kind="observed" />   |
+| `emailPostUrl`                   | string | 1, 2     | The "email this post" form, `https://www.blogger.com/email-post.g?blogID=…&postID=…`. Empty when email links are off in the Blog widget | <BloggerSource kind="official" />   |
+| `dummyTag`, `googlePlusShareTag` | HTML   | 1        | The Google +1 button                                                                                                                    | <BloggerSource kind="deprecated" /> |
+
+On static pages the share URL has `pageID=` instead of `postID=`. Its targets are `email`, `blog`, `twitter`, `facebook` and `pinterest`, the `target` values of [`data:blog.sharing.platforms`](./blog.mdx#datablogsharingplatforms):
+
+```xml
+<a expr:href='appendParams(data:post.shareUrl, { target: "pinterest" })' rel='nofollow noopener' target='_blank'>Pinterest</a>
+```
+
+For services that Blogger does not cover, build the URL from the permalink. A share text with the title and the address, where `snippet` turns the URL into plain text before it is joined: <BloggerSource kind="observed" />
+
+```xml /length: 2048/
+<b:with value='data:post.title + " " + snippet(data:post.url.canonical, { length: 2048, links: false, linebreaks: false, ellipsis: false })' var='shareText'>
+  <a expr:href='params("https://share.joinmastodon.org/", { text: data:shareText })' rel='noopener' target='_blank'>Mastodon</a>
+</b:with>
+```
+
+The `length` of 2048 keeps `snippet` from cutting a long URL.
+
+The email links setting belongs to the Blog widget, and also applies to the posts of FeaturedPost and PopularPosts.
+
+## Comment settings and URLs
+
+What a post knows about its comments. The comments themselves, the form and comment paging are on [Comments](./comments.mdx).
+
+| Field                  | Type    | Versions | Meaning                                                                                                   | Source                              |
+| ---------------------- | ------- | -------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `allowComments`        | boolean | 1, 2     | Comments are shown. False when they are hidden for the blog or for this post                              | <BloggerSource kind="official" />   |
+| `allowNewComments`     | boolean | 1, 2     | New comments are accepted                                                                                 | <BloggerSource kind="observed" />   |
+| `noNewCommentsText`    | string  | 1, 2     | `New comments are not allowed.`, when comments are closed                                                 | <BloggerSource kind="observed" />   |
+| `numberOfComments`     | number  | 2        | The number of comments                                                                                    | <BloggerSource kind="observed" />   |
+| `numComments`          | number  | 1        | The number of comments                                                                                    | <BloggerSource kind="official" />   |
+| `commentLabelFull`     | string  | 1        | `No comments`, `1 comment`, `5 comments`, translated                                                      | <BloggerSource kind="observed" />   |
+| `commentsUrl`          | URL     | 2        | Where to write a comment, which depends on the comment location                                           | <BloggerSource kind="observed" />   |
+| `addCommentUrl`        | URL     | 1        | Same as `commentsUrl`                                                                                     | <BloggerSource kind="official" />   |
+| `commentsUrlOnclick`   | string  | 2        | JavaScript opening the comment popup, when comments open in a popup                                       | <BloggerSource kind="observed" />   |
+| `addCommentOnclick`    | string  | 1        | Same as `commentsUrlOnclick`                                                                              | <BloggerSource kind="observed" />   |
+| `embedCommentForm`     | boolean | 1, 2     | The comment form sits under the post                                                                      | <BloggerSource kind="observed" />   |
+| `showThreadedComments` | boolean | 1, 2     | Comments are shown as threads                                                                             | <BloggerSource kind="official" />   |
+| `comments`             | list    | 1, 2     | The comments, on posts and static pages                                                                   | <BloggerSource kind="official" />   |
+| `feedLinks`            | list    | 1, 2     | The comment feed of the post: one item with `url`, `name`, `feedType` and `mimeType`. Not on static pages | <BloggerSource kind="official" />   |
+| `commentSource`        | number  | 1, 2     | `0` for Blogger comments, `1` for Google+ comments. Always `0` since 2019                                 | <BloggerSource kind="deprecated" /> |
+
+`commentsUrl` follows the comment location chosen in Settings > Comments:
+
+| Comment location | `commentsUrl`                                         | `commentsUrlOnclick`                                                                                   |
+| ---------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Embedded         | the permalink with `#comment-form`                    | empty                                                                                                  |
+| Full page        | `https://www.blogger.com/comment.g?blogID=…&postID=…` | empty                                                                                                  |
+| Popup window     | the full page URL with `&isPopup=true`                | `javascript:window.open(this.href, "bloggerPopup", "toolbar=0,…,width=640,height=500"); return false;` |
+| Hidden           | the URL of the last location chosen                   | empty                                                                                                  |
+
+```xml title="A comment count link"
+<b:if cond='data:post.allowComments'>
+  <a class='comment-count' expr:href='fragment(data:post.url, "comments")'>
+    <b:if cond='data:post.numberOfComments > 0'>
+      <b:message name='messages.numberOfComments'>
+        <b:param expr:value='data:post.numberOfComments' name='numComments'/>
+      </b:message>
+    <b:else/>
+      <data:messages.postAComment/>
+    </b:if>
+  </a>
+</b:if>
+```
+
+In the feeds, the comment count of a post is the title of its `replies` link of type `text/html`, `5 Comments`. The fields left for the comments page, `commentHtml`, `commentFormIframeSrc`, `commentPagingRequired` and the paging URLs, are on [Comments](./comments.mdx).
+
+## Ads
+
+| Field       | Type    | Versions | Meaning                                                                         | Source                            |
+| ----------- | ------- | -------- | ------------------------------------------------------------------------------- | --------------------------------- |
+| `includeAd` | boolean | 1, 2     | An ad can follow this post, from the "posts between ads" setting. Needs AdSense | <BloggerSource kind="observed" /> |
+| `adNumber`  | number  | 2        | The number of the ad after this post, from `0`                                  | <BloggerSource kind="observed" /> |
+
+Blogger's 2017 themes cap the number of in-feed ads with `adNumber`, comparing it with `data:maxNumAds` of the Blog widget.
+
+## A post as JSON
+
+Client scripts often want the post in a form they can read. A theme can print each post of the page as JSON from a small includable, which also shows how most fields behave: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="A shortened json:post"
+<b:includable id='json:post' var='post'>{"id":"<data:post.id/>","title":"<data:post.title.jsonEscaped/>","url":"<data:post.url.canonical.jsonEscaped/>","thumbnail":<b:if cond='data:post.featuredImage'>"<data:post.featuredImage.jsonEscaped/>"<b:else/>null</b:if>,"published":"<data:post.date.iso8601.jsonEscaped/>","updated":"<data:post.lastUpdated.iso8601.jsonEscaped/>","author":{"name":"<data:post.author.name.jsonEscaped/>"},"comments":<b:eval expr='data:post.numberOfComments'/>,"location":<b:if cond='data:post.location'>{"name":"<data:post.location.name.jsonEscaped/>","url":"<data:post.location.mapsUrl.jsonEscaped/>"}<b:else/>null</b:if>}</b:includable>
+```
+
+```txt title="Rendered"
+{"id":"4061187728390351284","title":"Un week-end à Lisbonne","url":"https://example.blogspot.com/2026/05/week-end-lisbonne.html","thumbnail":"https://blogger.googleusercontent.com/img/b/…/s1600/tram.jpg","published":"2026-05-17T09:30:00+01:00","updated":"2026-05-19T18:02:41Z","author":{"name":"Inês"},"comments":3,"location":null}
+```
+
+</CodeTabs>
+
+- Every string goes through `.jsonEscaped`; `id` and the count are digits and need nothing.
+- Optional values print `null` in a `<b:else/>` branch, so the JSON stays valid when they are missing.
+- The whole includable is on one line: any line break or indentation inside it would end up in the output.
+
+## Other fields
+
+A few post fields are read by themes without being documented: `showManageComments` in the threaded comments of the 2017 themes, and `allowIframeComments`, `iframeCommentSrc`, `reactionsUrl`, `datePublished` and `viewType` in older themes. <BloggerSource kind="observed" /> Google also lists `showBacklinks` and `numBacklinks`. In practice backlinks have been empty since 2016. <BloggerSource kind="deprecated" />
+
+## FeaturedPost and PopularPosts
+
+The posts of FeaturedPost and PopularPosts version 2 are post objects too, with only part of the fields: <BloggerSource kind="observed" />
+
+| Group                | Fields                                                                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Content              | `id`, `title`, `body`, `snippets.short`, `snippets.long`, `hasJumpLink`                                                            |
+| Addresses and image  | `url`, `featuredImage`, `absoluteUrl` (deprecated)                                                                                 |
+| Dates                | `date`, `lastUpdated`                                                                                                              |
+| Author               | `author.name`, `author.profileUrl`, `author.authorPhoto` with `image`, `width`, `height` and `alt`                                 |
+| Labels               | `labels`, with `name` and `url`                                                                                                    |
+| Comments and sharing | `allowComments`, `numberOfComments`, `commentsUrl`, `commentsUrlOnclick`, `shareUrl`, `emailPostUrl`, `commentSource` (deprecated) |
+
+Their body is always cut at the jump break. Both widgets also have `data:postDisplay`, the display options `showTitle`, `showSnippet`, `showFeaturedImage`, `showDate` and `showAuthor`. See [FeaturedPost](../widget-types/featured-post.mdx) and [PopularPosts](../widget-types/popular-posts.mdx).
+
+A post can appear in several widgets of one page. To list it once, collect the ids already shown and filter the others out. In a PopularPosts widget on the homepage:
+
+```xml {2}
+<b:with value='data:widgets.Blog.first.posts map (p => p.id)' var='shownIds'>
+  <b:with value='data:posts filter (p => p.id not in data:shownIds)' var='posts'>
+    <b:include name='popular-list'/>
+  </b:with>
+</b:with>
+```
+
+`data:posts` is renamed to itself by the inner `<b:with>`, so the includable sees only the remaining posts. The ids of the featured post can be removed the same way, from `data:widgets.FeaturedPost map (w => w.postId)`, see [Widgets](./widgets.mdx#featuredpost-and-popularposts-entries).
+
+## Notes
+
+- **The type of `id`.** Google calls it the numeric id of the post. It prints the same as a string or a number; compare it with `data:view.postId`, a number, with `==`.
+- **`feedLinks`.** Google describes the feed type as Atom or RSS. In practice the list holds one Atom feed, `https://example.blogspot.com/feeds/POST_ID/comments/default`, named `Post Comments`.

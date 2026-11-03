@@ -1,0 +1,78 @@
+---
+title: Navbar
+description: The Navbar widget of classic themes, Blogger's bar across the top of the blog, loaded from Blogger in an iframe.
+published: 2026-10-26
+---
+
+<BloggerSource kind="deprecated" />
+
+`Navbar` is the Blogger bar that ran across the top of classic blogs, and for years the place where visitors reported abuse. The bar is a page served by Blogger and shown in an iframe; the theme only carries the scripts that open it. The widget exists in classic themes only. The 2017 themes dropped it, and the report link moved to the [ReportAbuse](./report-abuse.mdx) widget.
+
+## Quick example
+
+Classic themes keep the bar in a section of its own, at the very top of `<body>`, that holds one widget and offers no "Add a Gadget" link:
+
+```xml title="theme.xml (a classic theme)"
+<b:section class='navbar' id='navbar' maxwidgets='1' name='Navbar' showaddelement='no'>
+  <b:widget id='Navbar1' locked='true' title='Navbar' type='Navbar'/>
+</b:section>
+```
+
+In an export, the widget also contains a `main` includable filled in by Blogger for that blog. It is read only.
+
+## Placement and limits
+
+| Property              | Value                                                                                                                                     | Source                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                  | `Navbar`                                                                                                                                  | <BloggerSource kind="observed" /> |
+| Themes                | Classic themes (layouts versions 1 and 2). Not in the 2017 themes; switched off in Dynamic Views. Still valid in a custom version 2 theme | <BloggerSource kind="observed" /> |
+| Where Blogger puts it | The `navbar` section at the top of the `<body>`                                                                                           | <BloggerSource kind="observed" /> |
+| Locked                | `locked='true'` in 8 of the 9 classic exports                                                                                             | <BloggerSource kind="observed" /> |
+| Markup                | **Read only**: changes to `main` are not kept                                                                                             | <BloggerSource kind="observed" /> |
+| Title                 | `Navbar`, in every export                                                                                                                 | <BloggerSource kind="observed" /> |
+| Per blog              | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type)                                                           |                                   |
+
+## Widget settings
+
+None. The color of the bar is not a `<b:widget-setting>`: it travels as the `navbarType` parameter of the iframe address (`LIGHT`, for example).
+
+## Widget data
+
+None. `main` reads no data.
+
+In a custom version 2 theme, `<b:widget id='Navbar1' locked='true' title='Navbar' type='Navbar' version='1' visible='true'/>` saves. Blogger stores it with its default `main` filled in, the navbar script as escaped text, and without `version`, and renders `<div class='widget Navbar' data-version='2' id='Navbar1'><script type="text/javascript">…`. <BloggerSource kind="observed" />
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders                          | Source                            |
+| ---------- | --- | --- | ---------------------------------------- | --------------------------------- |
+| `main`     | Yes | Yes | The scripts that open the bar. Read only | <BloggerSource kind="observed" /> |
+
+`main` is not markup but escaped text: in the export, the scripts are stored as `&lt;script&gt;…` with the blog's values already written in. Unescaped, they do four things:
+
+1. Define a helper, `setAttributeOnload`, that sets a property once the page has loaded.
+2. Write an empty `div#navbar-iframe-container`.
+3. Load Google's `https://apis.google.com/js/platform.js`, then open an iframe with the id `navbar-iframe` in that container. Its address is `https://www.blogger.com/navbar.g?…` (or a `draft.blogger.com` host) with the blog id, the blog name, the locale, `navbarType` and a few other parameters.
+4. Load `google_top_exp.js` from `pagead2.googlesyndication.com`.
+
+On live classic blogs the iframe address takes a shorter form, `https://www.blogger.com/navbar/BLOG_ID?origin=…`. Whether Blogger renders the text stored in the theme, or writes its own current scripts in its place, is not confirmed.
+
+## Styling and hiding it
+
+The bar's content lives in Blogger's iframe, out of the theme's reach. The theme controls the box around it:
+
+```css
+#navbar-iframe-container { position: relative; z-index: 10; }
+.navbar.section { margin: 0; }
+```
+
+A classic theme that does not want the bar can hide it with CSS while keeping the locked widget in place:
+
+```css
+#navbar-iframe-container, .navbar.section { display: none; }
+```
+
+## Things to know
+
+- **Classic only.** A new theme written for current Blogger has no reason to include a `Navbar` widget, and Blogger's 2017 themes do without it. Give readers a [ReportAbuse](./report-abuse.mdx) link instead.
+- **Read only.** The XML of the widget can be exported but not edited.

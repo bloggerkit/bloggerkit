@@ -1,0 +1,92 @@
+---
+import { Image } from 'astro:assets';
+import { getPageAuthors } from '@/lib/content/authors';
+import type { PageAuthor } from '@/lib/types';
+import AuthorName from './AuthorName.astro';
+
+export interface Props {
+	/** From the frontmatter; the site author when missing. */
+	authors?: PageAuthor[];
+	published: Date;
+	updated?: Date;
+}
+
+/** Authors and dates under an article's title. Bullets separate the parts because DM Sans' middle dot is too faint. */
+const { authors, published, updated } = Astro.props;
+const people = getPageAuthors(authors);
+
+// Frontmatter dates are in UTC. Formatting them in local time can shift the day
+const format = new Intl.DateTimeFormat('en-US', {
+	dateStyle: 'medium',
+	timeZone: 'UTC',
+});
+// At most three circles. With more authors, two photos and a "+N". All names are still written out
+const maxCircles = 3;
+const stacked = people.length > maxCircles ? maxCircles - 1 : people.length;
+const rest = people.slice(stacked);
+// Each item has a 1.25rem gap before it, with its bullet centered in the gap
+const sep =
+	"relative ms-5 before:pointer-events-none before:absolute before:-start-3 before:top-1/2 before:-translate-y-1/2 before:text-xs before:content-['•']";
+// A ring in the page color keeps overlapping circles apart
+const circle = 'size-6 shrink-0 rounded-full bg-muted ring-2 ring-background';
+// GitHub authors get their profile photo. Astro fetches it at build time, so readers never request GitHub. Others
+// get their initials
+const initials = (name: string) => {
+	const words = name.trim().split(/\s+/);
+	return `${words[0]?.[0] ?? ''}${words.length > 1 ? (words.at(-1)?.[0] ?? '') : ''}`.toUpperCase();
+};
+---
+
+{/*
+  Each item draws its bullet in the gap before it (`sep`). The row is shifted left by that gap inside a clip, so no
+  line starts with a bullet. The clip is horizontal only, so the author cards below stay visible
+*/}
+<div class="mt-4 overflow-x-clip text-sm text-muted-foreground" data-pagefind-ignore>
+	<div class="-ms-5 flex flex-wrap items-center gap-y-2">
+	<div class:list={['relative flex items-center gap-2.5', sep]}>
+		<span class="flex shrink-0 -space-x-2" aria-hidden="true">
+			{
+				people.slice(0, stacked).map((person) =>
+					person.github ? (
+						<Image
+							src={`https://avatars.githubusercontent.com/${person.github}?s=96`}
+							alt=""
+							width={48}
+							height={48}
+							format="webp"
+							loading="eager"
+							class:list={[circle, 'object-cover']}
+						/>
+					) : (
+						<span class:list={[circle, 'grid place-items-center text-[0.625rem] font-semibold text-foreground']}>
+							{initials(person.name)}
+						</span>
+					),
+				)
+			}
+			{
+				rest.length > 0 && (
+					<span
+						class:list={[circle, 'grid place-items-center text-[0.625rem] font-semibold text-muted-foreground tabular-nums']}
+						title={rest.map((person) => person.name).join(', ')}
+					>
+						+{rest.length}
+					</span>
+				)
+			}
+		</span>
+		<span class="min-w-0">
+			{
+				people.map((person, i) => (
+					<>
+						{i > 0 && (i === people.length - 1 ? ' and ' : ', ')}
+						<AuthorName person={person} />
+					</>
+				))
+			}
+		</span>
+	</div>
+	<span class={sep}>Published <time datetime={published.toISOString()}>{format.format(published)}</time></span>
+	{updated && <span class={sep}>Updated <time datetime={updated.toISOString()}>{format.format(updated)}</time></span>}
+	</div>
+</div>

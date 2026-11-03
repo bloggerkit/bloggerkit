@@ -1,0 +1,110 @@
+---
+title: Followers
+description: The Followers widget, a read-only box with a follow button and the faces of the blog's followers.
+published: 2026-10-26
+---
+
+`Followers` lets a signed-in visitor follow the blog, which adds it to their Blogger reading list, and shows who already follows it. It began as a Google Friend Connect widget that Blogger took over in 2012. All the visible content comes from Blogger: the theme prints a code snippet that loads the follower box in an iframe, and the markup of the widget can not be changed.
+
+## Quick example
+
+Because the includable is read only, all a theme decides is where the widget goes and which color settings it carries. The `main` includable is Blogger's, and edits to it are not kept, so it is left out here:
+
+```xml title="theme.xml"
+<b:widget id='Followers1' locked='false' title='Readers' type='Followers' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='borderColorTransparent'>true</b:widget-setting>
+    <b:widget-setting name='contentHeadlineColor'>#1f2933</b:widget-setting>
+    <b:widget-setting name='contentLinkColor'>#2563eb</b:widget-setting>
+    <b:widget-setting name='contentSecondaryLinkColor'>#1d4ed8</b:widget-setting>
+    <b:widget-setting name='contentSecondaryTextColor'>#52606d</b:widget-setting>
+    <b:widget-setting name='contentTextColor'>#1f2933</b:widget-setting>
+    <b:widget-setting name='endcapLinkColor'>#2563eb</b:widget-setting>
+    <b:widget-setting name='endcapTextColor'>#1f2933</b:widget-setting>
+    <b:widget-setting name='useTemplateDefaultStyles'>true</b:widget-setting>
+  </b:widget-settings>
+</b:widget>
+```
+
+Blogger does not keep these colors: a valid color other than the default is stored as `#000000` when the theme is saved, see [Widget settings](#widget-settings). <BloggerSource kind="observed" />
+
+On the page it becomes the widget wrapper, the title when there is something to show, and a `div` with the id `Followers1-wrapper` that receives the snippet. The snippet loads Google's `platform.js`, then opens the follower box in an iframe.
+
+## Placement and limits
+
+| Property                 | Value                                                                                                   | Source                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `Followers`                                                                                             | <BloggerSource kind="official" /> |
+| Per blog                 | 2. A third one is refused when saving, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Suggested width          | 300px                                                                                                   | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | Any section; no official theme adds it at install                                                       | <BloggerSource kind="observed" /> |
+| Locked                   | Not by default                                                                                          | <BloggerSource kind="observed" /> |
+| Markup                   | **Read only**: changes to `main` are not kept                                                           | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                                                   | <BloggerSource kind="official" /> |
+| Not available in         | Mobile Default 2010, Dynamic Views                                                                      | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+Exported themes carry these settings. They look like the colors of the follower box; which part of the box each one paints is not confirmed.
+
+| Setting                     | Values found in exports                     | Source                            |
+| --------------------------- | ------------------------------------------- | --------------------------------- |
+| `useTemplateDefaultStyles`  | `true`                                      | <BloggerSource kind="observed" /> |
+| `borderColorTransparent`    | `true`                                      | <BloggerSource kind="observed" /> |
+| `contentHeadlineColor`      | `#000000`                                   | <BloggerSource kind="observed" /> |
+| `contentTextColor`          | `#292929`, `rgba(0, 0, 0, 0.87)`, `#ffffff` | <BloggerSource kind="observed" /> |
+| `contentSecondaryTextColor` | `#000000`                                   | <BloggerSource kind="observed" /> |
+| `contentLinkColor`          | `#d67f3f`, `rgba(0, 0, 0, 0.87)`, `#bca772` | <BloggerSource kind="observed" /> |
+| `contentSecondaryLinkColor` | `#FFFFFF`, `rgba(0, 0, 0, 0.87)`            | <BloggerSource kind="observed" /> |
+| `endcapTextColor`           | `#292929`, `rgba(0, 0, 0, 0.87)`, `#ffffff` | <BloggerSource kind="observed" /> |
+| `endcapLinkColor`           | `#d67f3f`, `rgba(0, 0, 0, 0.87)`, `#bca772` | <BloggerSource kind="observed" /> |
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A Followers widget written with no settings gets the title `Followers`, `borderColorTransparent` and `useTemplateDefaultStyles` `true`, `contentSecondaryLinkColor` `#FFFFFF`, and `#000000` for the six other colors.
+- A color must be `#RGB` or `#RRGGBB`. Other lengths and names such as `red` are refused 'Invalid color (e.g. "#FFCC99")', and an empty one is required.
+- A valid color other than the default, such as `#abc`, `#AbCdEf` or `transparent`, is stored as `#000000`. Whether `rgba(…)`, seen in exports, is accepted is not confirmed.
+- `borderColorTransparent` stores `yes`, an empty value and `true` as `true`.
+
+The followers themselves are not a setting and are not in the theme. The owner can download them as a CSV file through Google Takeout.
+
+## Widget data
+
+Both versions have the same data and the same markup.
+
+| Field         | Type   | Content                                        | Source                            |
+| ------------- | ------ | ---------------------------------------------- | --------------------------------- |
+| `title`       | string | Widget title, up to 100 characters             | <BloggerSource kind="observed" /> |
+| `codeSnippet` | string | The HTML and script that load the follower box | <BloggerSource kind="observed" /> |
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders      | Source                            |
+| ---------- | --- | --- | -------------------- | --------------------------------- |
+| `main`     | Yes | Yes | Read only. See below | <BloggerSource kind="observed" /> |
+
+`main` works in three steps:
+
+1. When both `title` and `codeSnippet` are non-empty, it writes `<h2 class='title'>` with the title.
+2. It opens `div.widget-content`, then `div#ID-wrapper`, where `ID` is `data:widget.instanceId`.
+3. When `codeSnippet` is non-empty, it prints it in a `div` with a small right margin, then includes `quickedit`.
+
+The 2017 themes get the same includable as classic themes: the title is an `h2`, not the `h3` that `widget-title` writes in other version 2 widgets, and `quickedit` is still included.
+
+## Styling it
+
+The theme can not reach inside the iframe. It can style the heading and the space around the box:
+
+```css
+.Followers h2.title { font-size: 1rem; margin: 0 0 .5rem; }
+.Followers .widget-content { overflow: hidden; }
+#Followers1-wrapper iframe { max-width: 100%; }
+```
+
+The color settings are the way to change the inside of the box. To leave the box out of some pages, add a `cond` to the widget, such as `cond='data:view.isSingleItem'`; the condition belongs to `<b:widget>`, not to the read-only includable.
+
+## Things to know
+
+- **Blocking a follower** is done from the Stats pages of the dashboard, not from the widget.
+- **Read only, not retired.** The widget still works. Google Friend Connect, where it started, is long gone.
+- **Title tag.** Because the heading is a fixed `h2.title`, a theme that styles `h3.title` for widget titles needs a rule for this one too.

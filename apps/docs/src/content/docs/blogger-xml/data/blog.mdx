@@ -1,0 +1,404 @@
+---
+title: data:blog
+description: 'The global dictionary of the blog: its addresses, language, settings and services, and older page fields, each with its type, an example and its source.'
+level: intermediate
+published: 2026-10-26
+---
+
+`data:blog` describes the blog as a whole: what it is called, where it lives, which language it speaks, which feeds and services it has, how it is set up. It also carries the fields about the current page that themes used before `data:view` existed, such as `pageType` and `pageTitle`. Like every global dictionary, it can be read anywhere under `<html>` except inside `<![CDATA[ ]]>`.
+
+<CodeTabs>
+
+```xml title="The start of a head"
+<head>
+  <meta expr:content='"text/html; charset=" + data:blog.encoding' http-equiv='Content-Type'/>
+  <title><data:blog.pageTitle/></title>
+  <link expr:href='data:blog.url.canonical' rel='canonical'/>
+  <link expr:href='data:blog.blogspotFaviconUrl' rel='icon' type='image/x-icon'/>
+  <data:blog.feedLinks/>
+</head>
+```
+
+```html title="Rendered on a post"
+<head>
+  <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'/>
+  <title>Carnets de route: Un week-end à Lisbonne</title>
+  <link href='https://example.blogspot.com/2026/05/week-end-lisbonne.html' rel='canonical'/>
+  <link href='https://example.blogspot.com/favicon.ico' rel='icon' type='image/x-icon'/>
+  <link rel="alternate" type="application/atom+xml" title="Carnets de route - Atom" href="https://example.blogspot.com/feeds/posts/default" />
+  <link rel="alternate" type="application/rss+xml" title="Carnets de route - RSS" href="https://example.blogspot.com/feeds/posts/default?alt=rss" />
+  …
+</head>
+```
+
+</CodeTabs>
+
+Google lists eight fields as globally available data: `title`, `pageType`, `url`, `homepageUrl`, `pageTitle`, `encoding`, `languageDirection` and `feedLinks`. Posts of the Blogger blogs add a few more. <BloggerSource kind="official" /> Everything else on this page is known from Blogger's themes and from live blogs. <BloggerSource kind="observed" /> In total, 61 fields: 53 directly under `data:blog` and 8 under `data:blog.sharing`.
+
+A field can be printed, evaluated or given a shorter name:
+
+```xml
+<data:blog.title/>
+<b:eval expr='data:blog.title + " (archive)"'/>
+<b:with value='data:blog' var='b'><data:b.title/></b:with>
+```
+
+URL fields take the URL properties `.canonical`, `.http` and `.https`; text fields take `.escaped`, `.jsEscaped`, `.jsonEscaped`, `.cssEscaped` and `.length`. See [properties](../expressions/properties.mdx).
+
+## Identity and addresses
+
+| Field                  | Type    | What it holds                                                                                                                    | Example                                                       | Source                              |
+| ---------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------- |
+| `blogId`               | string  | The id of the blog, a string of digits. Most ids have 19 digits; very old blogs have shorter ones                                | `6283910475523019463`, `2399953`                              | <BloggerSource kind="observed" />   |
+| `title`                | string  | The title from Settings, also edited by the Header widget. 100 characters at most. `&` is held as `&amp;`, see [titles](#titles) | `Carnets de route`                                            | <BloggerSource kind="official" />   |
+| `homepageUrl`          | URL     | The homepage, always with a final slash                                                                                          | `https://example.blogspot.com/`                               | <BloggerSource kind="official" />   |
+| `url`                  | URL     | The address of the current page, cleaned by Blogger. Equal to `data:view.url`                                                    | `https://example.blogspot.com/2026/05/week-end-lisbonne.html` | <BloggerSource kind="official" />   |
+| `searchUrl`            | URL     | The search page, the target of a search form                                                                                     | `https://example.blogspot.com/search`                         | <BloggerSource kind="observed" />   |
+| `blogspotFaviconUrl`   | URL     | The favicon chosen in Settings                                                                                                   | `https://example.blogspot.com/favicon.ico`                    | <BloggerSource kind="observed" />   |
+| `bloggerUrl`           | URL     | The address of Blogger itself, the base of share, edit and "Powered by Blogger" links                                            | `https://www.blogger.com`                                     | <BloggerSource kind="observed" />   |
+| `hasCustomDomain`      | boolean | The blog is served on its own domain rather than on `blogspot.com`                                                               | `false`                                                       | <BloggerSource kind="observed" />   |
+| `httpsEnabled`         | boolean | The blog is served over HTTPS. Empty, not `false`, when it is not                                                                | `true`                                                        | <BloggerSource kind="observed" />   |
+| `canonicalHomepageUrl` | URL     | Older field for the canonical homepage. Replaced by `homepageUrl.canonical`                                                      | `http://example.blogspot.com/`                                | <BloggerSource kind="deprecated" /> |
+| `canonicalUrl`         | URL     | Older field for the canonical address of the page. Replaced by `url.canonical`                                                   | `http://example.blogspot.com/`                                | <BloggerSource kind="deprecated" /> |
+
+### `data:blog.homepageUrl`
+
+Since the homepage always ends with `/`, a path can be appended to it with `+`. The `path` function is the cleaner way: it replaces the path, keeps the host, and returns a URL value with its properties:
+
+```xml {2}
+<link expr:href='path(data:blog.homepageUrl.canonical, "sitemap.xml")' rel='sitemap' type='application/xml'/>
+<b:class cond='data:view.url.canonical == path(data:blog.homepageUrl.canonical, "search")' name='on-all-posts'/>
+```
+
+The second line is how a theme can recognize the plain `/search` page, the list of all posts with no query and no label: it compares the canonical address of the page with the search URL built from the homepage. <BloggerSource kind="observed" />
+
+### `data:blog.url`
+
+The address of the page as Blogger understands it, not as the reader typed it: <BloggerSource kind="observed" />
+
+- `?showComment=…` and `?view=…` are removed.
+- `/search?label=travel` is written `/search/label/travel`.
+- `/?updated-max=…` stays `/`.
+- `?m=1` is kept, and the other parameters of the page are dropped: on a custom theme, `/?m=1&x=2` gave `https://example.blogspot.com/?m=1`. <BloggerSource kind="observed" />
+- On `/search?q=…` and on a 404 page, the query string is kept. <BloggerSource kind="observed" />
+- On a 404 page, the path follows a double slash, `https://example.blogspot.com//missing-page`.
+
+The 2017 themes read the same value from `data:view.url`. <BloggerSource kind="observed" />
+
+### `canonicalUrl` and `canonicalHomepageUrl`
+
+Before the `.canonical` property existed, these two fields gave the canonical form of the page and of the homepage. Blogger still fills them: on the homepage of a live blog served over HTTPS, `canonicalUrl` was the `http://` address. Write `data:blog.url.canonical` and `data:blog.homepageUrl.canonical` in new themes. `.canonical` rewrites a country domain such as `example.blogspot.fr` to `example.blogspot.com`, keeps the scheme and path, and removes `?m=1`. <BloggerSource kind="observed" /> Whether it keeps other query parameters, such as `?q=`, is not confirmed. See [properties](../expressions/properties.mdx).
+
+## The current page
+
+| Field                   | Type   | What it holds                                                                                                                                                                                       | Example                                                        | Source                            |
+| ----------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------- |
+| `pageType`              | string | The kind of page: `index`, `archive`, `item`, `static_page` or `error_page`                                                                                                                         | `item`                                                         | <BloggerSource kind="official" /> |
+| `pageName`              | string | The page alone: the post or page title, the label, the search heading, the archive period. Empty on the homepage and on 404 pages                                                                   | `Un week-end à Lisbonne`, `May 2026`                           | <BloggerSource kind="observed" /> |
+| `pageTitle`             | string | A ready `<title>`: the blog title, then `: ` and `pageName` when there is one. Tags removed, `&` held as `&amp;`                                                                                    | `Carnets de route: Un week-end à Lisbonne`                     | <BloggerSource kind="official" /> |
+| `postId`                | string | The id of the post, on posts only. `data:view.postId` holds it as a number                                                                                                                          | `4061187728390351284`                                          | <BloggerSource kind="observed" /> |
+| `pageId`                | string | The id of the static page, on static pages only. `data:view.pageId` holds it as a number                                                                                                            | `7712045139620358831`                                          | <BloggerSource kind="observed" /> |
+| `searchLabel`           | string | The label of a label page. Equal to `data:view.search.label`                                                                                                                                        | `Portugal`                                                     | <BloggerSource kind="observed" /> |
+| `searchQuery`           | string | The query of a search, from `?q=`. Equal to `data:view.search.query`                                                                                                                                | `tram`                                                         | <BloggerSource kind="observed" /> |
+| `metaDescription`       | string | The search description from Settings, when search descriptions are on: the blog's on lists, the post's or page's on single items. 150 characters at most. Missing, not empty, when none was written | `Notes from slow journeys`                                     | <BloggerSource kind="observed" /> |
+| `postImageUrl`          | string | The main image of the post or page, full size (`/s1600/`). Only on posts and static pages that have one                                                                                             | `https://blogger.googleusercontent.com/img/b/…/s1600/tram.jpg` | <BloggerSource kind="observed" /> |
+| `postImageThumbnailUrl` | string | The same image as a 72 px square (`/s72-c/`: 72 px, cropped)                                                                                                                                        | `https://blogger.googleusercontent.com/img/b/…/s72-c/tram.jpg` | <BloggerSource kind="observed" /> |
+| `view`                  | string | The value of the `?view=` parameter. Empty without it                                                                                                                                               | `-Debug`, `classic`                                            | <BloggerSource kind="observed" /> |
+
+### `data:blog.pageType`
+
+The oldest way for a theme to know what it is rendering, with five values: `index`, `archive`, `item`, `static_page` and `error_page`. Which page gives which value, and what Google documents, is in [`data:blog.pageType`](./page-types.mdx#datablogpagetype) on Page types.
+
+```xml
+<b:switch var='data:blog.pageType'>
+  <b:case value='item'/>
+    <span class='crumb'><data:messages.posts/></span>
+  <b:case value='static_page'/>
+    <span class='crumb'><data:blog.pageName/></span>
+  <b:case value='error_page'/>
+    <span class='crumb'>404</span>
+  <b:default/>
+    <span class='crumb'><data:messages.home/></span>
+</b:switch>
+```
+
+`index` covers the homepage, the list of all posts, label pages and searches alike. The 2017 themes no longer read `pageType`: they use the [`data:view` flags](./page-types.mdx#flags-matrix), which tell those pages apart. <BloggerSource kind="observed" />
+
+### `data:blog.pageName` and `data:blog.pageTitle`
+
+`pageTitle` is `pageName` with the blog title in front. On a live English blog:
+
+| Page                           | `pageName`                | `pageTitle`                                 |
+| ------------------------------ | ------------------------- | ------------------------------------------- |
+| Homepage, `/search`            | empty                     | `Carnets de route`                          |
+| Label `/search/label/Portugal` | `Portugal`                | `Carnets de route: Portugal`                |
+| Search `/search?q=tram`        | `Search results for tram` | `Carnets de route: Search results for tram` |
+| Month `/2026/05/`              | `May 2026`                | `Carnets de route: May 2026`                |
+| Year `/2026/`                  | `2026`                    | `Carnets de route: 2026`                    |
+| Post or static page            | its title                 | `Carnets de route: Un week-end à Lisbonne`  |
+| 404                            | empty                     | `Carnets de route`                          |
+
+The search heading follows the language of the blog. To build a title in another order, combine `data:view.title`, which never contains the blog title, with `data:blog.title`, see [`data:view.title`](./view.mdx#dataviewtitle).
+
+### Titles
+
+The four titles do not hold the same text. With a blog title and a post title both typed `a&b <i>x</i> "q" 'a'` in Settings and in the post editor: <BloggerSource kind="observed" />
+
+| Data                  | Tags    | `&`     | Prints                                      |
+| --------------------- | ------- | ------- | ------------------------------------------- |
+| `data:post.title`     | kept    | `&`     | `a&b <i>x</i> "q" 'a'`                      |
+| `data:blog.title`     | kept    | `&amp;` | `a&amp;b <i>x</i> "q" 'a'`                  |
+| `data:blog.pageTitle` | removed | `&amp;` | `a&amp;b x "q" 'a'`                         |
+| `data:view.title`     | removed | `&`     | `a&b x "q" 'a'` (on a post, the post title) |
+
+- `<`, `>`, `"` and `'` are never escaped, so the tags of `data:post.title` and `data:blog.title` render as HTML.
+- `.escaped` on `data:blog.title` or `data:blog.pageTitle` escapes the `&amp;` again, `&amp;amp;`, and `.jsonEscaped` puts `&amp;` into JSON. Print these two as they are in HTML.
+- `data:post.title` and `data:view.title` take `.escaped` where their text must not render as HTML.
+- A label name is already HTML text: a label typed `a&b` is `a&amp;b`, and its `.escaped` escapes it twice, `a&amp;amp;b`. <BloggerSource kind="observed" />
+- A post title written like a number, or as `yes`, `no`, `true` or `false`, is read as a number or a boolean. See [Posts](./post.mdx).
+
+### `data:blog.metaDescription`
+
+Missing unless the owner turned search descriptions on and wrote one, so a description tag needs a fallback. A data tag of a missing field prints a comment, `<!--Can't find substitution for tag [blog.metaDescription]-->`, not nothing. <BloggerSource kind="observed" />
+
+A fallback chain is written with ternaries rather than `?:`, which keeps an empty string, and must end on `data:blog.title`, because `data:blog.pageName` is empty on the homepage and on 404 pages. The full chain, with an extract of the post on single items, is in [Meta description](../guides/head-and-seo.mdx#meta-description). `data:view.description` already holds a similar chain, see [data:view](./view.mdx#dataviewdescription).
+
+### `data:blog.postImageUrl`
+
+A plain string, not an image value: the image functions do not apply to it. `data:view.featuredImage` is the same image as an image value, which `resizeImage` can resize and which also covers the thumbnail of a YouTube video. Prefer it.
+
+### `data:blog.view`
+
+Blogger reads the `?view=` parameter of any URL, removes it from `data:blog.url`, and puts its value here. The names `classic`, `flipcard`, `magazine`, `mosaic`, `sidebar`, `snapshot` and `timeslide` belong to Dynamic Views. Any other value comes through as it is, hyphens included, and the redirects Blogger makes keep the parameter. <BloggerSource kind="observed" /> A theme can use it to serve other documents from the same template, for its own tools or for its scripts:
+
+```xml
+<b:if cond='(data:blog.view + "") contains "-Lazy"'>
+  <b:include name='lazy-document'/>
+<b:elseif cond='data:blog.view == "-Debug"'/>
+  <b:include name='debug-document'/>
+<b:else/>
+  <b:include name='page'/>
+</b:if>
+```
+
+Names starting with a hyphen are a convention: no Blogger view uses them, so they never clash. A `/search?view=-Lazy` request returns the theme's lazy document instead of the page, and a script can fetch it without counting a view of the homepage. A theme can fetch the internal document of its lazy-loaded CSS and scripts this way. <BloggerSource kind="observed" /> One theme converts the value with `+ ""` before `contains`, while another writes `data:blog.view contains "-DevServer"` directly; both work in production. <BloggerSource kind="observed" />
+
+## Language and encoding
+
+| Field                       | Type   | What it holds                                                                        | Example                          | Source                            |
+| --------------------------- | ------ | ------------------------------------------------------------------------------------ | -------------------------------- | --------------------------------- |
+| `encoding`                  | string | The character encoding of the page                                                   | `UTF-8`                          | <BloggerSource kind="official" /> |
+| `languageDirection`         | string | `ltr` or `rtl`, from the language of the blog. Equal to `locale.languageDirection`   | `ltr`                            | <BloggerSource kind="official" /> |
+| `locale`                    | locale | The language of the blog, or the one asked for with `?hl=`. Prints as a language tag | `en`, `fr-CA`, `pt-BR`, `es-419` | <BloggerSource kind="observed" /> |
+| `localeUnderscoreDelimited` | string | The same tag with `_`                                                                | `en`, `fr_CA`, `pt_BR`, `es_419` | <BloggerSource kind="observed" /> |
+
+### `data:blog.locale`
+
+The locale is a value with members of its own:
+
+| Member               | Holds                                                  | Example                    | Source                            |
+| -------------------- | ------------------------------------------------------ | -------------------------- | --------------------------------- |
+| `.language`          | The language code                                      | `en`, `fr`                 | <BloggerSource kind="observed" /> |
+| `.country`           | The region code. Empty when the tag has none           | `GB`, `CA`, `BE`           | <BloggerSource kind="observed" /> |
+| `.variant`           | The variant after the region                           | `wa`, from `?hl=fr-BE-wa`  | <BloggerSource kind="observed" /> |
+| `.name`              | The display name of the language, with its region      | `English (United Kingdom)` | <BloggerSource kind="observed" /> |
+| `.languageDirection` | `ltr` or `rtl`                                         | `ltr`                      | <BloggerSource kind="observed" /> |
+| `.languageAlignment` | `left` for a left-to-right language, `right` otherwise | `left`                     | <BloggerSource kind="observed" /> |
+
+On a blog in `en-GB`, the locale prints `en-GB`, `.country` gives `GB` and `.name` gives `English (United Kingdom)`. <BloggerSource kind="observed" />
+
+`<b:attr>` placed directly inside `<html>` sets the attributes of the page root:
+
+```xml
+<html>
+  <b:attr expr:value='data:blog.locale.language' name='lang'/>
+  <b:attr expr:value='data:blog.languageDirection' name='dir'/>
+  …
+</html>
+```
+
+`?hl=` changes the locale of one page, and with it the texts of [`data:messages`](./messages.mdx). A link to the same page in French:
+
+```xml
+<b:if cond='data:blog.locale.language != "fr"'>
+  <a expr:href='params(data:view.url, { hl: "fr" })' hreflang='fr'>Français</a>
+</b:if>
+```
+
+## Head output
+
+| Field                | Type | What it holds                                                                                      | Example                                                      | Source                              |
+| -------------------- | ---- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------- |
+| `feedLinks`          | HTML | The `<link>` tags that announce the feeds of the page                                              | see below                                                    | <BloggerSource kind="official" />   |
+| `ieCssRetrofitLinks` | HTML | Conditional comments loading Internet Explorer fixes, printed by the 2010 themes. Widget version 1 | `<!--[if IE]> … <![endif]-->`                                | <BloggerSource kind="observed" />   |
+| `latencyHeadScript`  | HTML | A latency script of the official themes, kept for the Blogger team. Widget version 1               |                                                              | <BloggerSource kind="observed" />   |
+| `mobileHeadScript`   | HTML | The latency script of the old mobile themes. Inactive. Widget version 1                            |                                                              | <BloggerSource kind="deprecated" /> |
+| `meTag`              | HTML | A `<link rel="me">` to the owner's profile, dropped when Google Search stopped reading it          | `<link rel="me" href="https://www.blogger.com/profile/…" />` | <BloggerSource kind="deprecated" /> |
+
+### `data:blog.feedLinks`
+
+A string of up to four ready `<link>` tags: the Atom feed of the posts, the RSS version of it (`?alt=rss`), a `service.post` link for the Blogger API, and on a post the Atom feed of its comments. What it contains follows the page, the feed settings, the privacy of the blog and whether the post takes comments. When feeds are off, it is empty.
+
+```html title="Rendered on the homepage"
+<link rel="alternate" type="application/atom+xml" title="Carnets de route - Atom" href="https://example.blogspot.com/feeds/posts/default" />
+<link rel="alternate" type="application/rss+xml" title="Carnets de route - RSS" href="https://example.blogspot.com/feeds/posts/default?alt=rss" />
+<link rel="service.post" type="application/atom+xml" title="Carnets de route - Atom" href="https://www.blogger.com/feeds/6283910475523019463/posts/default" />
+```
+
+Blogger's `all-head-content` includable prints it. A theme that writes its own head can print it directly, and can let the owner turn it off with a Theme Designer setting: <BloggerSource kind="observed" />
+
+```xml
+<b:if cond='data:skin.vars.metatags_feeds == "2px"'>
+  <data:blog.feedLinks/>
+</b:if>
+```
+
+`data:feedLinks` of the Blog widget is something else: a list of maps with `url`, `name`, `feedType` and `mimeType`, see [Blog](../widget-types/blog.mdx). The feeds themselves are on [feeds](../guides/feeds.mdx).
+
+## Privacy and settings
+
+| Field                         | Type    | What it holds                                                                           | Example     | Source                            |
+| ----------------------------- | ------- | --------------------------------------------------------------------------------------- | ----------- | --------------------------------- |
+| `adultContent`                | boolean | The blog is marked as adult content; readers see a warning first                        | `false`     | <BloggerSource kind="observed" /> |
+| `isPrivate`                   | boolean | The blog is hidden from search engines, Settings > Privacy                              | `false`     | <BloggerSource kind="observed" /> |
+| `isPrivateBlog`               | boolean | Only invited readers can open the blog, Settings > Permissions                          | `false`     | <BloggerSource kind="observed" /> |
+| `jumpLinkMessage`             | string  | The text of the link to the full post, set in the Blog widget                           | `Read more` | <BloggerSource kind="observed" /> |
+| `hasCustomJumpLinkMessage`    | boolean | That text was changed from the default                                                  | `false`     | <BloggerSource kind="observed" /> |
+| `enabledCommentProfileImages` | boolean | Comments show avatars. True on every blog created after 2012. Kept for the Blogger team | `true`      | <BloggerSource kind="observed" /> |
+
+A private blog has no public feeds. Themes check `isPrivateBlog` before features that read the feeds, such as a sitemap page or related posts, and before ad slots. <BloggerSource kind="observed" />
+
+The 2017 themes print `jumpLinkMessage` in their "Read more" link. Classic themes read `data:post.jumpText` instead.
+
+## Ads and analytics
+
+| Field                    | Type    | What it holds                                                                                                                         | Example                        | Source                            |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | --------------------------------- |
+| `adsenseClientId`        | string  | The AdSense publisher id linked to the blog. Set when AdSense is linked in the Earnings settings and the blog is public and not adult | `ca-pub-0123456789012345`      | <BloggerSource kind="observed" /> |
+| `adsenseHostId`          | string  | Blogger's AdSense host id                                                                                                             | `ca-host-pub-1556223355139109` | <BloggerSource kind="observed" /> |
+| `adsenseHasAds`          | boolean | AdSense ads are on                                                                                                                    | `false`                        | <BloggerSource kind="observed" /> |
+| `adsenseAutoAds`         | boolean | AdSense automatic ads are on                                                                                                          | `false`                        | <BloggerSource kind="observed" /> |
+| `analyticsAccountNumber` | string  | The Google Analytics id from Settings. Empty by default                                                                               | `G-7KQ2M4XB1C`                 | <BloggerSource kind="official" /> |
+| `analytics4`             | boolean | The id is a Google Analytics 4 id. Empty when not                                                                                     | `true`                         | <BloggerSource kind="observed" /> |
+
+Google added `analyticsAccountNumber` in 2011, together with the `google-analytics` includable that reads it. Old `UA-` ids no longer collect data; Google Analytics 4 ids start with `G-`. A theme that loads the scripts itself checks the ids first and skips previews:
+
+```xml
+<b:if cond='data:blog.analyticsAccountNumber and !data:view.isPreview'>
+  <script async='async' expr:src='params("https://www.googletagmanager.com/gtag/js", { id: data:blog.analyticsAccountNumber })'/>
+</b:if>
+<b:if cond='data:blog.adsenseClientId and !data:blog.isPrivateBlog'>
+  <script async='async' crossorigin='anonymous' expr:src='params("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", { client: data:blog.adsenseClientId })'/>
+</b:if>
+```
+
+A theme can let the owner override both ids with Theme Designer string variables and fall back to the blog settings when the variables are empty. <BloggerSource kind="observed" />
+
+## Mobile requests
+
+| Field             | Type    | What it holds                                                                                      | Example                   | Source                            |
+| ----------------- | ------- | -------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------- |
+| `isMobile`        | boolean | The page is the mobile version, `?m=1`. Widget version 1                                           | `true` with `?m=1`        | <BloggerSource kind="official" /> |
+| `isMobileRequest` | boolean | The request comes from a phone, or the URL has `?m=1`                                              | `false`                   | <BloggerSource kind="observed" /> |
+| `mobileClass`     | string  | A class for `<body>`: ` mobile` on the mobile version, with the variant class of an official theme | ` mobile`, `variant-pale` | <BloggerSource kind="official" /> |
+
+In 2011 Google introduced mobile templates, renamed `data:mobile` to `data:blog.isMobile`, and suggested `<body expr:class='"loading" + data:blog.mobileClass'>`. Blogger used to serve a separate mobile version of classic themes with `?m=1`. The 2017 themes are responsive and have no mobile version. On live blogs: <BloggerSource kind="observed" />
+
+| Theme                       | `data:blog.isMobile` | `data:blog.isMobileRequest` | `data:blog.mobileClass` | `data:view.isMobile` | `?m=1` in `data:blog.url`      |
+| --------------------------- | -------------------- | --------------------------- | ----------------------- | -------------------- | ------------------------------ |
+| A 2017 theme, with `?m=1`   | true                 | true                        | ` mobile`               | false                | kept                           |
+| A custom theme, with `?m=1` | false                | true                        | empty                   | false                | kept, other parameters dropped |
+| Any theme, with `?m=0`      | false                | false                       | empty                   | false                |                                |
+
+On a custom test theme, `/?m=1&x=2` gave `https://example.blogspot.com/?m=1` in both `data:blog.url` and `data:view.url`, and their `.canonical` removed `?m=1`. <BloggerSource kind="observed" /> No test found `data:view.isMobile` true: it may only be set for classic themes with their mobile template turned on, which is not confirmed. The `mobile` attribute of `<b:widget>` is described in [Widgets](../layout/widgets.mdx#mobile).
+
+`isMobileRequest` is the useful one: it lets the server send smaller images or lighter code to phones. A theme can pick its image widths and its mobile CSS with it: <BloggerSource kind="observed" />
+
+```xml
+<img expr:alt='data:post.title.escaped' expr:src='resizeImage(data:post.featuredImage, (data:blog.isMobileRequest ? 480 : 800), "16:9")' loading='lazy'/>
+```
+
+Requests from phones can be redirected to `?m=1`. Scripts that fetch pages of the blog add `m=0` to their URLs to avoid that redirect. <BloggerSource kind="observed" />
+
+## Dynamic Views
+
+| Field                     | Type    | What it holds                                                           | Example                                                           | Source                            |
+| ------------------------- | ------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------- |
+| `isDynamicViewsAvailable` | boolean | The settings of the blog allow Dynamic Views. Kept for the Blogger team | `true`                                                            | <BloggerSource kind="observed" /> |
+| `dynamicViewsScriptSrc`   | string  | The base path of the Dynamic Views files                                | `//www.blogblog.com/dynamicviews/ab5d071a9f9b11cc`                | <BloggerSource kind="observed" /> |
+| `dynamicViewsCommentsSrc` | string  | The script of Dynamic Views comments                                    | `//www.blogblog.com/dynamicviews/4224c15c4e7c9321/js/comments.js` | <BloggerSource kind="observed" /> |
+
+Only the Dynamic Views theme reads these: it loads the script of the chosen view from `dynamicViewsScriptSrc` and the name of the view, kept in a skin variable.
+
+## Leftovers from Google+
+
+| Field              | Type    | What it holds                                                                           | Example                                  | Source                              |
+| ------------------ | ------- | --------------------------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------- |
+| `disableGComments` | boolean | Turns Google+ comments off. Always true since Google+ closed. Kept for the Blogger team | `true`                                   | <BloggerSource kind="observed" />   |
+| `gPlusViewType`    | string  | The kind of the Google+ comments module                                                 | `FILTERED_POSTMOD`                       | <BloggerSource kind="deprecated" /> |
+| `plusOneApiSrc`    | string  | The script of the +1 button                                                             | `https://apis.google.com/js/platform.js` | <BloggerSource kind="deprecated" /> |
+
+Google+ closed in 2019. Blogger still sets these fields, and they do nothing. Do not build a condition on `disableGComments`: if the field disappeared, it would read as false.
+
+## Sharing
+
+`data:blog.sharing` holds what share buttons need. Its `platforms` list is the source of the share menu of the 2017 themes. <BloggerSource kind="observed" />
+
+| Field                                | Type    | What it holds                                                                           | Example                                             | Source                              |
+| ------------------------------------ | ------- | --------------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------- |
+| `sharing`                            | map     | The sharing data                                                                        |                                                     | <BloggerSource kind="observed" />   |
+| `sharing.platforms`                  | list    | The share targets, six at most, always in the same order                                | see below                                           | <BloggerSource kind="observed" />   |
+| `sharing.platforms[i].key`           | string  | A key for the target, handy for an icon or a class                                      | `facebook`                                          | <BloggerSource kind="observed" />   |
+| `sharing.platforms[i].name`          | string  | The name of the target, translated                                                      | `Facebook`                                          | <BloggerSource kind="observed" />   |
+| `sharing.platforms[i].shareMessage`  | string  | A label for the button, translated                                                      | `Share to Facebook`                                 | <BloggerSource kind="observed" />   |
+| `sharing.platforms[i].target`        | string  | The value for the `target` parameter of the Blogger share URL. Empty for the link entry | `facebook`                                          | <BloggerSource kind="observed" />   |
+| `sharing.disableGooglePlus`          | boolean | Always true since Google+ closed. Kept for the Blogger team                             | `true`                                              | <BloggerSource kind="observed" />   |
+| `sharing.googlePlusBootstrap`        | HTML    | A script setting the language of the +1 button                                          | `<script>window.___gcfg = {'lang': 'en'};</script>` | <BloggerSource kind="deprecated" /> |
+| `sharing.googlePlusShareButtonWidth` | number  | The width of the +1 button                                                              | `0`                                                 | <BloggerSource kind="deprecated" /> |
+
+### `data:blog.sharing.platforms`
+
+On an English blog the list is:
+
+| #   | `key`       | `name`    | `shareMessage`     | `target`    |
+| --- | ----------- | --------- | ------------------ | ----------- |
+| 0   | `link`      | Get link  | Get link           | empty       |
+| 1   | `facebook`  | Facebook  | Share to Facebook  | `facebook`  |
+| 2   | `blogThis`  | BlogThis! | BlogThis!          | `blog`      |
+| 3   | `twitter`   | X         | Share to X         | `twitter`   |
+| 4   | `pinterest` | Pinterest | Share to Pinterest | `pinterest` |
+| 5   | `email`     | Email     | Email              | `email`     |
+
+A `target` completes the share URL of a post, `data:post.shareUrl`, which does nothing without one. Blogger's own share menu leaves BlogThis! out; this one also gives the link entry a copy button:
+
+<CodeTabs>
+
+```xml title="Share buttons for a post"
+<div class='share-buttons'>
+  <b:loop values='data:blog.sharing.platforms filter (p => p.key != "blogThis")' var='platform'>
+    <b:if cond='data:platform.key == "link"'>
+      <button class='share-copy' expr:data-url='data:post.url.canonical' type='button'><data:platform.shareMessage/></button>
+    <b:else/>
+      <a expr:class='"share-" + data:platform.key' expr:href='appendParams(data:post.shareUrl, { target: data:platform.target })' rel='nofollow noopener' target='_blank'><data:platform.name/></a>
+    </b:if>
+  </b:loop>
+</div>
+```
+
+```html title="Rendered, the Facebook entry"
+<a class='share-facebook' href='https://www.blogger.com/share-post.g?blogID=6283910475523019463&amp;postID=4061187728390351284&amp;target=facebook' rel='nofollow noopener' target='_blank'>Facebook</a>
+```
+
+</CodeTabs>
+
+Other links can be built from `bloggerUrl` in the same spirit. The editor of a post, for a link only the owner will use: <BloggerSource kind="observed" />
+
+```xml
+<a class='edit-post' expr:href='path(data:blog.bloggerUrl, ("blog/post/edit/" + data:blog.blogId + "/" + data:post.id))' rel='nofollow'>Edit</a>
+```
+
+The parentheses around the second argument are required: an argument of a function holds a single value, so an expression with an operator has to be wrapped. See [functions](../expressions/functions.mdx).
+
+## Undocumented keys
+
+The copy of the data in the page source has a few more keys: `boqCommentIframeForm`, `loginRedirectParam`, `isGoogleEverywhereLinkTooltipEnabled` and `interstitialAccepted`. Some exported classic themes read `data:blog.metaRobotsTag`. What they hold is not confirmed, and no theme should depend on them.

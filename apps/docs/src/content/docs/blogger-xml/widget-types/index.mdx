@@ -1,0 +1,163 @@
+---
+title: Widget types
+description: The kinds of widget Blogger knows, the data each one receives, and the three ways a theme changes their markup.
+level: intermediate
+published: 2026-10-26
+---
+
+Every `<b:widget>` has a `type`. The type decides three things: which settings the Layout editor offers for the widget, which data Blogger hands to its includables, and which built-in includables it can call. A `Label` widget receives the labels of the blog, a `LinkList` its list of links, a `Blog` widget the posts of the page. The markup is yours: Blogger only renders the widget's `main` [includable](../layout/includables.mdx).
+
+## A first widget
+
+A label list for a sidebar. The settings are the ones the Layout editor writes; `main` loops over `data:labels` and skips the link for the label page being viewed.
+
+<CodeTabs>
+
+```xml title="theme.xml" {9}
+<b:section id='theme_section_sidebar' name='Sidebar' showaddelement='true'>
+  <b:widget id='Label1' locked='false' title='Topics' type='Label' version='2' visible='true'>
+    <b:widget-settings>
+      <b:widget-setting name='sorting'>ALPHA</b:widget-setting>
+      <b:widget-setting name='display'>CLOUD</b:widget-setting>
+      <b:widget-setting name='showFreqNumbers'>true</b:widget-setting>
+    </b:widget-settings>
+    <b:includable id='main' var='this'>
+      <b:class name='side-box'/>
+      <h2 class='side-title'><data:title/></h2>
+      <div class='topics'>
+        <b:loop values='data:labels' var='label'>
+          <b:tag expr:name='data:blog.url == data:label.url ? "span" : "a"'>
+            <b:attr cond='data:blog.url != data:label.url' expr:value='data:label.url' name='href'/>
+            <data:label.name/>
+            <b:if cond='data:this.showFreqNumbers'><small><data:label.count/></small></b:if>
+          </b:tag>
+        </b:loop>
+      </div>
+    </b:includable>
+  </b:widget>
+</b:section>
+```
+
+```html title="Rendered, on the homepage"
+<div class='widget Label side-box' data-version='2' id='Label1'>
+  <h2 class='side-title'>Topics</h2>
+  <div class='topics'>
+    <a href='https://example.blogspot.com/search/label/Guides'>Guides<small>8</small></a>
+    <a href='https://example.blogspot.com/search/label/Releases'>Releases<small>3</small></a>
+  </div>
+</div>
+```
+
+</CodeTabs>
+
+The `<div class='widget Label side-box' data-version='2' id='Label1'>` around the output is not in the theme: Blogger adds it to every widget, and `b:class` and `b:attr` placed directly in `main` act on it, as `side-box` does here. See [Rendered output](../layout/widgets.mdx#rendered-output) and [Changing the element of the widget](../layout/widgets.mdx#changing-the-element-of-the-widget). The attributes of `<b:widget>` itself are on [Widgets](../layout/widgets.mdx).
+
+## All widget types
+
+The `type` value is case-sensitive: `HTML`, not `Html`. "Per blog" is how many widgets of the type one blog can hold. "XML" says whether the includables of the widget can be changed; a read-only widget renders Blogger's markup whatever the theme contains. "Versions" is the widget version: `1` for the widgets of classic themes, `2` for the widgets of the responsive themes Blogger released from 2017.
+
+| Type                                     | Shows                                                         | Per blog      | Versions | XML       | Source                                                                |
+| ---------------------------------------- | ------------------------------------------------------------- | ------------- | -------- | --------- | --------------------------------------------------------------------- |
+| [`Blog`](./blog.mdx)                     | The posts or the page being viewed, their comments, the pager | at least 2    | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`Header`](./header.mdx)                 | The blog title and description, with an optional banner       | 1             | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`HTML`](./html.mdx)                     | Code typed in a code editor                                   | at least 2    | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`Text`](./text.mdx)                     | Text typed in a rich-text editor                              | not confirmed | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`Image`](./image.mdx)                   | One image, with a caption and a link                          | not confirmed | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`Profile`](./profile.mdx)               | The author, or the members of a team blog                     | 1             | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`PageList`](./page-list.mdx)            | Static pages and links, as a menu                             | not confirmed | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`LinkList`](./link-list.mdx)            | Named links                                                   | not confirmed | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`Label`](./label.mdx)                   | The labels of the published posts, as a list or a cloud       | at least 2    | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`BlogArchive`](./blog-archive.mdx)      | The posts grouped by year, month, week or day                 | 2             | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`BlogSearch`](./blog-search.mdx)        | A form searching the posts                                    | at least 2    | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`PopularPosts`](./popular-posts.mdx)    | The most viewed posts over a period                           | at least 2    | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`FeaturedPost`](./featured-post.mdx)    | One post, chosen or the latest                                | 1             | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`TextList`](./text-list.mdx)            | Plain text items                                              | not confirmed | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`BlogList`](./blog-list.mdx)            | Other blogs, with their latest post                           | at least 2    | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`Feed`](./feed.mdx)                     | The entries of an RSS or Atom feed                            | not confirmed | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`ContactForm`](./contact-form.mdx)      | A form that emails the blog administrators                    | not confirmed | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`Followers`](./followers.mdx)           | The followers of the blog and a follow button                 | 2             | 1, 2     | Read-only | <BloggerSource kind="observed" />                                     |
+| [`FollowByEmail`](./follow-by-email.mdx) | An email subscription form. Deleted when saved                | none          | 2        | Editable  | <BloggerSource kind="observed" /> <BloggerSource kind="deprecated" /> |
+| [`Subscribe`](./subscribe.mdx)           | Links to the post and comment feeds                           | not confirmed | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`Attribution`](./attribution.mdx)       | "Powered by Blogger", the copyright, image credits            | 1             | 1, 2     | Read-only | <BloggerSource kind="observed" />                                     |
+| [`ReportAbuse`](./report-abuse.mdx)      | A link to report the blog                                     | 1             | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`AdSense`](./adsense.mdx)               | An AdSense ad unit                                            | not confirmed | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`Stats`](./stats.mdx)                   | The pageview counter                                          | 1             | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`Translate`](./translate.mdx)           | The Google Translate element                                  | 1             | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`Wikipedia`](./wikipedia.mdx)           | A Wikipedia search box                                        | 1             | 1, 2     | Editable  | <BloggerSource kind="observed" />                                     |
+| [`BloggerButton`](./blogger-button.mdx)  | A "Powered by Blogger" logo                                   | not confirmed | 1, 2     | Editable  | <BloggerSource kind="official" />                                     |
+| [`Navbar`](./navbar.mdx)                 | The Blogger bar of classic themes                             | not confirmed | 1, 2     | Read-only | <BloggerSource kind="observed" /> <BloggerSource kind="deprecated" /> |
+
+About the columns:
+
+- **Source.** The <BloggerSource kind="official" /> types are in Google's [Layouts Data Tags](https://support.google.com/blogger/answer/47270), under other names for three of them: "Picture" for Image, "List" for TextList and "Logo" for BloggerButton. The others appear in Blogger's own themes or in themes exported from Blogger; FollowByEmail only in exports.
+- **Per blog.** Google publishes no limit. A widget past the limit of its type is refused when saving, a theme needs no widget of any type, and a maximum higher than the one tested is not confirmed; the tests and the message are on [Widgets per type](../reference/limits.mdx#widgets-per-type). A `FollowByEmail` widget is deleted when saved: the type is retired, see [FollowByEmail](./follow-by-email.mdx). <BloggerSource kind="observed" />
+- **Versions.** A widget gets its version from the theme it is added to. The data and the built-in includables of a type differ between the two versions, so each type page lists both.
+- **Read-only.** Attribution, Followers and Navbar keep Blogger's markup.
+- **Navbar.** Classic themes have a `Navbar1` widget. The responsive themes have none, and the abuse link it carried lives in `ReportAbuse`. A `Navbar` still saves in a custom version 2 theme, where it renders a script with `data-version='2'`. <BloggerSource kind="observed" />
+- **Retired types.** `BlogSearch` took over from a `CustomSearch` type in 2016. <BloggerSource kind="observed" /> Google's examples still mention `HeaderView` and `ListView`, which no current theme uses. <BloggerSource kind="deprecated" />
+
+## How the type pages are organized
+
+Each page covers one type in the same order.
+
+**Quick example.** A widget of the type, as a theme writes it, and what it renders.
+
+**Placement and limits.** Where the widget usually sits, whether it is locked, how many a blog may have, on which pages it renders.
+
+**Widget settings.** The `<b:widget-setting>` elements of the type. Blogger writes them when the widget is edited in the Layout editor, and they travel with the theme file. The list is fixed per type: a theme reads their effect through the data and does not invent new ones. How Blogger checks, fills and orders them when saving is on [`b:widget-settings` and `b:widget-setting`](../layout/widgets.mdx#bwidget-settings-and-bwidget-setting); each type page lists its own settings and defaults.
+
+```xml
+<b:widget-settings>
+  <b:widget-setting name='numItemsToShow'>5</b:widget-setting>
+  <b:widget-setting name='timeRange'>LAST_WEEK</b:widget-setting>
+</b:widget-settings>
+```
+
+**Widget data.** What the includables of the widget read, as `data:name`, for each version. This data exists inside the widget only, and `var='this'` on `main` gives it a name, see [`data:this` and `data:top`](../data/widgets.mdx#datathis-and-datatop). `data:blog`, `data:view`, `data:messages` and the rest of the global data are available everywhere and documented in [Data](../data/index.mdx).
+
+**Built-in includables.** The includables Blogger defines for the type: their `var`, what they render, which others they call. These are what Blogger copies into a widget when it is added, and what `super.` reaches.
+
+**Writing your own markup.** Patterns for the type.
+
+**Things to know.** Details and limits that fit nowhere else.
+
+**Sources.** Every setting, field and includable carries a badge:
+
+<BloggerSourceLegend />
+
+## Changing a widget's markup
+
+Blogger renders `main`, and `main` includes the rest. A theme changes that markup in three places.
+
+### In the widget
+
+The includables inside `<b:widget>` are the widget's markup. Edit one, or replace them all: only `main` is required. Your own includables, with ids of your choice, sit next to the built-in ones and are included from `main`.
+
+```xml
+<b:widget id='LinkList1' locked='false' title='Follow' type='LinkList' version='2' visible='true'>
+  <b:includable id='main'>
+    <ul class='social'>
+      <b:loop values='data:links' var='link'>
+        <b:include data='link' name='item'/>
+      </b:loop>
+    </ul>
+  </b:includable>
+  <b:includable id='item' var='link'>
+    <li><a expr:aria-label='data:link.name' expr:href='data:link.target' rel='noopener' target='_blank'><data:link.name/></a></li>
+  </b:includable>
+</b:widget>
+```
+
+An includable of a widget can call any other includable of the same widget, the [Common includables](../layout/includables.mdx#common-includables) such as `widget-title`, and the built-in includables of its type, even when the widget does not declare them: Blogger falls back to its own markup. <BloggerSource kind="observed" />
+
+### In a default markup
+
+A `<b:defaultmarkup>` holds includables for every widget of a type, or for any widget with `Common`. Blogger copies them into a widget when it is added or reset, so pointing the `main` of each type at one Common includable keeps the markup in one place. See [How default markups apply](../layout/default-markups.mdx#how-default-markups-apply) and [One markup for every widget of a type](../layout/default-markups.mdx#one-markup-for-every-widget-of-a-type).
+
+### With `super.`
+
+In an includable that replaces a built-in one, `super.ID` renders Blogger's original of the same id, with the data the theme set around it with `b:with`. See [`super.` includes](../layout/includables.mdx#super-includes).
+
+## Types a theme does not style
+
+The Layout editor lets the blog owner add a widget of any type, including types the theme has no markup for. A theme can catch them with a default markup that prints a notice instead of Blogger's unstyled markup, see [A notice for unsupported widgets](../layout/default-markups.mdx#a-notice-for-unsupported-widgets). `data:widget.type`, `data:widget.instanceId` and `data:widget.sectionId` describe the widget being rendered, in widget includables and in Common includables alike, see [`data:widget`](../data/widgets.mdx#datawidget). <BloggerSource kind="observed" />

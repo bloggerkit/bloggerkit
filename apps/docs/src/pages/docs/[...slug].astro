@@ -1,0 +1,130 @@
+---
+import { render } from 'astro:content';
+import type { GetStaticPaths } from 'astro';
+import { components } from '@/components/content';
+import FolderContents from '@/components/sections/FolderContents.astro';
+import DocsLayout from '@/layouts/DocsLayout.astro';
+import {
+	getLatestUpdate,
+	getPages,
+	isTitleShared,
+	type Page,
+} from '@/lib/content/pages';
+import {
+	type Folder,
+	getBreadcrumbs,
+	getOverviewFolders,
+	getSection,
+	getTopic,
+	walk,
+} from '@/lib/content/sections';
+import { getPageUrl } from '@/lib/routes';
+
+/** Every docs page, plus an overview page for each folder without an `index` page. */
+export const getStaticPaths = (async () => {
+	const pages = await getPages();
+	return [
+		...[...pages].map(([slug, page]) => ({
+			params: { slug },
+			props: { slug, page },
+		})),
+		...getOverviewFolders().map((folder) => ({
+			params: { slug: folder.slug },
+			props: { slug: folder.slug, folder },
+		})),
+	];
+}) satisfies GetStaticPaths;
+
+type Props = { slug: string } & (
+	| { page: Page; folder?: undefined }
+	| { folder: Folder; page?: undefined }
+);
+
+const { slug, page, folder } = Astro.props;
+const pages = await getPages();
+const section = getSection(slug);
+const rendered = page ? await render(page) : undefined;
+
+// Previous/next links follow the section's sidebar order
+const order = section ? [...walk(section.folder)] : [];
+const index = page ? order.indexOf(slug) : -1;
+const link = (target: string) => {
+	const entry = pages.get(target);
+	return entry && { title: entry.data.title, url: getPageUrl(target) };
+};
+// When previous/next crosses into another topic (e.g. Tags → Expressions), name that topic
+const adjacent = (target: string | undefined) => {
+	if (target === undefined) {
+		return undefined;
+	}
+	const found = link(target);
+	const topic = getTopic(target);
+	return found && topic && topic.slug !== getTopic(slug)?.slug
+		? { ...found, topic: topic.name }
+		: found;
+};
+// Folder overviews: the listed items and latest update, for structured data
+const items = folder?.children.flatMap((node) => {
+	if (node.type === 'page') {
+		const entry = pages.get(node.slug);
+		return entry
+			? [{ name: entry.data.title, url: getPageUrl(node.slug) }]
+			: [];
+	}
+	return node.type === 'folder'
+		? [{ name: node.name, url: getPageUrl(node.slug) }]
+		: [];
+});
+const folderUpdated = folder && (await getLatestUpdate(walk(folder)));
+// Unknown prerequisite paths fail the build. Shared titles get their folder appended: "Comments (Data)"
+const prerequisites =
+	page?.data.prerequisites &&
+	(await Promise.all(
+		page.data.prerequisites.map(async (path) => {
+			const target = link(path);
+			if (!target) {
+				throw new Error(`${page.id}: no page for the prerequisite "${path}"`);
+			}
+			const folderName = getBreadcrumbs(path).at(-1)?.name;
+			return folderName && (await isTitleShared(target.title))
+				? { ...target, title: `${target.title} (${folderName})` }
+				: target;
+		}),
+	));
+---
+
+{
+	page && rendered ? (
+		<DocsLayout
+			title={page.data.title}
+			description={page.data.description}
+			level={page.data.level}
+			prerequisites={prerequisites}
+			updated={page.data.updated}
+			published={page.data.published}
+			authors={page.data.authors}
+			headings={rendered.headings}
+			page={{
+				slug,
+				filePath: page.filePath,
+				section,
+				prev: index > 0 ? adjacent(order[index - 1]) : undefined,
+				next: index !== -1 ? adjacent(order[index + 1]) : undefined,
+			}}
+		>
+			<rendered.Content components={components} />
+		</DocsLayout>
+	) : (
+		folder && (
+			<DocsLayout
+				title={folder.name}
+				description={folder.description}
+				page={{ slug, section, overview: true }}
+				items={items}
+				updated={folderUpdated}
+			>
+				<FolderContents folder={folder} />
+			</DocsLayout>
+		)
+	)
+}

@@ -1,0 +1,141 @@
+---
+title: Translate
+description: The Translate widget, which embeds Google's website translator so visitors can read the blog in another language.
+published: 2026-10-26
+---
+
+`Translate` puts Google's website translator on the blog: a drop-down of languages that translates the page in the visitor's browser. The theme writes three things: an empty element, a small function that creates the translator inside it, and Google's script, which calls that function once loaded. The only choice in the editor is how the drop-down is laid out.
+
+## Quick example
+
+The widget, and what it renders on an English blog, before Google's script runs:
+
+<CodeTabs>
+
+```xml title="theme.xml" {11-12}
+<b:widget id='Translate1' locked='false' title='Read in your language' type='Translate' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='displayMode'>SIMPLE</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:include name='widget-title'/>
+    <div class='translator' id='google_translate_element'/>
+    <script>
+      function googleTranslateElementInit() {
+        new google.translate.TranslateElement({
+          pageLanguage: '<b:eval expr='data:blog.locale.language ?: "auto"'/>',
+          layout: google.translate.TranslateElement.InlineLayout.<data:layout/>
+        }, 'google_translate_element');
+      }
+    </script>
+    <script async='async' src='https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit'/>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget Translate' data-version='2' id='Translate1'>
+<h3 class='title'>
+Read in your language
+</h3>
+<div class='translator' id='google_translate_element'></div>
+<script>
+      function googleTranslateElementInit() {
+        new google.translate.TranslateElement({
+          pageLanguage: 'en',
+          layout: google.translate.TranslateElement.InlineLayout.SIMPLE
+        }, 'google_translate_element');
+      }
+    </script>
+<script async='async' src='https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit'></script>
+</div>
+```
+
+</CodeTabs>
+
+`data:layout` is printed straight into the script, which is why its values are the names of Google's layout constants. `pageLanguage` falls back to `auto`, letting Google detect the language, when the blog has none set.
+
+## Placement and limits
+
+| Property                 | Value                                                                                                    | Source                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `Translate`                                                                                              | <BloggerSource kind="official" /> |
+| Per blog                 | 1. A second one is refused when saving, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Suggested width          | 300 to 450px                                                                                             | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | Any section. The 2017 themes do not style it                                                             | <BloggerSource kind="observed" /> |
+| Locked                   | Not by default                                                                                           | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                                                 | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                                                    | <BloggerSource kind="official" /> |
+| Not available in         | Mobile Default 2010, Dynamic Views on mobile                                                             | <BloggerSource kind="observed" /> |
+
+The limit of one fits the markup: the element id `google_translate_element` and the function name `googleTranslateElementInit` are fixed, and two copies on a page would collide.
+
+## Widget settings
+
+| Setting       | Values                             | Read as  | Meaning                                                                                                         | Source                            |
+| ------------- | ---------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `displayMode` | `VERTICAL`, `HORIZONTAL`, `SIMPLE` | `layout` | `VERTICAL` puts the Google logo under the drop-down, `HORIZONTAL` beside it, `SIMPLE` shows the drop-down alone | <BloggerSource kind="observed" /> |
+
+A Translate widget written with no settings gets the title `Translate` and `displayMode` `VERTICAL`. The value is case-sensitive, and `DROPDOWN` is refused. A second Translate widget is refused when the theme is saved. <BloggerSource kind="observed" />
+
+## Widget data
+
+The data is the same in both widget versions.
+
+| Field          | Type   | Content                                                                                                                                | Source                            |
+| -------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `title`        | string | Widget title, up to 100 characters                                                                                                     | <BloggerSource kind="observed" /> |
+| `layout`       | string | `VERTICAL`, `HORIZONTAL` or `SIMPLE`                                                                                                   | <BloggerSource kind="observed" /> |
+| `pageLanguage` | string | The language code of the blog, such as `en`, `fr` or `vi`, from **Settings > Language**. The same value as `data:blog.locale.language` | <BloggerSource kind="observed" /> |
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders                                                                                             | Source                            |
+| ---------- | --- | --- | ----------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `main`     | Yes | Yes | v1: an `h2.title` when there is a title, the translator and `quickedit`. v2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`  | No  | Yes | The translator                                                                                              | <BloggerSource kind="observed" /> |
+
+Both versions write the same three parts: `div#google_translate_element`, an inline `googleTranslateElementInit` that passes `pageLanguage`, `autoDisplay: 'true'` and the layout, and Google's `element.js` loaded from a protocol-relative `//translate.google.com/...` address with `cb=googleTranslateElementInit`. They differ in where the language comes from: version 1 prints `data:pageLanguage`, version 2 evaluates `data:blog.locale.language` with `auto` as the fallback.
+
+## Writing your own markup
+
+### Load the translator on demand
+
+Google's script is heavy for a feature few visitors use. Keep the element and the init function, and add the script only when the visitor asks for it:
+
+```xml {12}
+<b:includable id='main'>
+  <button class='translate-open' type='button'><data:title/></button>
+  <div id='google_translate_element'/>
+  <script>
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({
+        pageLanguage: '<b:eval expr='data:blog.locale.language ?: "auto"'/>',
+        layout: google.translate.TranslateElement.InlineLayout.<data:layout/>
+      }, 'google_translate_element');
+    }
+    document.querySelector('.translate-open').addEventListener('click', function () {
+      if (window.google &amp;&amp; window.google.translate) return;
+      var s = document.createElement('script');
+      s.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+      document.body.appendChild(s);
+    }, { once: true });
+  </script>
+</b:includable>
+```
+
+Inside a `<script>` in the theme, `&&` has to be written `&amp;&amp;`: the theme is XML.
+
+### Keep parts of the page in their language
+
+Google's translator leaves alone any element with the class `notranslate`. Put it on code samples, brand names or the blog title:
+
+```xml
+<h1 class='notranslate'><data:blog.title/></h1>
+```
+
+## Things to know
+
+- **`pageLanguage` in version 2.** The field still exists, but Blogger's version 2 markup reads `data:blog.locale.language` instead. Both hold the same code.
+- **Fixed names.** Renaming the element id means passing the new id as the second argument of `TranslateElement`; renaming the function means changing `cb=` in the script address.
+- **`quickedit`** in the version 1 `main` no longer does anything.

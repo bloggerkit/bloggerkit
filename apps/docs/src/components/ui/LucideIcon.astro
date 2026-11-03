@@ -1,0 +1,53 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+import { findLucideIcon, type IconName } from '@/lib/ui/lucide';
+
+interface Props extends HTMLAttributes<'svg'> {
+	/** Lucide icon name, e.g. `FileCode`. */
+	name: IconName;
+	size?: number;
+}
+
+/**
+ * Renders a Lucide icon by name, with the same markup as `@lucide/astro` but without importing it
+ * (see `src/lib/ui/lucide.ts`). An unknown name fails the build.
+ */
+const { name, size = 16, class: className, ...props } = Astro.props;
+// Drop the caller's scoped-style attribute (`data-astro-cid-*`). It doesn't style the icon
+const rest = Object.fromEntries(
+	Object.entries(props).filter(([key]) => !key.startsWith('data-astro-cid-')),
+);
+const icon = await findLucideIcon(name);
+if (icon === undefined) {
+	throw new Error(`Unknown Lucide icon: ${name}, see https://lucide.dev/icons`);
+}
+const viewBox = icon.size ?? 24;
+// `lucide lucide-<name> lucide-<alias>… <class>`, without duplicates, like `@lucide/astro`
+const classes = [
+	...new Set([
+		'lucide',
+		`lucide-${icon.name}`,
+		...(icon.aliases ?? []).map((alias) => `lucide-${alias}`),
+		...String(className ?? '')
+			.split(' ')
+			.filter(Boolean),
+	]),
+].join(' ');
+---
+
+<svg
+	xmlns="http://www.w3.org/2000/svg"
+	width={size}
+	height={size}
+	viewBox={`0 0 ${viewBox} ${viewBox}`}
+	fill="none"
+	stroke="currentColor"
+	stroke-width="2"
+	stroke-linecap="round"
+	stroke-linejoin="round"
+	class={classes}
+	aria-hidden="true"
+	{...rest}
+>
+	{icon.node.map(([Tag, attrs]) => <Tag {...attrs} />)}
+</svg>

@@ -1,0 +1,8 @@
+---
+import type { ComponentProps } from 'astro/types';
+import Heading from './Heading.astro';
+
+type Props = Omit<ComponentProps<typeof Heading>, 'level'>;
+---
+
+<Heading {...Astro.props} level={4}><slot /></Heading>

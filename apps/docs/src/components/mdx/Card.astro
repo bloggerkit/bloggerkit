@@ -1,0 +1,33 @@
+---
+import IconTile from '@/components/ui/IconTile.astro';
+import type { IconName } from '@/lib/ui/lucide';
+
+interface Props {
+	title: string;
+	description?: string;
+	href?: string;
+	/** Lucide icon name. */
+	icon?: IconName;
+	/** Heading level for the title, one below the surrounding heading (`3` under `##`). */
+	headingLevel?: 2 | 3 | 4 | 5 | 6;
+}
+
+/** A content card, linked when `href` is set. Place it inside `<Cards>`. */
+const { title, description, href, icon, headingLevel = 3 } = Astro.props;
+const Tag = href ? 'a' : 'div';
+const Heading = `h${headingLevel}` as const;
+---
+
+<Tag
+	href={href}
+	class:list={[
+		'block rounded-xl border border-border bg-card p-4 text-sm text-card-foreground no-underline transition-colors',
+		href && 'hover:bg-accent',
+	]}
+>
+	{icon && <IconTile name={icon} variant="card" />}
+	{/* Explicit styles, so every heading level looks the same inside `.markdown` */}
+	<Heading class="m-0 mb-1 text-sm font-medium text-foreground">{title}</Heading>
+	{description && <p class="m-0 text-muted-foreground">{description}</p>}
+	{Astro.slots.has('default') && <div class="m-0 text-muted-foreground"><slot /></div>}
+</Tag>

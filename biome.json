@@ -1,7 +1,12 @@
 {
   "$schema": "node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["**", "!**/node_modules", "!!**/dist", "!!**/.turbo"]
+    "includes": ["**", "!**/*.md", "!**/*.mdx"]
+  },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
   },
   "assist": {
     "actions": {
@@ -46,7 +51,7 @@
   },
   "overrides": [
     {
-      "includes": ["**/*.svelte", "**/*.vue"],
+      "includes": ["**/*.svelte", "**/*.vue", "**/*.astro"],
       "linter": {
         "rules": {
           "style": {
@@ -56,6 +61,24 @@
           "correctness": {
             "noUnusedVariables": "off",
             "noUnusedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/docs/**/*.css"],
+      "css": {
+        "parser": {
+          "tailwindDirectives": true
+        }
+      }
+    },
+    {
+      "includes": ["apps/docs/public/**/*.svg"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noSvgWithoutTitle": "off"
           }
         }
       }

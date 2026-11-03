@@ -1,0 +1,106 @@
+---
+title: FollowByEmail
+description: The retired Follow by Email widget, a FeedBurner subscription form that Google turned down in July 2021.
+published: 2026-10-26
+---
+
+<BloggerSource kind="deprecated" />
+
+`FollowByEmail` ("Follow by Email") was a small form: a visitor typed an email address and FeedBurner mailed them every new post. When FeedBurner ended its email subscriptions in July 2021, Google turned the widget down. Subscribers stopped receiving emails, and a blog that did not already have the widget on April 13, 2021 can no longer add it. <BloggerSource kind="official" />
+
+The widget still turns up in themes exported before that date, which is why it is documented here: to recognise it and to replace it.
+
+## Quick example
+
+```xml title="theme.xml (an old export)" {4}
+<b:widget id='FollowByEmail1' locked='true' title='Get new posts by email' type='FollowByEmail' version='2' visible='true'>
+  <b:includable id='main'>
+    <b:include name='widget-title'/>
+    <b:include name='content'/>
+  </b:includable>
+</b:widget>
+```
+
+The `content` includable held the form itself, described below.
+
+## Placement and limits
+
+| Property | Value                                                                                      | Source                            |
+| -------- | ------------------------------------------------------------------------------------------ | --------------------------------- |
+| Type     | `FollowByEmail`                                                                            | <BloggerSource kind="observed" /> |
+| Status   | Turned down in July 2021                                                                   | <BloggerSource kind="official" /> |
+| Per blog | None: deleted when saved, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Locked   | `locked='true'` in every export that has one                                               | <BloggerSource kind="observed" /> |
+| Markup   | Editable in the exports                                                                    | <BloggerSource kind="observed" /> |
+| Versions | Only version 2 markup is known                                                             | <BloggerSource kind="observed" /> |
+
+The facts below come from themes exported from 2017-theme blogs (Contempo and Notable) and from Google's announcement.
+
+## Widget settings
+
+None appear in exports.
+
+## Widget data
+
+| Field      | Type   | Content                                                       | Source                            |
+| ---------- | ------ | ------------------------------------------------------------- | --------------------------------- |
+| `title`    | string | Widget title                                                  | <BloggerSource kind="observed" /> |
+| `feedPath` | string | The FeedBurner feed name, sent as `uri` with the subscription | <BloggerSource kind="observed" /> |
+
+The form also uses two global messages, both on their way out: <BloggerSource kind="observed" />
+
+| Message                               | English text              |
+| ------------------------------------- | ------------------------- |
+| `data:messages.emailAddress`          | "Email Address"           |
+| `data:messages.getEmailNotifications` | "Get email notifications" |
+
+## Built-in includables
+
+| Includable | What it renders                                                       | Source                            |
+| ---------- | --------------------------------------------------------------------- | --------------------------------- |
+| `main`     | `widget-title`, then `content`                                        | <BloggerSource kind="observed" /> |
+| `content`  | `.widget-content > .follow-by-email-inner` with the subscription form | <BloggerSource kind="observed" /> |
+
+The form, in parts:
+
+| Part                            | Content                                                                                                                                                                                  |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `form`                          | `method='post'`, `action` set to FeedBurner's `mailverify` address, `target='popupwindow'`, and an `onsubmit` that opens that address with `?uri=` and `feedPath` in a 550 by 520 pop-up |
+| `input.follow-by-email-address` | `type='email'`, `name='email'`, placeholder `data:messages.emailAddress`                                                                                                                 |
+| `input.follow-by-email-submit`  | `type='submit'`, label `data:messages.getEmailNotifications`                                                                                                                             |
+| Hidden inputs                   | `uri` with `feedPath`, and `loc` with `en_US`                                                                                                                                            |
+
+Since July 2021, submitting it subscribes no one.
+
+## Replacing it
+
+Remove the widget, then give readers another way to follow the blog.
+
+The blog's own feed works in every feed reader. A link in the theme is enough:
+
+```xml
+<a class='follow-feed' expr:href='data:blog.homepageUrl + "feeds/posts/default"' rel='alternate' type='application/atom+xml'>
+  Follow with a feed reader
+</a>
+```
+
+For email, use a newsletter service and paste its sign-up form into an [HTML](./html.mdx) widget, so the owner can change it from the dashboard:
+
+```xml
+<b:widget id='HTML5' locked='false' title='Newsletter' type='HTML' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='content'><![CDATA[<form action='https://newsletter.example.com/subscribe' method='post'><input name='email' required type='email'/><button type='submit'>Subscribe</button></form>]]></b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:include name='widget-title'/>
+    <data:content/>
+  </b:includable>
+</b:widget>
+```
+
+The [Subscribe](./subscribe.mdx) widget is another option, with links to the posts and comments feeds.
+
+## Things to know
+
+- **Google's announcement.** [Update: Blogger's FollowByEmail widget is going away](https://support.google.com/blogger/answer/10477563). FeedBurner feeds themselves kept working; only the emails stopped. Google advised exporting the subscriber list from FeedBurner.
+- **Saving a theme that still has one.** Blogger saves the theme without an error but removes the widget: a section that held only `FollowByEmail1` is stored empty, `<b:section id='s1'/>`. <BloggerSource kind="observed" />

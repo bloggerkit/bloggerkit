@@ -1,0 +1,27 @@
+---
+import FolderIcon from '@lucide/astro/icons/folder';
+import FolderOpen from '@lucide/astro/icons/folder-open';
+
+interface Props {
+	name: string;
+	defaultOpen?: boolean;
+}
+
+/** A collapsible folder in a `<Files>` tree. */
+const { name, defaultOpen = false } = Astro.props;
+---
+
+<details open={defaultOpen}>
+	<summary
+		class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-foreground hover:bg-accent"
+	>
+		<FolderIcon size={16} class="text-muted-foreground [details[open]>summary>&]:hidden" aria-hidden="true" />
+		<FolderOpen
+			size={16}
+			class="hidden text-muted-foreground [details[open]>summary>&]:block"
+			aria-hidden="true"
+		/>
+		{name}
+	</summary>
+	<div class="ms-4 border-s border-border ps-2"><slot /></div>
+</details>

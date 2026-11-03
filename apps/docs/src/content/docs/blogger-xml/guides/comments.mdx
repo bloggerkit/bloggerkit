@@ -1,0 +1,315 @@
+---
+title: Comments
+description: Show a post's comments, build threads with map and filter, load and resize Blogger's comment form, add replies, page long threads, link to one comment.
+level: advanced
+prerequisites:
+  - blogger-xml/tags/loops
+  - blogger-xml/expressions/lambdas
+  - blogger-xml/data/comments
+published: 2026-10-26
+---
+
+The comments of a post are in `data:post.comments`, inside the Blog widget, on posts and static pages. <BloggerSource kind="official" /> Blogger can render the whole thread itself, in `data:post.commentHtml`, or the theme walks the list and writes its own markup. The comment form is always Blogger's: a page of `www.blogger.com` shown in an `<iframe>`.
+
+```xml title="A flat list of comments"
+<b:if cond='data:post.allowComments and data:post.numberOfComments > 0'>
+  <section class='comments' id='comments'>
+    <h2>
+      <b:message name='messages.numberOfComments'>
+        <b:param expr:value='data:post.numberOfComments' name='numComments'/>
+      </b:message>
+    </h2>
+    <ol class='comment-list'>
+      <b:loop values='data:post.comments' var='comment'>
+        <li class='comment' expr:id='"c" + data:comment.id'>
+          <b class='comment-author'><data:comment.author/></b>
+          <time class='comment-date'><data:comment.timestamp/></time>
+          <div class='comment-body'><data:comment.body/></div>
+        </li>
+      </b:loop>
+    </ol>
+  </section>
+</b:if>
+```
+
+The list is in time order, oldest first. Replies are mixed with the other comments; a [thread](#threads) puts them under the comment they answer. The fields of a comment are on [comment data](../data/comments.mdx).
+
+## When a post has comments
+
+Four settings decide what the comment area shows: the Blog widget's comment option, the comments setting of the post, whether new comments are still accepted, and where the form appears. A theme can reduce them to one state: <BloggerSource kind="observed" />
+
+| State     | Test                                               | Show                                                                |
+| --------- | -------------------------------------------------- | ------------------------------------------------------------------- |
+| Disabled  | `!data:widgets.Blog.first.allBylineItems.comments` | nothing: the blog hides comments                                    |
+| Hidden    | `!data:post.allowComments`                         | nothing: comments are hidden, for the blog or for this post         |
+| Read only | `!data:post.allowNewComments`                      | the comments, and `data:post.noNewCommentsText` instead of the form |
+| Allowed   | otherwise                                          | the comments and the form                                           |
+
+```xml
+<b:if cond='!data:widgets.Blog.first.allBylineItems.comments'>
+  <b:comment>Comments are off for the blog.</b:comment>
+<b:elseif cond='!data:post.allowComments'/>
+  <b:comment>Comments are hidden on this post.</b:comment>
+<b:elseif cond='!data:post.allowNewComments'/>
+  <b:include data='post' name='commentList'/>
+  <p class='comments-closed'><data:post.noNewCommentsText/></p>
+<b:else/>
+  <b:include data='post' name='commentList'/>
+  <b:include data='post' name='commentForm'/>
+</b:if>
+```
+
+- `data:widgets.Blog.first.allBylineItems.comments` is empty when the "comments" byline item of the Blog widget is off; it is readable from any widget. See [data:widgets](../data/widgets.mdx).
+- On lists, `data:post.comments` is empty: only `data:post.numberOfComments` is set, for the count of each card. <BloggerSource kind="observed" />
+
+## Threads
+
+A reply has `inReplyTo`, the id of the comment it answers. A top-level comment has none, or `0`. <BloggerSource kind="official" /> A thread is the list of top-level comments, each with the comments that reply to it. A theme can build it once, with `map` and `filter`, into a list of objects that the markup then only reads: <BloggerSource kind="observed" />
+
+```xml title="Building a two-level thread"
+<b:with value='data:post.comments map (c => { info: data:c, isAuthor: (data:c.extraIconClass or data:c.authorClass ? true : false), isAnonymous: (data:c.author == "Anonymous" and !data:c.authorUrl) })' var='all'>
+  <b:with value='data:all filter (c => !data:c.info.inReplyTo or data:c.info.inReplyTo == 0)' var='roots'>
+    <b:with value='data:roots map (c => { info: data:c.info, isAuthor: data:c.isAuthor, isAnonymous: data:c.isAnonymous, level: 1, replies: (data:all filter (r => data:r.info.inReplyTo == data:c.info.id)) })' var='thread'>
+      <ol class='comment-list'>
+        <b:loop values='data:thread' var='comment'>
+          <b:include data='comment' name='commentItem'/>
+        </b:loop>
+      </ol>
+    </b:with>
+  </b:with>
+</b:with>
+```
+
+1. The first `map` wraps every comment with flags computed once: written by an author of the blog, anonymous.
+2. `filter` keeps the top-level comments.
+3. The second `map` gives each of them its `replies`, the comments whose `inReplyTo` is its id.
+
+The markup of one comment is an includable, which calls itself for the replies:
+
+<CodeTabs>
+
+```xml title="commentItem" {16}
+<b:includable id='commentItem' var='comment'>
+  <li class='comment' expr:id='"c" + data:comment.info.id'>
+    <b:class cond='data:comment.isAuthor' name='by-author'/>
+    <b:class cond='data:comment.info.isDeleted' name='deleted'/>
+    <div class='comment-head'>
+      <b class='comment-author'><b:eval expr='data:comment.isAnonymous ? "Anonymous" : data:comment.info.author'/></b>
+      <a class='comment-date' expr:href='data:comment.info.url'><data:comment.info.timestamp/></a>
+    </div>
+    <div class='comment-body'><data:comment.info.body/></div>
+    <b:if cond='data:comment.level == 1 and data:post.allowNewComments'>
+      <button class='comment-reply' expr:data-reply-to='data:comment.info.id' type='button'><data:skin.vars.m_reply/></button>
+    </b:if>
+    <b:if cond='data:comment.replies.notEmpty'>
+      <ol class='comment-replies'>
+        <b:loop values='data:comment.replies' var='reply'>
+          <b:include data='{ info: data:reply.info, isAuthor: data:reply.isAuthor, isAnonymous: data:reply.isAnonymous, level: 2, replies: [] }' name='commentItem'/>
+        </b:loop>
+      </ol>
+    </b:if>
+  </li>
+</b:includable>
+```
+
+```html title="Rendered"
+<ol class='comment-list'>
+  <li class='comment' id='c4021778313'>
+    <div class='comment-head'><b class='comment-author'>Mira</b> <a class='comment-date' href='…?showComment=…#c4021778313'>March 15, 2026 at 8:02 AM</a></div>
+    <div class='comment-body'>Mine survived under a sheet. The basil did not.</div>
+    <button class='comment-reply' data-reply-to='4021778313' type='button'>Reply</button>
+    <ol class='comment-replies'>
+      <li class='comment by-author' id='c4021790045'>…</li>
+    </ol>
+  </li>
+</ol>
+```
+
+</CodeTabs>
+
+- Inside a lambda, the parameter is written bare (`c`) or with `data:` (`data:c`); both read the same value. The outer `data:all` keeps its prefix. See [The parameter](../expressions/lambdas.mdx#the-parameter).
+- A map literal, `{ info: …, level: 1 }`, holds the result of a lambda when the lambda is in parentheses. Ternaries and comparisons in a map value need parentheses too.
+- `"c" + id` as the element id is what Blogger's permalinks point to, see [deep links](#deep-links).
+- Includables can call themselves. Here the second call passes an empty `replies`, which ends the recursion. See [includables](../layout/includables.mdx).
+- A theme can take the word "Reply" from a `string` skin variable, `m.reply`, so the owner can change or translate it. See [skin data](../data/skin.mdx).
+- The reply button is only on top-level comments: a reply to a reply joins the same thread, so two levels show every comment.
+
+### Blogger's own thread
+
+`data:post.showThreadedComments` is true when the blog can show threads; `data:post.commentHtml` is then the whole thread, rendered by Blogger. <BloggerSource kind="official" /> A theme can print it as it is and style its classes:
+
+```xml
+<b:if cond='data:post.showThreadedComments'>
+  <div id='comment-holder'><data:post.commentHtml/></div>
+</b:if>
+```
+
+The conditions under which `showThreadedComments` is true are on [Threads](../data/comments.mdx#threads). The rendered thread also needs Blogger's scripts: with `b:js='false'`, its reply links do nothing. <BloggerSource kind="observed" /> Building the thread as above works in every case.
+
+## Who wrote it
+
+| Fact                  | Test                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| An author of the blog | `data:comment.extraIconClass` (version 2) or `data:comment.authorClass` (version 1) is not empty |
+| Anonymous             | `data:comment.author == "Anonymous"` and no `authorUrl`                                          |
+| Deleted               | `data:comment.isDeleted`: the body is a notice, not the comment                                  |
+| With a profile        | `data:comment.authorUrl` is set                                                                  |
+
+<BloggerSource kind="observed" />
+
+How these tests work, and how a theme removes the links from the comments of other readers with `snippet`, is on [Comments by the author of the post](../data/comments.mdx#comments-by-the-author-of-the-post) and [Links in comments](../data/comments.mdx#links-in-comments). The avatar of a commenter, and what to show without one, is on [Avatars](../data/comments.mdx#avatars).
+
+## The comment form
+
+When the blog shows the form below the post (Settings > Comments > Comment location: Embedded), `data:post.embedCommentForm` is true, and `data:post.commentFormIframeSrc` is the URL of the form: <BloggerSource kind="observed" />
+
+```txt
+//www.blogger.com/comment-iframe.g?blogID=4815162342108&postID=7310984426
+```
+
+Static pages have `pageID=` instead of `postID=`. The URL has no scheme; in an `src`, it takes the scheme of the page.
+
+### With Blogger's scripts
+
+When the theme keeps Blogger's scripts (the default, `b:js` not set to `false`), Blogger's `BLOG_CMT_createIframe` loads the form. It needs three pieces, by their ids: a link holding the URL, an empty iframe, and the call. <BloggerSource kind="observed" />
+
+```xml /data:cmtIframeInitialHeight/
+<a expr:href='data:post.commentFormIframeSrc' id='comment-editor-src'/>
+<iframe allowtransparency='true' expr:height='data:cmtIframeInitialHeight ?: "90px"' frameborder='0' id='comment-editor' name='comment-editor' src='' width='100%'/>
+<script>BLOG_CMT_createIframe('<data:post.appRpcRelayPath/>');</script>
+```
+
+`data:cmtIframeInitialHeight` is a Blog widget value, read as is inside the widget. Blogger's script then resizes the iframe as the form grows.
+
+### Without Blogger's scripts
+
+With `b:js='false'`, `BLOG_CMT_createIframe` does not exist: the theme loads the form and resizes it itself. A theme can load it only when the reader asks, so a post with comments closed to most readers costs nothing: <BloggerSource kind="observed" />
+
+```xml title="The button"
+<b:includable id='commentForm' var='post'>
+  <div class='comment-form' id='comment-form'>
+    <b:if cond='data:this.messages.blogComment != ""'>
+      <p class='comment-note'><data:this.messages.blogComment/></p>
+    </b:if>
+    <button class='comment-open' expr:data-src='appendParams(data:post.commentFormIframeSrc, { skin: "contempo" })' type='button'><data:messages.postAComment/></button>
+  </div>
+</b:includable>
+```
+
+```js title="Loading the form"
+document.querySelector('.comment-open')?.addEventListener('click', ({ currentTarget: button }) => {
+  const frame = document.createElement('iframe');
+  frame.id = 'comment-editor';
+  frame.name = 'comment-editor';
+  frame.src = button.dataset.src;
+  frame.width = '100%';
+  frame.height = '96';
+  frame.setAttribute('frameborder', '0');
+  button.replaceWith(frame);
+});
+```
+
+- `data:this` is the data of the Blog widget, named by `<b:includable id='main' var='this'>`; the comment message is read from it, see [Widget messages](../data/messages.mdx#widget-messages).
+- `appendParams` adds `skin=contempo` to the URL. A theme sends it to get the form of Blogger's current themes; which values `skin` takes, and what each changes, is not confirmed. <BloggerSource kind="observed" />
+- A theme can also give the iframe a `sandbox` with `allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-storage-access-by-user-activation`: the form signs readers in and opens pop-ups, so each of these is needed. <BloggerSource kind="observed" />
+
+### Height messages
+
+The form tells its parent page how tall it is, with `postMessage`, as a string: <BloggerSource kind="observed" />
+
+```txt
+set-comment-editor-height 245px
+```
+
+It sends a new message when it grows, for the sign-in choices or a long comment. The page finds the iframe that sent it and sets its height:
+
+```js title="Resizing the form"
+window.addEventListener('message', (event) => {
+  if (typeof event.data !== 'string') return;
+  const match = /^set-comment-editor-height (\d+)px$/i.exec(event.data);
+  if (!match) return;
+  for (const frame of document.getElementsByTagName('iframe')) {
+    if (frame.contentWindow === event.source) {
+      frame.setAttribute('scrolling', 'no');
+      frame.height = match[1];
+    }
+  }
+});
+```
+
+Matching `event.source` with the iframe's window means the height only comes from that frame, and several forms on a page each get their own.
+
+### Replies
+
+A reply is the same form with the id of the parent comment, as a `parentID` parameter. <BloggerSource kind="observed" /> The reply buttons of the thread above carry the id; the script moves the form under the comment and reloads it:
+
+```js
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('.comment-reply');
+  if (!button) return;
+  const base = document.querySelector('.comment-open')?.dataset.src;
+  const frame = document.getElementById('comment-editor') || document.createElement('iframe');
+  frame.id = 'comment-editor';
+  frame.src = `${base}&parentID=${button.dataset.replyTo}`;
+  frame.width = '100%';
+  button.after(frame);
+});
+```
+
+A theme can show reply buttons only while the whole thread is on the page, so a reply never answers a comment the reader can not see; the test is on [Comment paging](../data/comments.mdx#comment-paging).
+
+### When the form is not embedded
+
+With the full page or popup comment location, `data:post.embedCommentForm` is false. The theme links to the form instead: <BloggerSource kind="observed" />
+
+```xml {3}
+<b:if cond='!data:post.embedCommentForm and data:post.allowNewComments'>
+  <a class='comment-link' expr:href='data:post.commentsUrl' rel='nofollow noreferrer' target='_blank'>
+    <b:attr cond='data:post.commentsUrlOnclick' expr:value='data:post.commentsUrlOnclick' name='onclick'/>
+    <data:messages.postAComment/>
+  </a>
+</b:if>
+```
+
+`commentsUrlOnclick` is the script that opens the popup window, set only for the popup location. See [post data](../data/post.mdx).
+
+## Paging
+
+A page shows at most 200 comments. A post with more has comment pages, and the Blog widget gives their links. <BloggerSource kind="observed" />
+
+```xml /fragment/
+<b:if cond='data:post.commentPagingRequired'>
+  <nav class='comment-pager'>
+    <b:if cond='data:post.hasOlderLinks'>
+      <a expr:href='fragment(data:post.oldestLinkUrl, "comments")'><data:messages.oldest/></a>
+      <a expr:href='fragment(data:post.olderLinkUrl, "comments")'><data:messages.older/></a>
+    </b:if>
+    <span class='comment-range'><data:post.commentRangeText/></span>
+    <b:if cond='data:post.hasNewerLinks'>
+      <a expr:href='fragment(data:post.newerLinkUrl, "comments")'><data:messages.newer/></a>
+      <a expr:href='fragment(data:post.newestLinkUrl, "comments")'><data:messages.newest/></a>
+    </b:if>
+  </nav>
+</b:if>
+```
+
+`fragment` sets the `#comments` part of each link, so the next page opens at the comments, the section above with `id='comments'`. Every paging field is on [Comment paging](../data/comments.mdx#comment-paging).
+
+## Deep links
+
+Links to a comment, from notifications, the dashboard or `data:comment.url`, use these forms: <BloggerSource kind="observed" />
+
+| Link                         | Leads to                                                       |
+| ---------------------------- | -------------------------------------------------------------- |
+| `#comments`                  | The comment section, when the theme gives it that id           |
+| `#comment-form`              | The form, in Blogger's themes                                  |
+| `#c4021778313`               | One comment: `c` and its id                                    |
+| `?showComment=…#c4021778313` | The page of comments that holds that comment, then the comment |
+
+- `#c` and the id only lands when the element of the comment has `id='c…'`, as in the [thread](#threads) above.
+- Blogger removes `showComment` from `data:blog.url`, so the canonical URL of the post stays the same. <BloggerSource kind="observed" />
+- A theme can also read `?sc=` and `#comment` to open its comments panel, and remove them from the address bar when the reader closes it. These are the theme's own links, not Blogger's. <BloggerSource kind="observed" />
+
+## Counts and recent comments elsewhere
+
+On lists, `data:post.numberOfComments` gives the count of each post. A list of recent comments, in a sidebar for example, comes from the comments feed, `/feeds/comments/default`, read by a script. See [Feeds](./feeds.mdx).

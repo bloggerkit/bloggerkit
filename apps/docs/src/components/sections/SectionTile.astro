@@ -1,0 +1,39 @@
+---
+import ArrowRight from '@lucide/astro/icons/arrow-right';
+import IconTile from '@/components/ui/IconTile.astro';
+import { countPages, getTopics, type Section } from '@/lib/content/sections';
+import { plural } from '@/lib/format';
+
+interface Props {
+	section: Section;
+}
+
+/** A compact section card. The home page lists sections with these once there are too many for full overviews. */
+const { section } = Astro.props;
+const topics = getTopics(section).length;
+const counts = [
+	plural(countPages(section.folder), 'page'),
+	topics > 0 && plural(topics, 'topic'),
+]
+	.filter(Boolean)
+	.join(' · ');
+---
+
+<a
+	href={section.url}
+	class="group flex h-full w-full flex-col gap-3 rounded-2xl border border-border bg-card/50 p-5 no-underline transition-colors hover:border-foreground/20 hover:bg-card"
+>
+	<span class="flex items-start gap-3">
+		{section.icon && <IconTile name={section.icon} variant="section" />}
+		<span class="flex min-w-0 flex-1 flex-col gap-0.5">
+			<span class="text-base leading-snug font-semibold text-foreground">{section.name}</span>
+			<span class="text-meta text-muted-foreground">{counts}</span>
+		</span>
+		<ArrowRight
+			size={16}
+			class="mt-1 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
+			aria-hidden="true"
+		/>
+	</span>
+	{section.description && <span class="line-clamp-2 text-sm text-muted-foreground">{section.description}</span>}
+</a>

@@ -1,0 +1,17 @@
+# Headers of the files served by Cloudflare, see https://developers.cloudflare.com/workers/static-assets/headers/
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+
+# scripts, styles and fonts, their names change with their content
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# the search index, rewritten on every build
+/pagefind/*
+  Cache-Control: public, max-age=3600
+
+/og/*
+  Cache-Control: public, max-age=86400

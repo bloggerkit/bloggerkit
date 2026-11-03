@@ -1,0 +1,19 @@
+---
+import { LEVELS, type Level } from '@/lib/ui/levels';
+import Badge from './Badge.astro';
+
+interface Props {
+	level: Level;
+}
+
+/** A page's level, with its meaning as a tooltip. */
+const { level } = Astro.props;
+const badge = LEVELS.get(level);
+if (!badge) {
+	throw new Error(
+		`Unknown level "${level}", one of ${[...LEVELS.keys()].join(', ')}`,
+	);
+}
+---
+
+<Badge title={badge.title} class={badge.class} size="xs">{badge.label}</Badge>

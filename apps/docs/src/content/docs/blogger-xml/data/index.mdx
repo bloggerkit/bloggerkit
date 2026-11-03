@@ -1,0 +1,164 @@
+---
+title: Data
+description: What Blogger hands to a theme when it renders a page, which part of the theme can read each set of values, and how to look at the values of a live page.
+level: intermediate
+published: 2026-10-26
+---
+
+A theme has no access to a database. Everything it knows about the blog and the page it is rendering comes from **data** that Blogger prepares before rendering: the settings of the blog, the kind of page and its URL, the posts and comments to show, the interface texts in the language of the blog, the Theme Designer values and a list of the installed widgets. The theme reads these values with `data:` paths. Here is some markup, and what it gives on a post of a French blog:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<html expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale.language'>
+  <head>
+    <title><data:view.title.escaped/> | <data:blog.title/></title>
+  </head>
+  <body>
+    <b:class cond='data:view.isPost' name='on-post'/>
+    <a class='home' expr:href='data:blog.homepageUrl'><data:messages.home/></a>
+  </body>
+</html>
+```
+
+```html title="Rendered"
+<html dir='ltr' lang='fr'>
+  <head>
+    <title>Un week-end à Lisbonne | Carnets de route</title>
+  </head>
+  <body class='on-post'>
+    <a class='home' href='https://example.blogspot.com/'>Accueil</a>
+  </body>
+</html>
+```
+
+</CodeTabs>
+
+Four kinds of data are at work here: `data:blog` gives the direction, the language, the blog title and the homepage; `data:view` tells that the page is a post and gives its title; `data:messages` gives the word "Home" translated into French.
+
+## Reading a value
+
+A path is `data:` followed by names joined with dots. The first name chooses a dictionary or a name, the next ones walk into it: `data:blog.title`, `data:view.search.label`, `data:post.author.name`. A list item is read with its index, `data:posts[0]`, or with a list property such as `.first`.
+
+Blogger reads paths in every place where it evaluates an expression:
+
+| Where                                                                                              | Example                       | Page                                                           |
+| -------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------- |
+| A data tag or `<b:eval>`, to print a value                                                         | `<data:post.title/>`          | [Output](../tags/output.mdx)                                   |
+| An `expr:` attribute, `<b:attr>` or `<b:class>`                                                    | `expr:href='data:post.url'`   | [Attributes](../tags/attributes.mdx)                           |
+| A condition: `cond` of `<b:if>`, `<b:include>`, `<b:widget>`, `<b:section>`, `var` of `<b:switch>` | `cond='data:view.isHomepage'` | [Conditionals](../tags/conditionals.mdx)                       |
+| A list or a value to name: `values` of `<b:loop>`, `value` of `<b:with>`, `data` of `<b:include>`  | `values='data:post.labels'`   | [Loops](../tags/loops.mdx), [Variables](../tags/variables.mdx) |
+
+The full syntax of paths is on [data paths](../expressions/data-paths.mdx), and the properties that every kind of value has, `.escaped`, `.jsonEscaped`, `.canonical`, `.size` and the others, are on [properties](../expressions/properties.mdx).
+
+## Who can read what
+
+Not every value is visible everywhere. Data falls into four groups, by the part of the theme that can read it.
+
+| Group                     | Names                                                                                   | Readable in                                                                                                       | Details                                   |
+| ------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Global dictionaries       | `data:blog`, `data:view`, `data:messages`, `data:skin`, `data:template`, `data:widgets` | Every element under `<html>`: the head, the body, sections, widgets and includables. Never inside `<![CDATA[ ]]>` | [Below](#global-dictionaries)             |
+| The widget being rendered | `data:widget`                                                                           | The includables of a widget                                                                                       | [data:widget](./widgets.mdx#datawidget)   |
+| Widget data               | `data:posts`, `data:title`, `data:labels`, `data:olderPageUrl`…                         | The includables of a widget of that type                                                                          | [Widget types](../widget-types/index.mdx) |
+| Variables                 | `data:post`, `data:comment`, `data:i`, any name a `var` gives                           | The element that declares the name, and what it includes                                                          | [Variables](../tags/variables.mdx)        |
+
+### Global dictionaries
+
+A global dictionary holds the same values wherever it is read on a page. Google documents `data:blog` as data that can be used anywhere, unlike widget data. <BloggerSource kind="official" /> The other dictionaries behave the same way, as Blogger's own themes show. <BloggerSource kind="observed" />
+
+| Dictionary      | Content                                                                                                                      | Source                            | Page                                     |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ---------------------------------------- |
+| `data:blog`     | The blog: title, addresses, language, feeds, privacy, AdSense and Analytics ids, and the older fields about the current page | <BloggerSource kind="official" /> | [data:blog](./blog.mdx)                  |
+| `data:view`     | The page being shown: its kind, title, description, URL, main image, search and archive details                              | <BloggerSource kind="observed" /> | [data:view](./view.mdx)                  |
+| `data:messages` | 95 interface texts in the language of the blog                                                                               | <BloggerSource kind="observed" /> | [data:messages](./messages.mdx)          |
+| `data:skin`     | The Theme Designer variables declared in `<b:skin>`, and the CSS added in the Theme Designer                                 | <BloggerSource kind="observed" /> | [data:skin](./skin.mdx)                  |
+| `data:template` | The official theme the blog uses, and its variant                                                                            | <BloggerSource kind="observed" /> | [data:template](./skin.mdx#datatemplate) |
+| `data:widgets`  | Every widget of the blog whose `cond` is not false, with a few fields of each                                                | <BloggerSource kind="observed" /> | [data:widgets](./widgets.mdx)            |
+
+Inside `<b:skin>` the content is CDATA, so none of these dictionaries can be read there. The CSS of the skin uses the Theme Designer variables with `$(…)` instead, see [Theme Designer](../styles/theme-designer.mdx).
+
+### The widget being rendered
+
+Inside any includable of a widget, `data:widget` describes that widget: its id such as `Blog1`, its type, the section it sits in and its version. Google documents the id, `instanceId`. <BloggerSource kind="official" /> The other three fields are known from Blogger's themes. <BloggerSource kind="observed" /> It is the usual way to give elements an id that stays unique when a widget type is installed twice, `expr:id='data:widget.instanceId + "-list"'`. The fields are on [data:widget](./widgets.mdx#datawidget).
+
+### Widget data
+
+Each widget type receives its own values, read with no dictionary name: the Blog widget has `data:posts`, `data:olderPageUrl` and `data:newerPageUrl`, a Label widget has `data:labels`, a LinkList widget has `data:links`, and most widgets have `data:title`. These names only exist inside the includables of that widget. One widget can not read the data of another, except for the few fields that [`data:widgets`](./widgets.mdx) copies for every widget.
+
+What a widget receives also depends on its `version`. Version 1 is the widget of the classic themes, version 2 the widget of the 2017 themes, and some fields exist in one version only or change shape: `data:post.author` is a name in version 1 and a map in version 2. Each [widget type](../widget-types/index.mdx) lists its own data. The posts and comments, shared by several widgets, have their own pages: [Posts](./post.mdx) and [Comment data](./comments.mdx).
+
+### Variables
+
+`data:post` is not a dictionary. It is the name a loop gives to the current post, `<b:loop values='data:posts' var='post'>`, or the name an includable gives to the value it was passed, `<b:includable id='postTitle' var='post'>`. `data:comment`, `data:label` and `data:i` are names of the same kind. Any `var` of [`<b:loop>`](../tags/loops.mdx), [`<b:with>`](../tags/variables.mdx) or [`<b:includable>`](../layout/includables.mdx) creates one, and while it exists it hides any data with the same name:
+
+```xml
+<b:with value='data:view.title' var='title'>
+  <!-- inside, data:title is the page title, no longer the widget title -->
+  <h1 class='page-title'><data:title/></h1>
+</b:with>
+```
+
+Themes often give the whole data of a widget a name as well, `var='this'` on the `main` includable, so that other includables can still reach it: `data:this.messages.blogComment`. Classic themes use the name `top`. See [data:this and data:top](./widgets.mdx#datathis-and-datatop).
+
+## When a value is missing
+
+Most fields exist only on some pages. `data:view.search` exists only on search pages, `data:view.archive` only on archives, `data:post.comments` is filled only on posts and static pages, and some flags are missing rather than `false` where they do not apply. Each page of this section says where its fields exist. <BloggerSource kind="observed" />
+
+Reading a field that is not there is not an error: it is false in a condition, and the rest of the includable renders, so a field can be tested before use, `<b:if cond='data:view.featuredImage'>`. How missing data prints, compares and differs from an empty value is in [Missing data](../expressions/evaluation.mdx#missing-data).
+
+## Values that are not plain strings
+
+Some values print like text but are not strings to Blogger: ids, Theme Designer values, the body of a comment, URLs. A string property or a string operator applied to them can give nothing. Themes in production first turn them into a string by adding an empty string, as for the blog id in JSON, `(data:blog.blogId + "").jsonEscaped`, see [Escapes and values](../expressions/properties.mdx#escapes-and-values). Other cases: <BloggerSource kind="observed" />
+
+| Written as                                   | Why                                                                     |
+| -------------------------------------------- | ----------------------------------------------------------------------- |
+| `(data:blog.view + "") contains "-Lazy"`     | To search the `?view=` value                                            |
+| `(data:comment.body + "") not contains "<a"` | To search the HTML of a comment. In an attribute, `<` is written `&lt;` |
+
+The `snippet` function, with no options, is another way to get plain text out of a value: `snippet(data:skin.vars.status_light)` for a color, `snippet(data:view.url) contains "https://"` for a URL. See [functions](../expressions/functions.mdx).
+
+## Looking at the data of a page
+
+Blogger does not print a whole dictionary for you, and `<b:eval>` is meant for strings, numbers and booleans. Two methods show what a page holds.
+
+**The copy in the page source.** Blogger writes part of the data into every page it renders, as the argument of a script call `_WidgetManager._SetDataContext([…])`. It holds `blog`, `features`, `messages`, `template`, `view` and `widgets`. <BloggerSource kind="observed" /> Search the page source for `_SetDataContext` to see the flags and URLs of that page:
+
+```txt title="In the source of a post, shortened"
+_WidgetManager._SetDataContext([{'name': 'blog', 'data': {'blogId': '6283910475523019463',
+'title': 'Carnets de route', 'pageType': 'item', 'pageName': 'Un week-end à Lisbonne', …}},
+{'name': 'view', 'data': {'title': 'Un week-end à Lisbonne', 'type': 'item', 'isPost': true,
+'isSingleItem': true, 'isMultipleItems': false, 'postId': 4061187728390351284, …}}, …])
+```
+
+The copy is partial. `messages` holds only a few keys, the posts of the Blog widget are left out, and false or empty fields are often missing. A key that is absent there may still exist in the theme.
+
+**A JSON block written by the theme.** A theme can print the values it cares about into a `<script type='application/json'>` and read them in the browser console. Keep it behind a `?view=` name of your own so that readers never get it. View names that start with a hyphen are free for this kind of internal use, see [`data:blog.view`](./blog.mdx#datablogview):
+
+```xml title="Only with ?view=-Debug in the URL"
+<b:if cond='data:blog.view == "-Debug"'>
+  <script id='debug-data' type='application/json'>{"blogId":"<b:eval expr='(data:blog.blogId + "").jsonEscaped'/>","pageType":"<data:blog.pageType.jsonEscaped/>","viewType":"<data:view.type.jsonEscaped/>","url":"<data:view.url.jsonEscaped/>","isHomepage":<b:eval expr='data:view.isHomepage ? "true" : "false"'/>,"isSearch":<b:eval expr='data:view.isSearch ? "true" : "false"'/>,"posts":<b:eval expr='data:widgets.Blog.first.posts.length ?: 0'/>}</script>
+</b:if>
+```
+
+Then run `JSON.parse(document.getElementById('debug-data').textContent)` in the console of any page opened with `?view=-Debug`. Every string goes through `.jsonEscaped`, and the flags through a ternary, so the block stays valid JSON on every page.
+
+## Where the facts come from
+
+Google documents a small part of this data, mostly in the "Layouts Data Tags" article of the Blogger Help Center and in posts of the Blogger blogs. The rest is known from Blogger's own themes and from testing themes on live blogs. Each field on these pages carries its source:
+
+<BloggerSourceLegend />
+
+Some fields belong to one generation of themes only, the classic themes, the 2010 themes, Dynamic Views or the 2017 themes, and some are kept by Blogger for its own use. The pages say so where it matters.
+
+## Pages
+
+<Cards>
+  <Card title="data:blog" href="/docs/blogger-xml/data/blog">The blog, its settings, and the older fields about the page.</Card>
+  <Card title="data:view" href="/docs/blogger-xml/data/view">The page being shown: kind, title, URL, image, search and archive.</Card>
+  <Card title="Posts" href="/docs/blogger-xml/data/post">The post object of the Blog, FeaturedPost and PopularPosts widgets.</Card>
+  <Card title="Comment data" href="/docs/blogger-xml/data/comments">Comments, threads, paging and the comment form.</Card>
+  <Card title="Widgets" href="/docs/blogger-xml/data/widgets">data:widgets, data:widget, data:this and data:title.</Card>
+  <Card title="data:messages" href="/docs/blogger-xml/data/messages">The 95 interface texts and their parameters.</Card>
+  <Card title="data:skin" href="/docs/blogger-xml/data/skin">Theme Designer variables in the markup, and data:template.</Card>
+  <Card title="Page types" href="/docs/blogger-xml/data/page-types">Every kind of page, its URLs and the value of every flag.</Card>
+</Cards>

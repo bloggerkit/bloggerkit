@@ -1,0 +1,354 @@
+---
+title: Attributes
+description: Compute attribute values with expr:, and add, replace or remove attributes and classes with b:attr and b:class.
+level: intermediate
+prerequisites:
+  - blogger-xml/expressions
+published: 2026-10-26
+---
+
+Three tools set the attributes of an element from data:
+
+- The `expr:` prefix turns the value of one attribute into an expression.
+- `<b:attr>`, placed inside an element, adds, replaces or removes one of its attributes, with an optional condition.
+- `<b:class>`, placed inside an element, adds a class to it, with an optional condition.
+
+<CodeTabs>
+
+```xml title="A link to a post" {3}
+<a class='post-link' expr:href='data:post.url' expr:title='data:post.title.escaped'>
+  <b:class cond='data:post.featuredImage' name='has-image'/>
+  <b:attr cond='data:post.link' name='rel' value='external'/>
+  <data:post.title/>
+</a>
+```
+
+```html title="Rendered for a post with an image"
+<a class='post-link has-image' href='https://example.blogspot.com/2025/03/lentil-soup.html' title='Lentil soup'>
+  Lentil soup
+</a>
+```
+
+</CodeTabs>
+
+The post has no external link, so the `rel` of the `<b:attr>` is not added.
+
+## `expr:`
+
+| Form            | On                                                       | Value      | Effect                         | Source                            |
+| --------------- | -------------------------------------------------------- | ---------- | ------------------------------ | --------------------------------- |
+| `expr:ATTR='…'` | any attribute of an HTML element                         | expression | Renders `ATTR` with the result | <BloggerSource kind="official" /> |
+| `expr:ATTR='…'` | an attribute of a `b:` tag that takes text               | expression | Computes the text              | <BloggerSource kind="observed" /> |
+| `expr:ATTR='…'` | an attribute of a `b:` tag that is already an expression | expression | Evaluates the result once more | <BloggerSource kind="observed" /> |
+
+### On HTML elements
+
+Write `expr:` before the name of any attribute, and its value is an [expression](../expressions/index.mdx). The page gets the attribute without the prefix: `expr:href` renders as `href`.
+
+```xml
+<html expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale.language'>
+<a expr:href='path(data:blog.homepageUrl.canonical, "search")'>All posts</a>
+<button expr:aria-label='data:messages.share' expr:class='"share-button share-" + data:i' type='button'/>
+<input checked='' expr:id='"slide-" + data:slide.id' hidden='' name='carousel' type='radio'/>
+<span class='views' expr:data-id='data:post.id'/>
+<ins class='adsbygoogle' expr:data-ad-client='data:adClientId ?: data:blog.adsenseClientId' expr:style='data:style ?: "display: block;"'/>
+```
+
+Without the prefix, the value is plain text: `href='data:blog.homepageUrl'` renders as it is written. <BloggerSource kind="official" />
+
+When the expression gives nothing, the attribute is still rendered, empty: `<i expr:title='data:missing'>` renders `<i title=''>`. To leave the attribute out, use [`<b:attr>`](#battr). A boolean prints as text, `title='false'`, and a list as it prints, `class='[1,2]'`. <BloggerSource kind="observed" />
+
+Every kind of attribute works with the prefix, custom `data-` attributes included. A search box shows the usual mix, with the current query put back in the box on a search page:
+
+```xml title="A search form"
+<form expr:action='data:blog.searchUrl' method='get'>
+  <input autocomplete='off' expr:aria-label='data:messages.searchThisBlog' expr:placeholder='data:messages.searchThisBlog' expr:value='data:view.isSearch ? data:view.search.query.escaped : ""' name='q' required='' type='search'/>
+</form>
+```
+
+The query is typed by the visitor, so it is escaped with `.escaped`.
+
+### `ATTR` and `expr:ATTR` together
+
+When an element has both, `expr:ATTR` wins and the plain value is ignored. Blogger keeps both in the file. <BloggerSource kind="observed" />
+
+```xml
+<a expr:href='data:blog.homepageUrl' href='#'>Home</a>
+```
+
+The link goes to the homepage. A fixed part and a computed part of the same attribute are better written in one expression, `expr:class='"post " + data:extraClass'`, or added with `<b:class>`.
+
+### On Blogger tags
+
+On the attributes of `b:` tags, the prefix does one of three things: <BloggerSource kind="observed" />
+
+- **On an attribute that takes text**, it makes the text computed: `expr:name` of `<b:attr>`, `<b:class>`, `<b:tag>`, `<b:include>` and `<b:message>`, `expr:value` of `<b:attr>`, `<b:case>` and `<b:param>`. The plain `value` of `<b:case>` is text and is not parsed; `expr:value` is parsed and computed.
+- **On an attribute that is already an expression**, such as `cond`, `values` or the `value` of `<b:with>`, the first result is evaluated once more. When that result is a string, it is read as an expression. See [Dynamic paths](../expressions/data-paths.mdx#dynamic-paths).
+- **On the names of `<b:loop>` and `<b:with>`**, `expr:var` and `expr:index` compute the name. They work alone, and win over `var` and `index` when both are written.
+
+When both forms are written, the `expr:` one wins. <BloggerSource kind="observed" />
+
+Some tags do not take the prefix: <BloggerSource kind="observed" />
+
+| Tag        | Attribute   | What happens                                                                |
+| ---------- | ----------- | --------------------------------------------------------------------------- |
+| `b:eval`   | `expr:expr` | A [markup error](../basics/saving.mdx#markup-errors): `b:eval` needs `expr` |
+| `b:switch` | `expr:var`  | A markup error: `b:switch` needs `var`                                      |
+
+On the layout tags, some `expr:` attributes save but do not work as expected. An `expr:id` on `<b:section>` saves next to `id`, and is read again when the page renders, where it wins over `id`: when no section has the computed id, every page fails with a 500 error, `Could not find section …`. `expr:class` and `expr:title` on `<b:section>` save and render nothing. Every `expr:` attribute of `<b:widget>` is deleted when the theme is stored, and an `expr:id` on `<b:includable>` saves and is kept, with an effect that is not confirmed. <BloggerSource kind="observed" /> What saving does with each form is in [`expr:` forms of attributes](../basics/saving.mdx#expr-forms-of-attributes).
+
+### Characters in expressions
+
+An expression in an attribute is XML text: `<` is written `&lt;` and `&` is written `&amp;`, so prefer `and` and `or` to `&&` and `||`. The rules for quotes and reserved characters are in [Writing an expression inside XML](../expressions/index.mdx#writing-an-expression-inside-xml).
+
+```xml
+<b:class cond='data:description.length &lt;= 10' name='short'/>
+```
+
+## `<b:attr>`
+
+```xml
+<ELEMENT>
+  <b:attr cond='CONDITION' name='NAME' value='VALUE'/>
+</ELEMENT>
+```
+
+| Attribute    | Required | Value      | Default | Description                            | Source                            |
+| ------------ | -------- | ---------- | ------- | -------------------------------------- | --------------------------------- |
+| `name`       | Yes      | text       |         | The name of the attribute              | <BloggerSource kind="observed" /> |
+| `value`      | No       | text       |         | Its value. Empty removes the attribute | <BloggerSource kind="observed" /> |
+| `cond`       | No       | expression | `true`  | Applies the tag only when true         | <BloggerSource kind="observed" /> |
+| `expr:name`  | No       | expression |         | The name, computed                     | <BloggerSource kind="observed" /> |
+| `expr:value` | No       | expression |         | The value, computed                    | <BloggerSource kind="observed" /> |
+
+`<b:attr>` changes the element it is in. Google does not document it, and Blogger's own themes use it in every layouts version 3 theme. It is empty and self-closed. Content between an opening and a closing tag, a space or text, saves, and is dropped: the tag still applies. <BloggerSource kind="observed" />
+
+Without `name`, or with a name that is empty or has a space or a quote, such as `name='a b'`, the tag is a markup error when it renders. Without `value`, it adds no attribute. <BloggerSource kind="observed" />
+
+### `name` and `value`
+
+Both are text. With `expr:`, they are expressions whose result is used:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<a class='social-link'>
+  <b:attr expr:value='data:link.target' name='href'/>
+  <b:attr name='target' value='_blank'/>
+  <b:attr name='rel' value='noopener'/>
+  <data:link.name/>
+</a>
+```
+
+```html title="Rendered"
+<a class='social-link' href='https://www.youtube.com/@example' target='_blank' rel='noopener'>
+  YouTube
+</a>
+```
+
+</CodeTabs>
+
+A computed name lets an includable set attributes it does not know in advance. A theme can pass a list of `[name, value]` pairs to an includable that writes them all:
+
+```xml
+<b:loop values='data:attributes' var='entry'>
+  <b:attr expr:name='data:entry[0]' expr:value='data:entry[1]'/>
+</b:loop>
+```
+
+A list given as the value renders as it prints: in brackets, strings in double quotes. The value is rendered raw, with only `'` written `&#39;`. The strings in the list are not escaped, so a script can read it back with `JSON.parse` only when they hold no `"` or `\`: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<button class='bookmark' type='button'>
+  <b:attr cond='data:post.labels.notEmpty' expr:value='data:post.labels map (l => l.name)' name='data-labels'/>
+</button>
+```
+
+```html title="Rendered"
+<button class='bookmark' data-labels='["Recipes","Vegan"]' type='button'>
+</button>
+```
+
+</CodeTabs>
+
+### `cond`
+
+When the condition is false, the tag does nothing and the element keeps its attributes. This is the way to write boolean attributes and attributes that only make sense sometimes:
+
+```xml
+<form class='search-form' expr:action='data:blog.searchUrl'>
+  <b:attr cond='not data:view.isPreview' name='target' value='_top'/>
+  …
+</form>
+
+<input class='replies-toggle' expr:id='"replies-" + data:comment.id' hidden='' type='checkbox'>
+  <b:attr cond='data:skin.vars.expandReplies == "1px"' name='checked' value='checked'/>
+</input>
+```
+
+In the preview of the theme, the search opens inside the preview instead of the whole window.
+
+### Adding, replacing, removing
+
+**Adding.** When the element does not have the attribute, it gets it. <BloggerSource kind="observed" />
+
+**Replacing.** When the element has it already, the new value replaces the old one. It is not appended: to add a class, use [`<b:class>`](#bclass). <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<div class='card'>
+  <b:attr name='class' value='card-wide'/>
+</div>
+```
+
+```html title="Rendered"
+<div class='card-wide'>
+</div>
+```
+
+</CodeTabs>
+
+**Removing.** An empty value removes the attribute, including attributes that Blogger adds itself and that the theme could not change otherwise. A value that gives nothing, such as `expr:value='data:item.link'` when there is no link, adds nothing. <BloggerSource kind="observed" />
+
+Themes commonly use this in two places. Right inside `<html>`, `<b:attr name='xmlns' value=''/>` and its siblings remove the namespace declarations that Blogger copies to the page, see [Removing the declarations from the page](../reference/root-attributes.mdx#removing-the-declarations-from-the-page). At the top of the `main` includable of a widget, empty values remove the `id`, `class` and `data-version` of the wrapper Blogger renders around the widget, see [Changing the element of the widget](../layout/widgets.mdx#changing-the-element-of-the-widget), which also says what to keep for Blogger's scripts.
+
+### Placement
+
+- Directly inside the element it changes: an HTML element, `<html>` itself, `<body>`, a [`<b:tag>`](./dynamic-tags.mdx), or the top of the `main` includable of a widget, for its wrapper.
+- Written directly in `<body>`, outside any element, it applies to `<body>`. In an includable, outside any element, it applies to the element around the include, a Common includable included in a `<span>` sets the attributes of the `<span>`.
+- Several `<b:attr>` can sit in one element, for different attributes. With two for the same attribute, the last one wins.
+- Blogger leaves a line break after the start tag of an element changed by `<b:attr>` or `<b:class>`: `<i title='t'>` followed by a line break, then the content.
+- Themes put them first, before the content of the element.
+- They do nothing inside a `<![CDATA[ ]]>` section, where they are text.
+
+<BloggerSource kind="observed" />
+
+**Void elements.** `<img>`, `<input>`, `<link>` and `<meta>` have no content in HTML. To hold a `<b:attr>`, they have to be written with an end tag in the theme, `<input …>…</input>`. Blogger keeps that end tag in the page: `<input checked='checked' type='checkbox'>`, a line break, then `</input>`. A [`<b:tag>`](./dynamic-tags.mdx#void-elements) holding a `<b:attr>` renders the same way. <BloggerSource kind="observed" /> Where the end tag must not appear, write the element twice in a `<b:if>`, with and without the attribute.
+
+## `<b:class>`
+
+```xml
+<ELEMENT>
+  <b:class cond='CONDITION' name='CLASS'/>
+</ELEMENT>
+```
+
+| Attribute   | Required | Value      | Default | Description                 | Source                            |
+| ----------- | -------- | ---------- | ------- | --------------------------- | --------------------------------- |
+| `name`      | Yes      | text       |         | The class or classes to add | <BloggerSource kind="observed" /> |
+| `cond`      | No       | expression | `true`  | Adds them only when true    | <BloggerSource kind="observed" /> |
+| `expr:name` | No       | expression |         | The classes, computed       | <BloggerSource kind="observed" /> |
+
+`<b:class>` adds to the classes of the element it is in, and keeps the ones it has. Several `<b:class>` add up, in order. Duplicates are not removed: `<b:class name='a'/>` in `<i class='a'>` renders `class='a a'`. Like `<b:attr>`, it is empty, self-closed, and used by Blogger's own themes without being documented. Content written inside it is dropped. <BloggerSource kind="observed" />
+
+Without `name`, or with `name=''`, it is a markup error when it renders. It applies where `<b:attr>` does, see [Placement](#placement). <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml" {3}
+<div class='post'>
+  <b:class name='post-featured'/>
+  <b:class name='grid gap-3'/>
+</div>
+```
+
+```html title="Rendered"
+<div class='post post-featured grid gap-3'>
+</div>
+```
+
+</CodeTabs>
+
+A `name` can hold several classes separated by spaces, as the second tag shows. With `expr:name`, the classes are computed:
+
+```xml
+<b:class expr:name='data:this.display == "list" ? "labels-list" : "labels-cloud"'/>
+<b:class cond='data:this.display == "cloud"' expr:name='"size-" + data:label.cssSize'/>
+<b:class expr:name='"label-card" + (data:label.cover ? " has-cover" : "") + (data:label.description ? " has-description" : "")'/>
+```
+
+### Classes per page type
+
+A theme styles each kind of page from one set of classes on a wrapper. A theme can put them on its app root, and its CSS reads them through variants such as `home:` and `post:`:
+
+<CodeTabs>
+
+```xml title="Classes of the page" {3}
+<div class='relative' id='app'>
+  <b:class cond='data:view.isMultipleItems' name='on-index'/>
+  <b:class cond='data:view.isMultipleItems != data:view.isHomepage' name='on-multi'/>
+  <b:class cond='data:view.isHomepage' name='on-home'/>
+  <b:class cond='data:view.isSingleItem' name='on-item'/>
+  <b:class cond='data:view.isPage' name='on-page'/>
+  <b:class cond='data:view.isPost' name='on-post'/>
+  <b:class cond='data:view.isError' name='on-error'/>
+  …
+</div>
+```
+
+```html title="Rendered on a post"
+<div class='relative on-item on-post' id='app'>
+```
+
+</CodeTabs>
+
+`data:view.isMultipleItems != data:view.isHomepage` is true on a page of several posts that is not the homepage: a label, a search or an archive.
+
+Blogger's layouts version 3 themes do the same on `<body>`, which has no `class` attribute and gets all its classes from `<b:class>`. Blogger then adds a class of its own, `variant-NAME`, after those of the theme. <BloggerSource kind="observed" />
+
+### The wrapper of a widget
+
+At the top of the `main` includable, `<b:class>` adds a class to the `<div class='widget TYPE'>` that Blogger renders around the widget, as `<b:attr>` does. <BloggerSource kind="observed" />
+
+```xml
+<b:includable id='main'>
+  <b:class name='card'/>
+  …
+</b:includable>
+```
+
+### `<b:class>` or `<b:attr>`
+
+| To                           | Write                              |
+| ---------------------------- | ---------------------------------- |
+| Add a class, keep the others | `<b:class name='x'/>`              |
+| Replace every class          | `<b:attr name='class' value='x'/>` |
+| Remove the `class` attribute | `<b:attr name='class' value=''/>`  |
+| Compute the whole value      | `expr:class='…'`                   |
+
+In the same element, the order matters. `<b:attr name='class'>` then `<b:class>`: the attribute replaces the classes, then the class is appended, `class='z b'`. `<b:class>` then `<b:attr name='class'>`: the attribute replaces everything, the appended class included. <BloggerSource kind="observed" />
+
+## Inside logic tags
+
+`<b:if>`, `<b:switch>`, `<b:with>` and `<b:loop>` are not elements. A `<b:attr>` or `<b:class>` inside one of them still changes the nearest element around it. <BloggerSource kind="observed" /> This lets a branch choose attributes:
+
+```xml title="A social link, from a LinkList"
+<a class='social'>
+  <b:switch var='data:link.name'>
+  <b:case value='Google News'/>
+    <b:attr expr:value='params("https://news.google.com/publications", { q: data:link.target })' name='href'/>
+    <b:class name='social-gnews'/>
+    <span>Follow on Google News</span>
+  <b:default/>
+    <b:attr expr:value='data:link.target' name='href'/>
+    <span><data:link.name/></span>
+  </b:switch>
+</a>
+```
+
+The same works for `<html>`. A theme can set `lang` and `dir` in one branch of the `<b:if>` that chooses the structure of its document:
+
+```xml
+<html …>
+  <b:if cond='data:view.isLayoutMode'>
+    …
+  <b:else/>
+    <b:attr expr:value='data:blog.locale.language' name='lang'/>
+    <b:attr expr:value='data:blog.languageDirection' name='dir'/>
+    …
+  </b:if>
+</html>
+```

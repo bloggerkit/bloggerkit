@@ -1,0 +1,155 @@
+@layer components {
+	.markdown {
+		@apply wrap-break-word text-foreground/90;
+
+		& > :first-child {
+			@apply mt-0;
+		}
+
+		& :is(p, ul, ol, blockquote, table, hr) {
+			@apply my-5;
+		}
+
+		& :is(h2, h3, h4, h5, h6) {
+			@apply relative mt-10 mb-4 leading-tight font-semibold text-foreground;
+		}
+
+		& h2 {
+			@apply text-2xl;
+		}
+
+		& h3 {
+			@apply mt-8 text-xl;
+		}
+
+		& h4 {
+			@apply mt-7 text-lg;
+		}
+
+		& :is(h2, h3, h4) + :is(h3, h4, h5) {
+			@apply mt-4;
+		}
+
+		& a:not(:where(.not-content *, .anchor-link)) {
+			@apply font-medium text-foreground underline decoration-primary decoration-[1.5px] underline-offset-[3.5px] hover:opacity-80;
+		}
+
+		& ul {
+			@apply list-disc ps-6;
+		}
+
+		& ol {
+			@apply list-decimal ps-6;
+		}
+
+		& li {
+			@apply my-1 marker:text-muted-foreground;
+		}
+
+		& li > :is(ul, ol) {
+			@apply my-1;
+		}
+
+		& strong {
+			@apply font-semibold text-foreground;
+		}
+
+		& blockquote {
+			@apply border-s-2 border-border ps-4 text-muted-foreground;
+		}
+
+		& hr {
+			@apply border-border;
+		}
+
+		& img {
+			@apply h-auto max-w-full rounded-lg;
+		}
+
+		& :not(pre) > code {
+			@apply rounded-[0.3125rem] border border-border bg-muted px-1 py-0.5 text-[0.875em];
+		}
+
+		/* A table is as wide as its content, up to the text's width, and scrolls sideways beyond it */
+		& table:not(:where(.not-content *)) {
+			@apply block w-max max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-background text-sm leading-relaxed text-foreground/85 shadow-xs scrollbar-subtle;
+			border-collapse: separate;
+			border-spacing: 0;
+		}
+
+		/* A minimum width keeps short values on one line. Backgrounds go on the cells, since rows have no box on phones */
+		& :is(th, td):not(:where(.not-content *)) {
+			@apply min-w-24 border-b border-border/60 px-3.5 py-2.5 text-start align-top not-last:border-e not-last:border-e-border/40;
+		}
+
+		/* On phones, a table with three or more columns becomes a grid. `:has()` counts the columns. Each column
+		   fits its content up to 15rem, so long text wraps at a readable width instead of in a tall, narrow column */
+		@media (width < 40rem) {
+			& table:not(:where(.not-content *)):has(tr > :nth-child(3)) {
+				display: grid;
+				grid-template-columns: repeat(var(--columns, 1), max-content);
+
+				&:has(tr > :nth-child(3)) {
+					--columns: 3;
+				}
+				&:has(tr > :nth-child(4)) {
+					--columns: 4;
+				}
+				&:has(tr > :nth-child(5)) {
+					--columns: 5;
+				}
+				&:has(tr > :nth-child(6)) {
+					--columns: 6;
+				}
+				&:has(tr > :nth-child(7)) {
+					--columns: 7;
+				}
+				&:has(tr > :nth-child(8)) {
+					--columns: 8;
+				}
+				&:has(tr > :nth-child(9)) {
+					--columns: 9;
+				}
+				&:has(tr > :nth-child(10)) {
+					--columns: 10;
+				}
+
+				& :is(thead, tbody, tr) {
+					display: contents;
+				}
+
+				/* Long values, such as URLs, wrap anywhere, so nothing spills into the next cell */
+				& :is(th, td) {
+					@apply max-w-60 min-w-0 wrap-anywhere;
+				}
+			}
+		}
+
+		& tr:last-child td:not(:where(.not-content *)) {
+			@apply border-b-0;
+		}
+
+		& tbody tr:nth-child(even) > td:not(:where(.not-content *)) {
+			@apply bg-muted/45;
+		}
+
+		/* The first column usually names the row */
+		& td:first-child:not(:where(.not-content *)) {
+			@apply font-medium text-foreground;
+		}
+
+		& th:not(:where(.not-content *)) {
+			@apply border-b-border bg-muted font-semibold whitespace-nowrap text-foreground;
+		}
+
+		/* An empty cell is a dash, not a gap */
+		& td:not(:where(.not-content *)):empty::before {
+			@apply text-muted-foreground/60 content-['—'];
+		}
+
+		/* Inline code around 13px, and on one line above phone widths (on phones, long values wrap in their column) */
+		& table:not(:where(.not-content *)) :not(pre) > code {
+			@apply text-[0.9375em] min-[40rem]:whitespace-nowrap;
+		}
+	}
+}

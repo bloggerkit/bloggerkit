@@ -1,0 +1,13 @@
+---
+import FileIcon from '@lucide/astro/icons/file';
+
+interface Props {
+	name: string;
+}
+
+/** A file row in a `<Files>` tree: `<File name="theme.xml" />`. */
+---
+
+<div class="flex items-center gap-2 rounded-md px-2 py-1 text-foreground">
+	<FileIcon size={16} class="text-muted-foreground" aria-hidden="true" />{Astro.props.name}
+</div>

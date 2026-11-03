@@ -1,0 +1,132 @@
+---
+import Check from '@lucide/astro/icons/check';
+import Monitor from '@lucide/astro/icons/monitor';
+import Moon from '@lucide/astro/icons/moon';
+import Sun from '@lucide/astro/icons/sun';
+import { menuItem, menuPanel } from '@/scripts/menu';
+import type { ThemeChoice } from '@/scripts/theme/state';
+
+/** Theme menu. The stored choice lives in `src/scripts/theme/state.ts`; BaseLayout applies it before first paint. */
+const options: { value: ThemeChoice; label: string; Icon: typeof Sun }[] = [
+	{ value: 'light', label: 'Light', Icon: Sun },
+	{ value: 'dark', label: 'Dark', Icon: Moon },
+	{ value: 'auto', label: 'System', Icon: Monitor },
+];
+// The three icons share one grid cell; the chosen one rotates and scales in
+const icon =
+	'col-start-1 row-start-1 rotate-90 scale-50 opacity-0 transition-[opacity,scale,rotate] duration-300 ease-out motion-reduce:transition-none';
+const shown: Record<ThemeChoice, string> = {
+	light:
+		'group-data-[choice=light]/menu:rotate-0 group-data-[choice=light]/menu:scale-100 group-data-[choice=light]/menu:opacity-100',
+	dark: 'group-data-[choice=dark]/menu:rotate-0 group-data-[choice=dark]/menu:scale-100 group-data-[choice=dark]/menu:opacity-100',
+	auto: 'group-data-[choice=auto]/menu:rotate-0 group-data-[choice=auto]/menu:scale-100 group-data-[choice=auto]/menu:opacity-100',
+};
+---
+
+{/* The script sets `data-choice`, which picks the icon shown */}
+<div class="group/menu relative" data-theme-select data-choice="auto">
+	<button
+		type="button"
+		class="grid size-8 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground"
+		aria-haspopup="menu"
+		aria-expanded="false"
+		aria-controls="theme-menu"
+		data-menu-button
+	>
+		{options.map(({ value, Icon }) => (
+			<Icon size={17} class:list={[icon, shown[value]]} aria-hidden="true" data-theme-icon />
+		))}
+		<span class="sr-only">Theme</span>
+	</button>
+	{/* `inset-e-2` undoes the header's `-me-2` on this button, so the menu ends at the page padding */}
+	<div id="theme-menu" role="menu" aria-label="Theme" class:list={[menuPanel, 'inset-e-2 w-40 origin-top-right']} data-menu>
+		<p class="m-0 px-2.5 pt-1.5 pb-1 text-xs font-medium text-muted-foreground" aria-hidden="true">Theme</p>
+		{
+			options.map(({ value, label, Icon }) => (
+				<button
+					type="button"
+					role="menuitemradio"
+					aria-checked="false"
+					tabindex="-1"
+					data-value={value}
+					class:list={[menuItem, 'group/item aria-checked:font-medium']}
+				>
+					<Icon
+						size={15}
+						class="text-muted-foreground transition-colors group-aria-checked/item:text-foreground"
+						aria-hidden="true"
+					/>
+					{label}
+					<Check
+						size={14}
+						class="ms-auto scale-50 text-foreground opacity-0 transition-[opacity,scale] duration-200 group-aria-checked/item:scale-100 group-aria-checked/item:opacity-100 motion-reduce:transition-none"
+						aria-hidden="true"
+					/>
+				</button>
+			))
+		}
+	</div>
+</div>
+
+<script>
+	import { setupMenu } from '@/scripts/menu';
+	import { onPage } from '@/scripts/page';
+	import {
+		applyTheme,
+		chooseTheme,
+		isThemeChoice,
+		onExternalThemeChange,
+		readChoice,
+		resolveTheme,
+		themeChangeEvent,
+	} from '@/scripts/theme/state';
+
+	function apply() {
+		const choice = readChoice();
+		const theme = resolveTheme(choice);
+		const root = document.documentElement;
+		if (root.getAttribute('data-theme') !== theme) {
+			// Turn off transitions so all colors switch at once. Reading a computed style forces the browser
+			// to apply that before transitions come back on the next frame
+			const style = document.createElement('style');
+			style.textContent =
+				'*:not([data-theme-icon]),*::before,*::after{transition:none!important}';
+			document.head.append(style);
+			applyTheme(document, theme);
+			getComputedStyle(root).colorScheme;
+			requestAnimationFrame(() => style.remove());
+		}
+		for (const select of document.querySelectorAll<HTMLElement>(
+			'[data-theme-select]',
+		)) {
+			select.setAttribute('data-choice', choice);
+			for (const item of select.querySelectorAll<HTMLElement>(
+				'[role="menuitemradio"]',
+			)) {
+				item.ariaChecked = String(item.getAttribute('data-value') === choice);
+			}
+		}
+	}
+
+	// Re-apply when the choice changes here, in another tab, via WebMCP, or in the OS
+	document.addEventListener(themeChangeEvent, apply);
+	onExternalThemeChange(apply);
+
+	// The header is replaced on every navigation, so bind the menu each time
+	onPage((signal) => {
+		apply();
+		for (const select of document.querySelectorAll<HTMLElement>(
+			'[data-theme-select]',
+		)) {
+			setupMenu(select, signal);
+			for (const item of select.querySelectorAll<HTMLButtonElement>(
+				'[role="menuitemradio"]',
+			)) {
+				const choice = item.getAttribute('data-value');
+				if (isThemeChoice(choice)) {
+					item.addEventListener('click', () => chooseTheme(choice), { signal });
+				}
+			}
+		}
+	});
+</script>

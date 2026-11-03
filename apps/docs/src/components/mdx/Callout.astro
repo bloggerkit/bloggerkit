@@ -1,0 +1,67 @@
+---
+import CircleCheck from '@lucide/astro/icons/circle-check';
+import CircleX from '@lucide/astro/icons/circle-x';
+import Info from '@lucide/astro/icons/info';
+import Lightbulb from '@lucide/astro/icons/lightbulb';
+import TriangleAlert from '@lucide/astro/icons/triangle-alert';
+
+interface Props {
+	type?: 'info' | 'warn' | 'warning' | 'error' | 'success' | 'idea';
+	title?: string;
+}
+
+/** A highlighted note: `<Callout type="warn" title="…">…</Callout>`. `warning` is an alias of `warn`. */
+const { type = 'info', title } = Astro.props;
+const kind = type === 'warning' ? 'warn' : type;
+// Per type: icon, accent color, and a label for screen readers (they can't see the icon or color)
+const callouts = new Map([
+	['info', { Icon: Info, bar: 'bg-info', text: 'text-info', label: 'Note' }],
+	[
+		'warn',
+		{
+			Icon: TriangleAlert,
+			bar: 'bg-warning',
+			text: 'text-warning',
+			label: 'Warning',
+		},
+	],
+	[
+		'error',
+		{ Icon: CircleX, bar: 'bg-error', text: 'text-error', label: 'Error' },
+	],
+	[
+		'success',
+		{
+			Icon: CircleCheck,
+			bar: 'bg-success',
+			text: 'text-success',
+			label: 'Success',
+		},
+	],
+	[
+		'idea',
+		{ Icon: Lightbulb, bar: 'bg-idea', text: 'text-idea', label: 'Tip' },
+	],
+]);
+const callout = callouts.get(kind);
+if (!callout) {
+	throw new Error(
+		`Unknown callout type "${type}": info, warn, warning, error, success or idea`,
+	);
+}
+const { Icon, bar, text, label } = callout;
+---
+
+<div
+	class="my-4 flex gap-2 rounded-xl border border-border bg-card py-3 ps-1 pe-3 text-sm text-card-foreground"
+	role="note"
+>
+	<div class:list={['w-0.5 shrink-0 rounded-full opacity-50', bar]}></div>
+	<Icon size={18} class:list={['mt-0.5 shrink-0', text]} aria-hidden="true" />
+	<div class="flex min-w-0 flex-1 flex-col gap-2">
+		{/* `sr-only` is absolutely positioned, so it adds no gap */}
+		<span class="sr-only">{label}:</span>
+		{title && <p class="m-0 font-medium text-foreground">{title}</p>}
+		<div class="text-muted-foreground *:first:mt-0 *:last:mb-0"><slot /></div>
+	</div>
+</div>

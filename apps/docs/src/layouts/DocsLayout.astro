@@ -1,0 +1,133 @@
+---
+import type { MarkdownHeading } from 'astro';
+import PageHeader from '@/components/layout/PageHeader.astro';
+import Pagination from '@/components/layout/Pagination.astro';
+import Sidebar from '@/components/layout/Sidebar.astro';
+import TableOfContents from '@/components/layout/TableOfContents.astro';
+import { isTitleShared } from '@/lib/content/pages';
+import { getBreadcrumbs, getTopic, type Section } from '@/lib/content/sections';
+import { getPageImageUrl, getPageMarkdownUrl, getPageUrl } from '@/lib/routes';
+import { getPageTitle } from '@/lib/seo/title';
+import type { NavLink, PageAuthor, PageLink } from '@/lib/types';
+import type { Level } from '@/lib/ui/levels';
+import { pagefindFilters } from '@/scripts/pagefind';
+import BaseLayout from './BaseLayout.astro';
+
+interface Props {
+	title: string;
+	description?: string;
+	level?: Level;
+	prerequisites?: PageLink[];
+	headings?: MarkdownHeading[];
+	/** Set for pages from `src/content/docs` (articles and folder overviews). */
+	page?: {
+		slug: string;
+		filePath?: string;
+		section?: Section;
+		prev?: PageLink;
+		next?: PageLink;
+		/** A generated folder overview, with no Markdown or source file. */
+		overview?: boolean;
+	};
+	/** Sidebar links for pages outside a section. */
+	links?: NavLink[];
+	/** `false` for overview pages like `/docs`: no sidebar, and a wider content column. */
+	sidebar?: boolean;
+	/** Open Graph image path; defaults to the page's generated image. */
+	image?: string;
+	updated?: Date;
+	published?: Date;
+	/** Pages listed on an index page (`/docs`, folder overviews), for structured data. */
+	items?: Pick<NavLink, 'name' | 'url'>[];
+	/** Page authors; defaults to the site author. */
+	authors?: PageAuthor[];
+}
+
+const {
+	title,
+	description,
+	level,
+	prerequisites = [],
+	headings = [],
+	page,
+	links,
+	sidebar = true,
+	image,
+	updated,
+	published,
+	items,
+	authors,
+} = Astro.props;
+const slug = page?.slug;
+const isArticle = page !== undefined && !page.overview;
+const breadcrumbs = slug === undefined ? [] : getBreadcrumbs(slug);
+// Top-level folder in the section (e.g. Tags), used as a search filter
+const topic = slug === undefined ? undefined : getTopic(slug);
+// Search results show the parent folder so pages with the same title can be told apart
+const folder =
+	breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 1] : undefined;
+// When pages share a title (e.g. "Comments"), <title> also names the folder
+const titleFolder = (await isTitleShared(title)) ? folder?.name : undefined;
+---
+
+<BaseLayout
+	title={title}
+	description={description}
+	image={image ?? (page ? getPageImageUrl(page.slug) : undefined)}
+	hasSidebar={sidebar}
+	type={isArticle ? 'article' : 'website'}
+	section={page?.section?.name}
+	titleFolder={titleFolder}
+	breadcrumbs={breadcrumbs.map((crumb) => ({ name: crumb.name, url: getPageUrl(crumb.slug) }))}
+	markdownUrl={isArticle ? getPageMarkdownUrl(page.slug) : undefined}
+	updated={updated}
+	published={published}
+	level={level}
+	prerequisites={prerequisites}
+	items={items}
+	authors={authors}
+>
+	{page?.section && <meta slot="head" data-pagefind-filter={`${pagefindFilters.section}[content]`} content={page.section.name} />}
+	{/* By slug, not name: two sections can both have a "Guides" topic */}
+	{topic && <meta slot="head" data-pagefind-filter={`${pagefindFilters.topic}[content]`} content={topic.slug} />}
+	{/* At least one viewport tall: the sidebar shrinks as the footer scrolls in, so it can't set the height */}
+	<div class="flex min-h-[calc(100dvh-3.5rem)] print:block print:min-h-0">
+		{sidebar && <Sidebar section={page?.section} current={slug} links={links} />}
+		{/* The sticky mobile table of contents stretches its background to this width */}
+		<div class="flex min-w-0 flex-1 justify-center gap-8 print:block" data-toc-area>
+			<main id="content" class:list={['w-full min-w-0 px-4 pt-8 pb-16 md:px-10 print:max-w-none print:p-0', sidebar ? 'max-w-200' : 'max-w-300']}>
+				<article
+					data-pagefind-body={page ? '' : undefined}
+					data-pagefind-meta={page && folder ? `folder:${folder.name}` : undefined}
+				>
+					<PageHeader
+						title={title}
+						description={description}
+						level={level}
+						prerequisites={prerequisites}
+						breadcrumbs={breadcrumbs}
+						section={page?.section?.name}
+						article={
+							isArticle
+								? {
+										slug: page.slug,
+										filePath: page.filePath,
+										shareTitle: getPageTitle({ title, titleFolder, section: page.section?.name }),
+									}
+								: undefined
+						}
+						byline={isArticle && published ? { authors, published, updated } : undefined}
+					/>
+					<TableOfContents headings={headings} mobile />
+					<div class="markdown"><slot /></div>
+				</article>
+				{page && (page.prev || page.next) && <Pagination prev={page.prev} next={page.next} />}
+			</main>
+			<TableOfContents headings={headings} />
+		</div>
+	</div>
+</BaseLayout>
+
+<script>
+	import '@/scripts/code-blocks';
+</script>

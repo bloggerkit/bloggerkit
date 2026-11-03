@@ -1,0 +1,43 @@
+---
+import type { IconName } from '@/lib/ui/lucide';
+import LucideIcon from './LucideIcon.astro';
+
+interface Props {
+	/** Lucide icon name. */
+	name: IconName;
+	/** Sets the size, corner radius and colors. */
+	variant: keyof typeof variants;
+}
+
+/** A Lucide icon inside a bordered tile, shown next to card titles. */
+const { name, variant } = Astro.props;
+const variants = {
+	// Compact section card (`SectionTile`). It sits inside the card's link, so it ignores the pointer
+	section: {
+		class:
+			'pointer-events-none flex shrink-0 rounded-xl border border-border bg-background p-2.5 text-foreground',
+		size: 22,
+	},
+	// Home page section. Less padding on phones
+	overview: {
+		class:
+			'flex shrink-0 rounded-xl border border-border bg-background p-2 text-foreground sm:p-2.5',
+		size: 22,
+	},
+	// MDX `<Card>`
+	card: {
+		class:
+			'mb-2 inline-flex rounded-lg border border-border bg-muted p-1.5 text-muted-foreground',
+		size: 16,
+	},
+	// Folder listing cards. Brightens when the card is hovered
+	folder: {
+		class:
+			'flex rounded-md border border-border bg-background p-1.5 text-muted-foreground transition-colors group-hover:text-foreground',
+		size: 15,
+	},
+};
+const tile = variants[variant];
+---
+
+<span class={tile.class}><LucideIcon name={name} size={tile.size} /></span>

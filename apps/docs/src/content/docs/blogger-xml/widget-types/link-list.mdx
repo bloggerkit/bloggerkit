@@ -1,0 +1,183 @@
+---
+title: LinkList
+description: The Link List widget, a list of links that each have a name and a URL.
+published: 2026-10-26
+---
+
+The `LinkList` widget, "Link List" in the Layout editor, holds a list of links, each made of a name and a URL. Themes render it as plain lists, menus and social icons. Since the owner can edit both fields in the Layout editor, it is also the usual way to give a theme settings: the name is a key, the URL its value.
+
+## Quick example
+
+Social links shown as icons. The icon is chosen from the name, and an item whose URL is still the placeholder `#` renders without a link.
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:widget id='LinkList21' locked='true' title='Follow us' type='LinkList' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='link-0'>https://www.instagram.com/example</b:widget-setting>
+    <b:widget-setting name='link-1'>#</b:widget-setting>
+    <b:widget-setting name='sorting'>NONE</b:widget-setting>
+    <b:widget-setting name='text-0'>Instagram</b:widget-setting>
+    <b:widget-setting name='text-1'>Threads</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <ul class='social'>
+      <b:loop values='data:links' var='link'>
+        <li>
+          <b:tag expr:name='data:link.target != "#" ? "a" : "span"'>
+            <b:attr cond='data:link.target != "#"' expr:value='data:link.target' name='href'/>
+            <b:attr cond='data:link.target != "#"' name='rel' value='noopener'/>
+            <b:attr expr:value='data:link.name' name='aria-label'/>
+            <b:include data='link.name' name='icon'/>
+          </b:tag>
+        </li>
+      </b:loop>
+    </ul>
+  </b:includable>
+  <b:includable id='content'/>
+  <b:includable id='icon' var='name'>
+    <b:switch var='data:name'>
+      <b:case value='Instagram'/>
+      <b:include name='icon.instagram'/>
+      <b:case value='Threads'/>
+      <b:include name='icon.threads'/>
+      <b:default/>
+      <b:include name='icon.link'/>
+    </b:switch>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget LinkList' data-version='2' id='LinkList21'>
+  <ul class='social'>
+    <li><a aria-label='Instagram' href='https://www.instagram.com/example' rel='noopener'><svg class='icon'>…</svg></a></li>
+    <li><span aria-label='Threads'><svg class='icon'>…</svg></span></li>
+  </ul>
+</div>
+```
+
+</CodeTabs>
+
+## Placement and limits
+
+|                     |                                                                                 | Source                            |
+| ------------------- | ------------------------------------------------------------------------------- | --------------------------------- |
+| Type                | `LinkList`                                                                      | <BloggerSource kind="official" /> |
+| Per blog            | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) |                                   |
+| Width               | 100 pixels or more                                                              | <BloggerSource kind="observed" /> |
+| Placement           | Any section                                                                     | <BloggerSource kind="observed" /> |
+| Locked              | Not usually                                                                     | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                        | <BloggerSource kind="observed" /> |
+| Classic mobile view | Hidden by default                                                               | <BloggerSource kind="official" /> |
+| Compatibility       | Not Mobile Default 2010 or Dynamic mobile                                       | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting   | Values                                         | Data              | Meaning                                                                                   | Source                            |
+| --------- | ---------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------- | --------------------------------- |
+| `sorting` | `NONE`, `ALPHABETICAL`, `REVERSE_ALPHABETICAL` | `sorting`         | The order of the items                                                                    | <BloggerSource kind="observed" /> |
+| `shownum` | number, or empty                               | `shownum`         | How many items to show. 1 or more; a number above the count is kept, an empty one dropped | <BloggerSource kind="observed" /> |
+| `text-N`  | text                                           | `links[N].name`   | The name of item `N`, counted from `0`                                                    | <BloggerSource kind="observed" /> |
+| `link-N`  | URL or any text                                | `links[N].target` | The URL of item `N`                                                                       | <BloggerSource kind="observed" /> |
+
+An item is a pair of settings with the same number. Blogger writes the settings in any order, so `link-3` can come before `text-0`. The value of `link-N` is stored as typed and does not have to be a URL. It can even be HTML in a CDATA section:
+
+```xml {2}
+<b:widget-settings>
+  <b:widget-setting name='link-0'><![CDATA[New theme release. <a href='/p/changelog.html'>See what changed</a>]]></b:widget-setting>
+  <b:widget-setting name='sorting'>NONE</b:widget-setting>
+  <b:widget-setting name='text-0'>notification</b:widget-setting>
+</b:widget-settings>
+```
+
+An HTML comment between two settings is deleted when the theme is saved, so it can not document a list for the owner. <BloggerSource kind="observed" />
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A LinkList written with no settings saves, with none added and an empty title.
+- Only complete `text-N` and `link-N` pairs keep the settings of the widget. A `shownum`, a `sorting`, a `text-0` or a `link-0` alone stores no settings at all. A pair gets `sorting` `NONE` added. An empty `text-0` or `link-0` is kept with its pair.
+- `sorting` takes `NONE`, `ALPHABETICAL` or `REVERSE_ALPHABETICAL`, case-sensitive; `ALPHA`, `ASCENDING` and `DESCENDING` are refused.
+- `text-x` or `link-x`, without a number, is refused as a setting name.
+
+## Widget data
+
+| Field             | V1  | V2  | Type            | Holds                                                             | Source                            |
+| ----------------- | --- | --- | --------------- | ----------------------------------------------------------------- | --------------------------------- |
+| `title`           | ✓   | ✓   | string          | The widget title, up to 100 characters                            | <BloggerSource kind="observed" /> |
+| `links`           | ✓   | ✓   | list            | The items, at most `shownum`                                      | <BloggerSource kind="official" /> |
+| `links[i].name`   | ✓   | ✓   | string          | The name of the item                                              | <BloggerSource kind="official" /> |
+| `links[i].target` | ✓   | ✓   | string          | The URL of the item, as typed                                     | <BloggerSource kind="official" /> |
+| `sorting`         | ✓   | ✓   | string          | `none`, `alpha` or `reversealpha`                                 | <BloggerSource kind="observed" /> |
+| `shownum`         | ✓   | ✓   | number or empty | The number typed in the editor, at least 1, or empty for no limit | <BloggerSource kind="observed" /> |
+
+## Built-in includables
+
+| Includable | V1  | V2  | Renders                                                                          | Source                            |
+| ---------- | --- | --- | -------------------------------------------------------------------------------- | --------------------------------- |
+| `main`     | ✓   | ✓   | Version 1: everything. Version 2: `widget-title`, then `content`                 | <BloggerSource kind="observed" /> |
+| `content`  |     | ✓   | `div.widget-content > ul`, with `li > a[href=target]` and the name for each link | <BloggerSource kind="observed" /> |
+
+The version 1 `main` writes the title as an `h2` when there is one, then the same `div.widget-content > ul` list, then the obsolete `quickedit` include. Blogger's themes keep these includables as they are. <BloggerSource kind="observed" />
+
+## Writing your own markup
+
+### Skipping unset items
+
+A theme ships its LinkList widgets with placeholder values. Filter them out before the loop with a [lambda](../expressions/lambdas.mdx):
+
+```xml
+<b:loop values='data:links filter (l => l.target not in ["#", "https://"])' var='link'>
+  <li><a expr:href='data:link.target'><data:link.name/></a></li>
+</b:loop>
+```
+
+### Settings for the theme
+
+Here the names are keys and the URLs values, printed as JSON for a script. Unset values are left out:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:widget id='LinkList61' locked='true' title='Comments settings' type='LinkList' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='link-0'>disqus</b:widget-setting>
+    <b:widget-setting name='link-1'>shortname_goes_here</b:widget-setting>
+    <b:widget-setting name='sorting'>NONE</b:widget-setting>
+    <b:widget-setting name='text-0'>platform</b:widget-setting>
+    <b:widget-setting name='text-1'>shortname</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:with value='data:links filter (l => l.target not in ["#", "https://"] and (l.target + "") not contains "_goes_here")' var='set'>
+      <script id='comments-config' type='application/json'>{<b:loop index='i' values='data:set' var='l'>"<data:l.name.jsonEscaped/>":"<data:l.target.jsonEscaped/>"<b:if cond='data:i &lt; data:set.length - 1'>,</b:if></b:loop>}</script>
+    </b:with>
+  </b:includable>
+  <b:includable id='content'/>
+</b:widget>
+```
+
+```html title="Rendered, before the owner sets a shortname"
+<div class='widget LinkList' data-version='2' id='LinkList61'>
+  <script id='comments-config' type='application/json'>{"platform":"disqus"}</script>
+</div>
+```
+
+</CodeTabs>
+
+One key can also be read directly, with `first`, which returns the first matching item:
+
+```xml
+<b:with value='data:links first (l => l.name == "platform")' var='platform'>
+  <b:if cond='data:platform.target == "disqus"'>…</b:if>
+</b:with>
+```
+
+This works inside the widget, where `data:links` is its own list. See [Widgets as configuration](../guides/widgets-as-configuration.mdx) for reading the values from other widgets.
+
+## Things to know
+
+- **Sorting values.** The setting takes `NONE`, `ALPHABETICAL` or `REVERSE_ALPHABETICAL`, and `data:sorting` reads `none`, `alpha` or `reversealpha`. <BloggerSource kind="observed" />
+- **Sorting is final.** Sorting the list in the editor rewrites the items in the new order; the original order is lost.
+- **Only `text-N` and `link-N`.** Blogger reads the items from these settings only.
+- **Text values.** `l.target + ""` turns the value into a string before `contains`, which is safe whatever the value holds.

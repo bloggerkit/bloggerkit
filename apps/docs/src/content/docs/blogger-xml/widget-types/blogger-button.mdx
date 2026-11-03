@@ -1,0 +1,95 @@
+---
+title: BloggerButton
+description: The Logo widget, a "Powered by Blogger" badge chosen from a few images and linked to Blogger.
+published: 2026-10-26
+---
+
+`BloggerButton` is the widget the Layout editor calls "Logo". It shows one "Powered by Blogger" badge, picked from a short list of images, as a link to `https://www.blogger.com`. It has no title, and the picked image is its only setting.
+
+## Quick example
+
+```xml title="theme.xml" {7}
+<b:widget id='BloggerButton1' locked='false' title='' type='BloggerButton' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='button'>//lh3.googleusercontent.com/ULB6iBuCeTVvSjjjU1A-O8e9ZpVba6uvyhtiWRti_rBAs9yMYOFBujxriJRZ-A=s128</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <a class='made-with' href='https://www.blogger.com' rel='nofollow'>
+      <img alt='Powered by Blogger' expr:src='data:source' expr:srcset='data:srcset' loading='lazy' sizes='128px' width='128'/>
+    </a>
+  </b:includable>
+</b:widget>
+```
+
+`srcset` lets the browser pick a sharper copy on high-density screens, and `sizes` tells it the badge is drawn 128 pixels wide.
+
+## Placement and limits
+
+| Property                 | Value                                                                           | Source                            |
+| ------------------------ | ------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `BloggerButton`                                                                 | <BloggerSource kind="official" /> |
+| Per blog                 | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) |                                   |
+| Suggested width          | 100px                                                                           | <BloggerSource kind="observed" /> |
+| Title                    | None                                                                            | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | Any section. No 2017 theme ships one                                            | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                        | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                           | <BloggerSource kind="official" /> |
+| Not available in         | Mobile Default 2010, Dynamic Views on mobile                                    | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting  | Values                     | Read as                                       | Meaning         | Source                            |
+| -------- | -------------------------- | --------------------------------------------- | --------------- | --------------------------------- |
+| `button` | one of the addresses below | `fullButton` (v1), `source` and `srcset` (v2) | The badge image | <BloggerSource kind="observed" /> |
+
+The badges on offer:
+
+- `//img1.blogblog.com/html/buttons/blogger-ipower-blue.gif`
+- `//img1.blogblog.com/html/buttons/blogger-powerby-blue.gif`
+- `//img1.blogblog.com/html/buttons/blogger-simple-blue.gif`
+- `//img1.blogblog.com/html/buttons/blogger-ipower-kahki.gif`
+- `//img1.blogblog.com/html/buttons/blogger-simple-kahki.gif`
+- `//img2.blogblog.com/html/buttons/blogger-simple-white.gif`
+- `//lh3.googleusercontent.com/ULB6iBuCeTVvSjjjU1A-O8e9ZpVba6uvyhtiWRti_rBAs9yMYOFBujxriJRZ-A=s128`, the current badge, offered in 2017 themes only
+
+The `kahki` spelling is Blogger's.
+
+When the theme is saved, `button` only takes Blogger's own badge images: another URL, even one under `resources.blogblog.com`, is refused "The specified logo URL is not allowed.", and an empty one is required. A BloggerButton written with no settings gets `https://resources.blogblog.com/html/buttons/blogger-ipower-blue.gif`. <BloggerSource kind="observed" />
+
+## Widget data
+
+| Field        | v1  | v2  | Type   | Content                                                                                   | Source                            |
+| ------------ | --- | --- | ------ | ----------------------------------------------------------------------------------------- | --------------------------------- |
+| `fullButton` | Yes | No  | string | The address of the chosen badge. Google: "The URL of the Blogger button you've selected"  | <BloggerSource kind="official" /> |
+| `source`     | No  | Yes | string | The address of the chosen badge                                                           | <BloggerSource kind="observed" /> |
+| `srcset`     | No  | Yes | string | A `srcset` value with copies 72, 128, 220, 400, 640, 800, 1024, 1280 and 1600 pixels wide | <BloggerSource kind="observed" /> |
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders                                             | Source                            |
+| ---------- | --- | --- | ----------------------------------------------------------- | --------------------------------- |
+| `main`     | Yes | Yes | The badge in a link to Blogger, inside `div.widget-content` | <BloggerSource kind="observed" /> |
+
+The two versions write nearly the same link. Version 1 uses `fullButton` as `src`, the alt text "Powered By Blogger", no `rel`, and ends with `quickedit`. Version 2 uses `source` and `srcset`, a fixed `width='128'`, the alt text "Powered by Blogger" and `rel='nofollow'`.
+
+## Writing your own markup
+
+### A text credit instead of an image
+
+The widget needs nothing from its data to work. A theme that prefers a text link can ignore the image entirely and keep the widget as the switch the owner turns on or off:
+
+```xml
+<b:includable id='main'>
+  <a class='made-with' href='https://www.blogger.com' rel='nofollow'>Made with Blogger</a>
+</b:includable>
+```
+
+### The GIF badges
+
+The old badges are GIF files on `blogblog.com`. Blogger's image service only resizes images hosted on `blogspot.com` and `googleusercontent.com`, so the copies listed in `srcset` can only differ in size for the current badge. With a GIF, `src` alone is enough.
+
+## Things to know
+
+- **Rare in practice.** No official export and no production theme examined contains this widget.
+- **The same credit elsewhere.** The [Attribution](./attribution.mdx) widget already says "Powered by Blogger" in the footer of most themes.
+- **`quickedit`** in the version 1 `main` no longer does anything.

@@ -1,0 +1,23 @@
+---
+import { author } from '@/lib/site';
+import type { Author } from '@/lib/types';
+
+interface Props {
+	person: Author;
+}
+
+const { person } = Astro.props;
+
+const rel =
+	person === author ? 'author noopener' : 'author nofollow ugc noopener';
+---
+
+{
+	person.url ? (
+		<a href={person.url} rel={rel} target="_blank" class="font-medium text-foreground no-underline hover:underline hover:underline-offset-[3px]">
+			{person.name}
+		</a>
+	) : (
+		<span class="font-medium text-foreground">{person.name}</span>
+	)
+}

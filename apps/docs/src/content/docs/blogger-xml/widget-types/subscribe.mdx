@@ -1,0 +1,145 @@
+---
+title: Subscribe
+description: The Subscription Links widget, which links to the blog's posts feed and to the comments feed of the blog or of the current post.
+published: 2026-10-26
+---
+
+`Subscribe` ("Subscription Links" in the Layout editor) offers the feeds of the blog to feed readers. Blogger hands the widget a short list of feeds that depends on the page: the posts feed everywhere, plus the comments feed of the whole blog, or of the post being read. The default markup turns each feed into a small drop-down with "add to reader" buttons. The list itself is useful on its own, and easy to render as plain links.
+
+The blog has to be public, with its feeds enabled in the settings.
+
+## Quick example
+
+The widget, and what it renders on a post page:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:widget id='Subscribe1' locked='false' title='Follow this blog' type='Subscribe' version='2' visible='true'>
+  <b:includable id='main'>
+    <b:include name='widget-title'/>
+    <ul class='feeds'>
+      <b:loop values='data:feeds' var='feed'>
+        <li expr:class='"feed-" + data:feed.type'>
+          <a expr:href='data:feed.url' rel='alternate' type='application/atom+xml'><data:feed.title/></a>
+        </li>
+      </b:loop>
+    </ul>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget Subscribe' data-version='2' id='Subscribe1'>
+<h3 class='title'>
+Follow this blog
+</h3>
+<ul class='feeds'>
+<li class='feed-POST'>
+<a href='https://example.blogspot.com/feeds/posts/default' rel='alternate' type='application/atom+xml'>Posts</a>
+</li>
+<li class='feed-PER_POST'>
+<a href='https://example.blogspot.com/feeds/4815162342108/comments/default' rel='alternate' type='application/atom+xml'>Comments</a>
+</li>
+</ul>
+</div>
+```
+
+</CodeTabs>
+
+On the homepage the second link would be the comments feed of the whole blog, with the type `COMMENT`.
+
+## Placement and limits
+
+| Property                 | Value                                                                           | Source                            |
+| ------------------------ | ------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `Subscribe`                                                                     | <BloggerSource kind="official" /> |
+| Per blog                 | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) |                                   |
+| Where Blogger puts it    | Any section. The 2017 themes do not style it                                    | <BloggerSource kind="observed" /> |
+| Locked                   | Not by default                                                                  | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                        | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                           | <BloggerSource kind="official" /> |
+| Not available in         | Mobile Default 2010, Dynamic Views on mobile                                    | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+None. Nothing about the widget is stored in the theme apart from its title. Written with no settings, it saves with an empty title. <BloggerSource kind="observed" />
+
+## Widget data
+
+| Field              | v1  | v2  | Type    | Content                                                                                                                                  | Source                            |
+| ------------------ | --- | --- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `title`            | Yes | Yes | string  | Widget title, up to 100 characters                                                                                                       | <BloggerSource kind="observed" /> |
+| `feeds`            | Yes | Yes | list    | The feeds for this page, two at most                                                                                                     | <BloggerSource kind="observed" /> |
+| `widgetId`         | Yes | Yes | string  | The widget id, the same value as `data:widget.instanceId`                                                                                | <BloggerSource kind="observed" /> |
+| `atomFeedTxt`      | Yes | Yes | string  | Localized "Atom Feed"                                                                                                                    | <BloggerSource kind="observed" /> |
+| `feedIconImg`      | Yes | Yes | string  | `https://img1.blogblog.com/img/icon_feed12.png`, a 12 by 12 feed icon                                                                    | <BloggerSource kind="observed" /> |
+| `arrowDropdownImg` | Yes | Yes | string  | `https://img2.blogblog.com/img/widgets/arrow_dropdown.gif`, 13 by 10                                                                     | <BloggerSource kind="observed" /> |
+| `imagePathBase`    | Yes | Yes | string  | `https://img1.blogblog.com/img/widgets/`, the folder of the reader buttons `subscribe-netvibes.png` and `subscribe-yahoo.png` (91 by 17) | <BloggerSource kind="observed" /> |
+| `isPublic`         | Yes | No  | boolean | `true` for a public blog, the opposite of `data:blog.isPrivateBlog`                                                                      | <BloggerSource kind="observed" /> |
+
+Each entry of `feeds`:
+
+| Field        | Type   | Content                                                                                                      | Source                            |
+| ------------ | ------ | ------------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| `type`       | string | `POST`, `COMMENT` or `PER_POST`                                                                              | <BloggerSource kind="observed" /> |
+| `title`      | string | Localized name: "Posts", "Comments", "All comments"                                                          | <BloggerSource kind="observed" /> |
+| `url`        | string | `/feeds/posts/default`, `/feeds/comments/default` or `/feeds/POST_ID/comments/default` on the blog's address | <BloggerSource kind="observed" /> |
+| `encodedUrl` | string | `url`, URL-encoded, ready to be put in a query string                                                        | <BloggerSource kind="observed" /> |
+
+What `feeds` contains:
+
+| Page                             | First entry | Second entry                              |
+| -------------------------------- | ----------- | ----------------------------------------- |
+| Homepage, label, search, archive | `POST`      | `COMMENT`, the comments of the whole blog |
+| Post                             | `POST`      | `PER_POST`, the comments of this post     |
+| Static page                      | `POST`      | None                                      |
+
+A feed switched off in the blog settings is left out. Turning comments off does not remove the comments feed.
+
+## Built-in includables
+
+| Includable | v1  | v2                 | What it renders                                                                            | Source                            |
+| ---------- | --- | ------------------ | ------------------------------------------------------------------------------------------ | --------------------------------- |
+| `main`     | Yes | Yes                | v1: the whole widget, inside a test on `data:isPublic`. v2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`  | No  | Yes                | `.widget-content` with `feeds` and a clearing `div`                                        | <BloggerSource kind="observed" /> |
+| `feeds`    | No  | Yes, `var='feeds'` | One drop-down per feed                                                                     | <BloggerSource kind="observed" /> |
+
+For every feed, the default markup writes a `div.subscribe-wrapper` with two boxes:
+
+| Box    | Id                                             | Content                                                                                                                                                  |
+| ------ | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Open   | `SW_READER_LIST_` + `widgetId` + `type`        | Hidden at first. The arrow, the feed icon and the title, then `div.feed-reader-links` with a Netvibes button, a Yahoo button and an "Atom" link to `url` |
+| Closed | `SW_READER_LIST_CLOSED_` + `widgetId` + `type` | The arrow, the icon and the title                                                                                                                        |
+
+Clicking either box calls `_SW_toggleReaderList(event, id)`, a function of Blogger's widget script, which swaps them. The reader buttons link to `netvibes.com/subscribe.php?url=` and `add.my.yahoo.com/content?url=` followed by `encodedUrl`, over `http://` in version 1 and `https://` in version 2. Version 2 has no `isPublic` test, since the field does not exist there.
+
+## Writing your own markup
+
+### Feed links in the head
+
+The same list can feed `<link rel='alternate'>` tags. Readers and browsers find them without any visible widget. Blogger's head content already writes the posts feed; a widget can add the comments feed of the current post:
+
+```xml
+<b:loop values='data:feeds filter (f => f.type == "PER_POST")' var='feed'>
+  <link expr:href='data:feed.url' expr:title='data:blog.pageName + " - " + data:feed.title' rel='alternate' type='application/atom+xml'/>
+</b:loop>
+```
+
+The widget must then sit in a section whose wrappers are hidden from the head, see [Sections that render no wrapper](../layout/sections.mdx#sections-that-render-no-wrapper) and [Widgets in the head](../guides/head-and-seo.mdx#widgets-in-the-head).
+
+### Without the widget
+
+The feed addresses are fixed, so a theme can link them directly:
+
+```xml
+<a expr:href='data:blog.homepageUrl + "feeds/posts/default"'>RSS</a>
+```
+
+The widget is worth it when the comments feed has to follow the current post. See [feeds](../guides/feeds.mdx) for every feed address.
+
+## Things to know
+
+- **Old readers.** Netvibes and Yahoo were the readers of the time; the buttons are dated, the feeds are not.
+- **No script, no drop-down.** With Blogger's widget script removed (`b:js='false'`), `_SW_toggleReaderList` does not exist and the default boxes never open. Plain links avoid the problem.
+- **`quickedit`** in the version 1 `main` no longer does anything.

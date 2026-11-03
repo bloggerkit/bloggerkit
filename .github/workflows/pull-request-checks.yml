@@ -1,4 +1,4 @@
-name: Check a pull request
+name: Pull request checks
 
 on:
   pull_request:
@@ -16,34 +16,34 @@ concurrency:
 
 jobs:
   ensure_changelog_exists:
-    name: 🔎 Ensure that .changeset is not empty
+    name: Check for a changeset
     runs-on: [ubuntu-latest]
     strategy:
       matrix:
         node-version: ["22.x"]
     if: "${{ !contains(github.event.pull_request.title, '[ci] release') }}"
     steps:
-      - name: Checkout repo
+      - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Use pnpm
+      - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
-      - name: Use Node ${{ matrix.node-version }}
+      - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Install changeset CLI
+      - name: Install Changesets CLI
         run: pnpm i -g @changesets/cli@$(node -p "require('./package.json').devDependencies['@changesets/cli']")
 
-      - name: Ensure that a changelog is added
+      - name: Check that a changeset is added
         run: pnpm exec changeset status --since=origin/main
 
   test:
-    name: ⬣, 🔎, 🔨 Test PR
+    name: Build and test
     uses: ./.github/workflows/build-test-reusable.yml
     secrets: inherit

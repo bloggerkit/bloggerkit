@@ -1,0 +1,125 @@
+---
+import { ardPath } from '@/lib/agents/ard';
+import { getPageAuthors } from '@/lib/content/authors';
+import { normalizePath, resources, siteImageUrl } from '@/lib/routes';
+import { HEIGHT, WIDTH } from '@/lib/seo/og';
+import { buildStructuredData } from '@/lib/seo/structured-data';
+import { getPageHeading, getPageTitle } from '@/lib/seo/title';
+import { appDescription, appName, appTagline, site } from '@/lib/site';
+import type { NavLink, PageAuthor, PageLink } from '@/lib/types';
+import type { Level } from '@/lib/ui/levels';
+
+export interface Props {
+	title: string;
+	description?: string;
+	/** Open Graph image path; defaults to the site image. */
+	image?: string;
+	/** `article` for docs pages, `website` for the home page and index pages. */
+	type?: 'website' | 'article';
+	/** Appended to the title: `b:loop – Blogger Theme XML | Blogger Kit`. */
+	section?: string;
+	/** Inserted between title and section when several pages share a title. */
+	titleFolder?: string;
+	/** Folders above the page, for the JSON-LD BreadcrumbList. */
+	breadcrumbs?: NavLink[];
+	/** The page's Markdown URL, linked as `rel="alternate"`. */
+	markdownUrl?: string;
+	noindex?: boolean;
+	updated?: Date;
+	published?: Date;
+	level?: Level;
+	prerequisites?: PageLink[];
+	/** Pages listed on an index page (`/docs`, folder overviews). */
+	items?: Pick<NavLink, 'name' | 'url'>[];
+	/** Page authors; defaults to the site author. */
+	authors?: PageAuthor[];
+}
+
+/** `<title>`, meta tags, Open Graph, links and JSON-LD: what search engines, agents and link previews read. */
+const {
+	title,
+	description = appDescription,
+	image = siteImageUrl,
+	type = 'website',
+	section,
+	titleFolder,
+	breadcrumbs = [],
+	markdownUrl,
+	noindex,
+	updated,
+	published,
+	level,
+	prerequisites,
+	items,
+	authors,
+} = Astro.props;
+const pageAuthors = getPageAuthors(authors);
+// Pages are built as `loops.html` but served at `/docs/blogger-xml/tags/loops`
+const path = normalizePath(Astro.url.pathname);
+const isHome = path === '/';
+// `b:loop – Blogger Theme XML | Blogger Kit`; the home page uses the site name and tagline
+const heading = getPageHeading({ title, titleFolder, section });
+const pageTitle = isHome
+	? `${appName}: ${appTagline}`
+	: getPageTitle({ title, titleFolder, section });
+// Link previews use the full title on the home page, the heading elsewhere
+const previewTitle = isHome ? pageTitle : heading;
+const canonical = new URL(path, site);
+const imageUrl = new URL(image, site).href;
+const jsonLd = buildStructuredData({
+	site,
+	canonical,
+	title,
+	description,
+	image: imageUrl,
+	type,
+	section,
+	breadcrumbs,
+	describePage: !isHome && !noindex,
+	updated,
+	published,
+	level,
+	prerequisites,
+	items,
+	authors: pageAuthors,
+});
+---
+
+<title>{pageTitle}</title>
+<meta name="description" content={description} />
+{/* Allow large image previews (Discover, image results) */}
+<meta name="robots" content={noindex ? 'noindex' : 'max-image-preview:large'} />
+<meta name="author" content={pageAuthors.map((who) => who.name).join(', ')} />
+<meta name="generator" content={Astro.generator} />
+<meta property="og:type" content={type} />
+<meta property="og:site_name" content={appName} />
+<meta property="og:locale" content="en_US" />
+<meta property="og:title" content={previewTitle} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:image" content={imageUrl} />
+<meta property="og:image:width" content={String(WIDTH)} />
+<meta property="og:image:height" content={String(HEIGHT)} />
+<meta property="og:image:alt" content={isHome ? appName : heading} />
+{type === 'article' && section && <meta property="article:section" content={section} />}
+{type === 'article' && pageAuthors.map((who) => <meta property="article:author" content={who.url ?? who.name} />)}
+{type === 'article' && published && <meta property="article:published_time" content={published.toISOString()} />}
+{type === 'article' && updated && <meta property="article:modified_time" content={updated.toISOString()} />}
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={previewTitle} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={imageUrl} />
+{!noindex && <link rel="canonical" href={canonical} />}
+<link rel="icon" href="/favicon.ico" sizes="48x48" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16" />
+<link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
+<link rel="icon" href="/favicon-48x48.png" type="image/png" sizes="48x48" />
+<link rel="icon" href="/favicon-96x96.png" type="image/png" sizes="96x96" />
+<link rel="icon" href="/favicon-192x192.png" type="image/png" sizes="192x192" />
+<link rel="icon" href="/favicon-512x512.png" type="image/png" sizes="512x512" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+{markdownUrl && <link rel="alternate" type="text/markdown" href={markdownUrl} title="Markdown" />}
+<link rel="sitemap" href={resources.sitemap} />
+<link rel="ard" href={ardPath} type="application/json" />
+<script type="application/ld+json" set:html={jsonLd} />

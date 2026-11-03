@@ -1,0 +1,61 @@
+---
+import LevelBadge from '@/components/ui/LevelBadge.astro';
+import type { Folder } from '@/lib/content/sections';
+import type { PageLink } from '@/lib/types';
+import type { Level } from '@/lib/ui/levels';
+import Breadcrumbs from './Breadcrumbs.astro';
+import Byline, { type Props as BylineProps } from './Byline.astro';
+import ViewOptions from './ViewOptions.astro';
+
+interface Props {
+	title: string;
+	description?: string;
+	level?: Level;
+	prerequisites?: PageLink[];
+	breadcrumbs: Folder[];
+	/** Stored as Pagefind metadata for the section filter. */
+	section?: string;
+	/** Set for articles; shows the Copy Markdown, Open and Share actions. `shareTitle` is the page's `<title>`. */
+	article?: { slug: string; filePath?: string; shareTitle: string };
+	/** Set for articles: the authors and dates shown under the title. */
+	byline?: BylineProps;
+}
+
+const {
+	title,
+	description,
+	level,
+	prerequisites = [],
+	breadcrumbs,
+	section,
+	article,
+	byline,
+} = Astro.props;
+---
+
+<header class="mb-8" data-pagefind-meta={section ? `section:${section}` : undefined}>
+	<Breadcrumbs folders={breadcrumbs} />
+	{/* Pagefind's result title, kept out of the excerpt. WebMCP tools read `data-page-title` */}
+	<h1 class="text-3xl leading-tight font-semibold" data-pagefind-meta="title" data-pagefind-ignore data-page-title>{title}</h1>
+	{description && <p class="mt-2 text-lg text-muted-foreground">{description}</p>}
+	{(level || prerequisites.length > 0) && (
+		<div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground" data-pagefind-ignore>
+			{level && <LevelBadge level={level} />}
+			{prerequisites.length > 0 && (
+				<p class="m-0">
+					Read first:{' '}
+					{prerequisites.map((item, i) => (
+						<>
+							{i > 0 && ', '}
+							<a href={item.url} class="font-medium text-foreground underline decoration-border underline-offset-[3px] hover:decoration-foreground">
+								{item.title}
+							</a>
+						</>
+					))}
+				</p>
+			)}
+		</div>
+	)}
+	{byline && <Byline {...byline} />}
+	{article && <ViewOptions {...article} description={description} />}
+</header>

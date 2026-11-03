@@ -1,0 +1,183 @@
+---
+title: b:with
+description: Name the result of an expression, so that the markup inside the tag can read it as data.
+level: intermediate
+prerequisites:
+  - blogger-xml/expressions
+published: 2026-10-26
+---
+
+`<b:with>` computes a value once and gives it a name. Inside the tag, the value is read like any data, `data:NAME`. Use it to write a long expression in one place, to give a data a fallback, or to hand values to an includable.
+
+<CodeTabs>
+
+```xml title="A cover image with a fallback"
+<b:with value='data:post.featuredImage ?: data:blog.postImageUrl' var='cover'>
+  <b:if cond='data:cover'>
+    <img class='cover' expr:alt='data:post.title' expr:src='resizeImage(data:cover, 640, "16:9")' loading='lazy'/>
+  </b:if>
+</b:with>
+```
+
+```html title="Rendered for a post with an image"
+<img class='cover' alt='Lentil soup' src='https://blogger.googleusercontent.com/img/b/AVvXsE…/w640-h360-p-k-no-nu/soup.jpg' loading='lazy'/>
+```
+
+</CodeTabs>
+
+`data:cover` is the image of the post, or the image of the page when the post has none. It is computed once and read twice.
+
+Google added `<b:with>` in June 2015, in [Even more expansions to the Blogger template language](https://blogger.googleblog.com/2015/06/even-more-expansions-to-blogger.html). <BloggerSource kind="official" />
+
+## Attributes
+
+| Attribute    | Required | Value      | Default | Description                                       | Source                            |
+| ------------ | -------- | ---------- | ------- | ------------------------------------------------- | --------------------------------- |
+| `value`      | Yes      | expression |         | The value of the variable                         | <BloggerSource kind="official" /> |
+| `var`        | Yes      | name       |         | The name of the variable, read as `data:NAME`     | <BloggerSource kind="official" /> |
+| `expr:value` | No       | expression |         | An expression whose result is evaluated once more | <BloggerSource kind="observed" /> |
+
+### `var`
+
+A plain name, without `data:`. `var='cover'` is read as `data:cover`. Pick names that say what the value is: `featuredPostIds`, `hasImage`, `postUrl`.
+
+`var` can also be computed, with `expr:var`, an expression whose result is the name. When both are written, `expr:var` wins. <BloggerSource kind="observed" /> A fixed name is almost always clearer.
+
+A `<b:with>` without `var`, or without `value`, saves, and is a [markup error](../basics/saving.mdx#markup-errors) when it renders. <BloggerSource kind="observed" />
+
+### `value`
+
+An [expression](../expressions/index.mdx) of any type: a string, a number, a boolean, a list, a map, the result of a function or of a lambda.
+
+```xml
+<b:with value='3' var='maxAds'>…</b:with>
+<b:with value='"post-" + data:post.id' var='postKey'>…</b:with>
+<b:with value='data:view.isSingleItem and data:post.labels.notEmpty' var='showLabels'>…</b:with>
+<b:with value='data:posts count (p => p.featuredImage)' var='withImages'>…</b:with>
+<b:with value='[16, 32, 192, 512]' var='sizes'>…</b:with>
+<b:with value='{ width: 640, ratio: "16:9" }' var='thumb'>…</b:with>
+```
+
+A list can then go in the `values` of a [`<b:loop>`](./loops.mdx) or through a [lambda](../expressions/lambdas.mdx). The keys of a map are read with a dot: `data:thumb.width`.
+
+A range is not a value: `value='1 to 3'` fails with `b:with has invalid value expression '1 to 3'`. <BloggerSource kind="observed" />
+
+A string of digits stored with `<b:with>` becomes a number: with `value='"9999"'`, `data:n + 1` is `10000`, and `data:n contains "9"` is an invalid expression. It keeps its text, so `"007"` still prints `007`. Join it with `""` where it must stay a string, `(data:n + "") contains "9"`. <BloggerSource kind="observed" />
+
+### `expr:value`
+
+`value` is already an expression. With the `expr:` prefix, Blogger evaluates it, then evaluates the result again: a string is read as an expression, so `"data:blog.title"` becomes the title of the blog, and any other result is used as it is. <BloggerSource kind="observed" /> This turns text, such as a title format typed by the blog owner, into an expression; how to do it safely is in [Dynamic paths](../expressions/data-paths.mdx#dynamic-paths).
+
+## Scope
+
+The variable exists between `<b:with>` and `</b:with>`, and nowhere else. <BloggerSource kind="official" /> After the closing tag, `data:NAME` is whatever it was before.
+
+Everything rendered from the content sees the variable, includables included. An includable called with [`<b:include>`](../layout/includables.mdx) inside a `<b:with>` reads the variable as if it were its own data. <BloggerSource kind="observed" /> This is how a theme changes the data of one of Blogger's own includables before calling it.
+
+```xml title="The posts of the homepage, without the featured post" {3}
+<b:includable id='main'>
+  <b:with value='data:widgets.FeaturedPost filter (w => w.sectionId == "top") map (w => w.postId)' var='featuredIds'>
+    <b:with value='data:view.isHomepage ? data:posts filter (p => p.id not in data:featuredIds) : data:posts' var='posts'>
+      <b:include name='super.main'/>
+    </b:with>
+  </b:with>
+</b:includable>
+```
+
+The inner `<b:with>` replaces `data:posts`, so the original `main` of the Blog widget lists the posts without the one already shown by the FeaturedPost widget of the `top` section.
+
+A `<b:with>` can wrap a whole document. A theme can put one right inside `<html>`, around everything, to give the Theme Designer values a short name:
+
+```xml
+<b:with value='data:skin.vars' var='vars'>
+  …the head and the body, reading data:vars.titleColor…
+</b:with>
+```
+
+A `<b:with>` with no content is saved self-closed, `<b:with value='1' var='x'/>`, and has no effect: there is nothing for the variable to reach. <BloggerSource kind="observed" />
+
+## Shadowing
+
+A variable named like an existing data hides that data inside the tag. The value is computed before the new name exists, so it can read the data it replaces:
+
+```xml
+<b:with value='data:title ?: data:messages.labels' var='title'>
+  <h3 class='title'><data:title/></h3>
+</b:with>
+```
+
+In `value`, `data:title` is the title of the widget. In the content, it is the new value, with a fallback. The Blog widget example above does the same with `data:posts`.
+
+Any data can be hidden this way, global ones too: a `<b:with var='view'>` hides [`data:view`](../data/view.mdx) for everything inside it. Use the name of a data only when replacing it is the point.
+
+## Nesting
+
+One `<b:with>` defines one variable. For several, nest them, and close them in the reverse order. Each one can read the ones around it:
+
+```xml title="A label page header, from the label's settings"
+<b:with value='data:links filter (l => l.name == data:blog.searchLabel)' var='matches'>
+  <b:with value='data:matches.first.target ?: ""' var='description'>
+    <b:with value='data:description != ""' var='hasDescription'>
+      <header class='label-header'>
+        <h1><data:blog.searchLabel/></h1>
+        <b:if cond='data:hasDescription'>
+          <p><data:description/></p>
+        </b:if>
+      </header>
+    </b:with>
+  </b:with>
+</b:with>
+```
+
+This runs in a LinkList whose links pair a label name with a description. Each step is short and has a name, where a single expression would be hard to read.
+
+`<b:with>` works anywhere markup renders, except inside a `<![CDATA[ ]]>` section, where it is plain text. Each one is a variable scope: `<b:with>` and `<b:loop>` nest up to 40 deep together, and the 41st is a markup error. <BloggerSource kind="observed" /> See [Nesting depth](../reference/limits.mdx#nesting-depth).
+
+## Patterns
+
+**A settings map.** Group related values in one map, and read them by key:
+
+```xml
+<b:with value='{ enabled: (data:skin.vars.analyticsStatus == "2px"), id: (data:skin.vars.analyticsId ?: data:blog.analyticsAccountNumber) }' var='analytics'>
+  <b:if cond='data:analytics.enabled and data:analytics.id and not data:view.isPreview'>
+    <script async='async' expr:src='"https://www.googletagmanager.com/gtag/js?id=" + data:analytics.id'/>
+  </b:if>
+</b:with>
+```
+
+The id written in the Theme Designer wins over the one of the blog settings. Each value of the map is in parentheses: inside braces, an operator needs them.
+
+**A URL used several times.** Name it once:
+
+```xml
+<b:with value='data:post.url.canonical' var='postUrl'>
+  <a class='post-title' expr:href='data:postUrl'><data:post.title/></a>
+  <a class='post-comments' expr:href='fragment(data:postUrl, "comments")'><data:messages.comments/></a>
+</b:with>
+```
+
+**Values for an includable.** An includable reads the variables of the `<b:with>` around its `<b:include>`. This is one way to pass options; the `data` attribute of `<b:include>`, described in [Includables](../layout/includables.mdx), is the other:
+
+```xml
+<b:with value='"h3"' var='headingTag'>
+  <b:include name='widgetTitle'/>
+</b:with>
+```
+
+**A list filtered once.** Filter in a `<b:with>`, then test the result and loop over it:
+
+```xml
+<b:with value='data:posts filter (p => p.featuredImage)' var='withImages'>
+  <b:if cond='data:withImages.notEmpty'>
+    <div class='gallery'>
+      <b:loop values='data:withImages' var='post'>
+        <img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 300, "1:1")'/>
+      </b:loop>
+    </div>
+  </b:if>
+</b:with>
+```
+
+<Callout title="Overriding a value with an empty string">
+Some of Blogger's includables fall back to their own value when the one they read is empty. To clear the inline style of Blogger's ad unit, a theme passes a value that is not empty but does nothing, a CSS comment, because an empty string is not enough. When a `<b:with>` override seems ignored, try a value that is not empty.
+</Callout>

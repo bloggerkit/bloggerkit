@@ -1,0 +1,135 @@
+---
+import ArrowUp from '@lucide/astro/icons/arrow-up';
+import GithubIcon from '@/components/ui/GithubIcon.astro';
+import Logo from '@/components/ui/Logo.astro';
+import LucideIcon from '@/components/ui/LucideIcon.astro';
+import { getSections } from '@/lib/content/sections';
+import { docsRoute, resources } from '@/lib/routes';
+import {
+	appDescription,
+	author,
+	copyrightSince,
+	githubUrl,
+	publisher,
+} from '@/lib/site';
+import type { NavLink } from '@/lib/types';
+
+const sections = getSections();
+const year = new Date().getFullYear();
+const years =
+	year > copyrightSince ? `${copyrightSince}–${year}` : `${copyrightSince}`;
+
+const groups: { name: string; links: NavLink[] }[] = [
+	{
+		name: 'Documentation',
+		links: [
+			{ name: 'All docs', url: docsRoute, icon: 'LayoutGrid' },
+			...sections.map((section) => ({
+				name: section.name,
+				url: section.url,
+				icon: section.icon,
+			})),
+		],
+	},
+	{
+		name: 'Resources',
+		links: [
+			{ name: 'llms.txt', url: resources.llms },
+			{ name: 'llms-full.txt', url: resources.llmsFull },
+			{ name: 'Sitemap', url: resources.sitemap },
+		],
+	},
+];
+const separator = 'px-0.5 align-[0.0625rem] text-[0.6875rem]';
+// Fixed min height so links with and without icons line up
+const link =
+	'flex min-h-6 w-fit items-center gap-2 text-sm text-muted-foreground no-underline transition-colors hover:text-foreground';
+const pill =
+	'inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm text-muted-foreground no-underline transition-colors hover:bg-accent hover:text-foreground';
+---
+
+{/* Opaque (the same color as `bg-card/40` over the page) and above the sticky sidebar on desktop, so the sidebar
+    can't show over it for a frame while it shrinks */}
+<footer
+	class="border-t border-border print:hidden bg-[color-mix(in_srgb,var(--color-card)_40%,var(--color-background))] md:relative md:z-16"
+	data-pagefind-ignore
+	data-site-footer
+>
+	<div class="mx-auto grid max-w-300 gap-12 px-4 py-14 md:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))] md:px-6">
+		<div class="flex flex-col gap-4">
+			<a href="/" class="flex w-fit items-center no-underline"><Logo /></a>
+			<p class="m-0 max-w-80 text-sm leading-relaxed text-muted-foreground">{appDescription}</p>
+			<div class="flex flex-wrap gap-2">
+				<a href={githubUrl} class={pill} target="_blank" rel="noreferrer noopener">
+					<GithubIcon size={15} />
+					GitHub
+				</a>
+			</div>
+		</div>
+		{/* Two columns on phones; on wide screens they join the grid next to the brand */}
+		<div class="grid grid-cols-2 gap-10 md:contents">
+			{
+				groups.map((group) => (
+					<nav aria-label={group.name} class="flex flex-col gap-4">
+						<p class="m-0 text-meta font-medium tracking-wider text-foreground uppercase">{group.name}</p>
+						<ul class="m-0 flex list-none flex-col gap-2 p-0">
+							{group.links.map((item) => (
+								<li>
+									<a href={item.url} class={link}>
+										{item.icon && <LucideIcon name={item.icon} size={14} />}
+										{item.name}
+									</a>
+								</li>
+							))}
+						</ul>
+					</nav>
+				))
+			}
+		</div>
+	</div>
+	<div class="border-t border-border">
+		<div
+			class="mx-auto flex max-w-300 flex-col-reverse gap-4 px-4 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between md:px-6"
+		>
+			<p class="m-0">
+				{/* Real text so copying gives "a • b". A bullet because DM Sans' middle dot is too faint */}
+				© {years}{' '}<span class={separator}>•</span>{' '}
+				<a
+					href={author.url}
+					rel="author noreferrer noopener"
+					target="_blank"
+					class="whitespace-nowrap text-foreground no-underline hover:underline"
+				>
+					{author.name}
+				</a>
+				{' '}<span class={separator}>•</span>{' '}
+				{/* Narrow screens break at a separator, not inside a name */}
+				<span class="whitespace-nowrap">
+					Made by{' '}
+					<a href={publisher.url} rel="noreferrer noopener" target="_blank" class="text-foreground no-underline hover:underline">
+						{publisher.name}
+					</a>
+				</span>
+			</p>
+						<button type="button" class:list={[link, 'cursor-pointer']} data-back-to-top>
+				Back to top
+				<ArrowUp size={14} aria-hidden="true" />
+			</button>
+		</div>
+	</div>
+</footer>
+
+<script>
+	import { onPage, prefersReducedMotion } from '@/scripts/page';
+
+	onPage(() => {
+		document
+			.querySelector('[data-back-to-top]')
+			?.addEventListener('click', () => {
+				scrollTo({
+					top: 0,
+					behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+				});
+			});
+	});
+</script>

@@ -1,0 +1,252 @@
+---
+import ChevronRight from '@lucide/astro/icons/chevron-right';
+import TextAlignStart from '@lucide/astro/icons/text-align-start';
+import type { MarkdownHeading } from 'astro';
+
+interface Props {
+	headings: MarkdownHeading[];
+	/** Render the collapsible bar for narrow screens instead of the side column. */
+	mobile?: boolean;
+}
+
+/** Lists the `##`–`####` headings: a side column on wide screens, a sticky dropdown otherwise. */
+const headings = Astro.props.headings.filter(
+	(heading) => heading.depth >= 2 && heading.depth <= 4,
+);
+const title =
+	'flex items-center gap-2 text-sm font-medium text-muted-foreground';
+---
+
+{
+	headings.length > 0 &&
+		(Astro.props.mobile ? (
+			// Once stuck (`data-stuck`), the background bleeds to the content area's edges, the summary shows the current
+			// heading, and it rises above the page actions' menus. Open, it is a dropdown under the header
+			<details
+				class="group/toc sticky top-14 z-10 mb-6 print:hidden rounded-lg border border-border bg-card px-3 xl:hidden data-stuck:z-14 data-stuck:rounded-none data-stuck:border-transparent data-stuck:bg-transparent data-stuck:px-0 data-stuck:before:absolute data-stuck:before:-inset-y-px data-stuck:before:-left-(--toc-bleed-start) data-stuck:before:-right-(--toc-bleed-end) data-stuck:before:-z-10 data-stuck:before:border-b data-stuck:before:border-border data-stuck:before:bg-background/90 data-stuck:before:backdrop-blur-md data-stuck:before:content-[''] data-stuck:open:before:bg-background data-stuck:open:before:shadow-[0_12px_16px_-12px_rgb(0_0_0/0.18)]"
+				data-toc-mobile-menu
+				data-pagefind-ignore
+			>
+				<summary class:list={[title, 'cursor-pointer list-none py-2.5 [&::-webkit-details-marker]:hidden']}>
+					{/* Once stuck, becomes a reading-progress ring driven by `--toc-progress` */}
+					<span class="grid size-4 shrink-0 place-items-center *:col-start-1 *:row-start-1" aria-hidden="true">
+						<TextAlignStart size={16} class="group-data-stuck/toc:hidden" />
+						<svg viewBox="0 0 20 20" class="hidden size-4 -rotate-90 group-data-stuck/toc:block" aria-hidden="true">
+							<circle cx="10" cy="10" r="8" fill="none" stroke-width="2.5" class="stroke-border" />
+							<circle
+								cx="10"
+								cy="10"
+								r="8"
+								fill="none"
+								stroke-width="2.5"
+								stroke-linecap="round"
+								pathLength="100"
+								stroke-dasharray="100"
+								class="stroke-primary transition-[stroke-dashoffset] duration-150 motion-reduce:transition-none"
+								style="stroke-dashoffset: calc(100 - var(--toc-progress, 0))"
+							/>
+						</svg>
+					</span>
+					<span class="shrink-0">On this page</span>
+					<span class="min-w-0 truncate font-normal text-foreground" data-toc-current />
+					<ChevronRight
+						size={16}
+						class="ms-auto shrink-0 transition-transform duration-200 group-open/toc:rotate-90 motion-reduce:transition-none"
+						aria-hidden="true"
+					/>
+				</summary>
+				<ul data-toc-list class="m-0 max-h-[min(60dvh,28rem)] list-none overflow-y-auto pb-3 group-data-stuck/toc:overscroll-contain text-sm leading-snug scrollbar-subtle">
+					{headings.map((heading) => (
+						<li>
+							<a
+								href={`#${heading.slug}`}
+								class="block border-s border-border py-1.5 ps-[calc(0.75rem+var(--depth)*0.75rem)] text-muted-foreground no-underline hover:text-foreground aria-[current=location]:border-primary aria-[current=location]:text-primary"
+								style={`--depth: ${heading.depth - 2}`}
+								data-toc-mobile
+							>
+								{heading.text}
+							</a>
+						</li>
+					))}
+				</ul>
+			</details>
+		) : (
+			<nav
+				class="sticky top-14 hidden max-h-[calc(100dvh-3.5rem-var(--footer-overlap,0px))] print:hidden! w-60 shrink-0 self-start overflow-y-auto overscroll-contain py-8 pe-4 scrollbar-overlay mask-t-from-[calc(100%-16px)] mask-b-from-[calc(100%-32px)] xl:block"
+				aria-label="On this page"
+				data-toc-list
+				data-overlay-scroll
+				data-footer-fit
+			>
+				<h2 class:list={[title, 'mb-3']}>
+					<TextAlignStart size={16} aria-hidden="true" />
+					On this page
+				</h2>
+				<ul class="m-0 list-none p-0 text-sm leading-snug">
+					{headings.map((heading) => (
+						<li>
+							<a
+								href={`#${heading.slug}`}
+								class="block border-s border-border py-1.5 ps-[calc(0.75rem+var(--depth)*0.75rem)] text-muted-foreground no-underline transition-colors hover:text-foreground aria-[current=location]:border-primary aria-[current=location]:text-primary"
+								style={`--depth: ${heading.depth - 2}`}
+								data-toc
+							>
+								{heading.text}
+							</a>
+						</li>
+					))}
+				</ul>
+			</nav>
+		))
+}
+
+<script>
+	import '@/scripts/overlay-scrollbar';
+	import { onPage } from '@/scripts/page';
+
+	onPage((signal) => {
+		// The current heading is the last one above the top quarter of the viewport
+		const links = [
+			...document.querySelectorAll<HTMLAnchorElement>(
+				'[data-toc], [data-toc-mobile]',
+			),
+		];
+		const headings = links.flatMap((link) => {
+			const heading = document.getElementById(
+				decodeURIComponent(link.hash.slice(1)),
+			);
+			return heading ? [{ link, heading }] : [];
+		});
+		const menu = document.querySelector<HTMLDetailsElement>(
+			'[data-toc-mobile-menu]',
+		);
+		// No headings, so no TOC was rendered
+		if (headings.length === 0 && !menu) {
+			return;
+		}
+		const label = menu?.querySelector<HTMLElement>('[data-toc-current]');
+		let frame = 0;
+		// The bar is stuck once it reaches its sticky `top`
+		const stuckAt = menu ? Number.parseFloat(getComputedStyle(menu).top) : 0;
+		function update() {
+			frame = 0;
+			// At the end of the article, the last heading is current even if its section is too short to reach the line
+			const article = document.querySelector('main article');
+			const atEnd = article
+				? article.getBoundingClientRect().bottom <= innerHeight + 1
+				: false;
+			if (menu) {
+				menu.toggleAttribute(
+					'data-stuck',
+					menu.getBoundingClientRect().top <= stuckAt + 0.5,
+				);
+				const area = menu.closest('[data-toc-area]')?.getBoundingClientRect();
+				if (area) {
+					// Measured from inside the border, where the background starts
+					const box = menu.getBoundingClientRect();
+					const style = getComputedStyle(menu);
+					const start =
+						box.left + Number.parseFloat(style.borderLeftWidth) - area.left;
+					const end =
+						area.right -
+						(box.right - Number.parseFloat(style.borderRightWidth));
+					menu.style.setProperty(
+						'--toc-bleed-start',
+						`${Math.max(start, 0)}px`,
+					);
+					menu.style.setProperty('--toc-bleed-end', `${Math.max(end, 0)}px`);
+				}
+				// Reading progress (0–100): how much of the article is above the bottom of the viewport
+				if (article) {
+					const box = article.getBoundingClientRect();
+					const read = (innerHeight - box.top) / box.height;
+					menu.style.setProperty(
+						'--toc-progress',
+						String(Math.round(Math.min(Math.max(read, 0), 1) * 100)),
+					);
+				}
+			}
+			const line = innerHeight / 4;
+			let current: HTMLElement | undefined;
+			for (const { heading } of headings) {
+				if (heading.getBoundingClientRect().top <= line) {
+					current = heading;
+				}
+			}
+			current ??= headings[0]?.heading;
+			if (atEnd) {
+				current = headings.at(-1)?.heading;
+			}
+			for (const { link, heading } of headings) {
+				if (heading === current) {
+					link.setAttribute('aria-current', 'location');
+				} else {
+					link.removeAttribute('aria-current');
+				}
+			}
+			// The bar names a heading only after the first one is scrolled past
+			if (label) {
+				const past =
+					atEnd || (current && current.getBoundingClientRect().top <= line);
+				label.textContent = past ? (current?.textContent ?? '') : '';
+			}
+			// Keep the current link in view by scrolling the list, never the window
+			for (const list of document.querySelectorAll<HTMLElement>(
+				'[data-toc-list]',
+			)) {
+				const link = list.querySelector<HTMLElement>('[aria-current]');
+				if (
+					!link ||
+					list.scrollHeight <= list.clientHeight ||
+					!list.offsetParent
+				) {
+					continue;
+				}
+				const top = link.getBoundingClientRect();
+				const box = list.getBoundingClientRect();
+				const margin = 48;
+				if (top.top < box.top + margin) {
+					list.scrollTop -= box.top + margin - top.top;
+				} else if (top.bottom > box.bottom - margin) {
+					list.scrollTop += top.bottom - (box.bottom - margin);
+				}
+			}
+		}
+		if (headings.length > 0) {
+			const schedule = () => (frame ||= requestAnimationFrame(update));
+			addEventListener('scroll', schedule, { passive: true, signal });
+			addEventListener('resize', schedule, { passive: true, signal });
+			// Cancel a pending frame on navigation, or it runs against the next page
+			signal.addEventListener('abort', () => cancelAnimationFrame(frame));
+			update();
+		}
+		if (menu) {
+			// Scroll the list to the current heading when opened
+			menu.addEventListener('toggle', () => menu.open && update(), { signal });
+			for (const link of menu.querySelectorAll('[data-toc-mobile]')) {
+				link.addEventListener('click', () => menu.removeAttribute('open'), {
+					signal,
+				});
+			}
+			document.addEventListener(
+				'click',
+				(event) => {
+					if (menu.open && !menu.contains(event.target as Node)) {
+						menu.removeAttribute('open');
+					}
+				},
+				{ signal },
+			);
+			document.addEventListener(
+				'keydown',
+				(event) => {
+					if (event.key === 'Escape' && menu.open) {
+						menu.removeAttribute('open');
+						menu.querySelector('summary')?.focus();
+					}
+				},
+				{ signal },
+			);
+		}
+	});
+</script>

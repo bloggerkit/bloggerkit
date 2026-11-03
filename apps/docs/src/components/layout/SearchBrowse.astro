@@ -1,0 +1,62 @@
+---
+import LucideIcon from '@/components/ui/LucideIcon.astro';
+import { getPages } from '@/lib/content/pages';
+import { getSections, getTopics, walk } from '@/lib/content/sections';
+import { getPageUrl } from '@/lib/routes';
+
+/**
+ * What the search dialog shows before anything is typed: every section and its topics. A section without topics
+ * (only pages, no folders) lists its pages instead, so its group is never empty.
+ */
+const pages = await getPages();
+const groups = getSections().map((section) => {
+	const topics = getTopics(section);
+	const items =
+		topics.length > 0
+			? topics.map((folder) => ({
+					url: getPageUrl(folder.slug),
+					name: folder.name,
+					description: folder.description,
+				}))
+			: [...walk(section.folder)].flatMap((slug) => {
+					const page = pages.get(slug);
+					return page
+						? [
+								{
+									url: getPageUrl(slug),
+									name: page.data.title,
+									description: page.data.description,
+								},
+							]
+						: [];
+				});
+	return { section, items };
+});
+---
+
+<div class="flex flex-col gap-3" data-search-empty>
+	{
+		groups.map(({ section, items }) => (
+			<div data-browse-section={section.name}>
+				<a
+					href={section.url}
+					class="flex items-center gap-2 px-2 pt-2 pb-1 text-meta font-medium text-muted-foreground no-underline hover:text-foreground"
+				>
+					{section.icon && <LucideIcon name={section.icon} size={14} />}
+					{section.name}
+				</a>
+				{/* Columns size to the dialog, not to the longest description */}
+				<ul class="m-0 grid list-none grid-cols-1 gap-0.5 p-0 sm:grid-cols-2">
+					{items.map((item) => (
+						<li>
+							<a href={item.url} class="flex flex-col rounded-lg px-2 py-1.5 no-underline hover:bg-accent">
+								<span class="text-sm font-medium">{item.name}</span>
+								{item.description && <span class="truncate text-meta text-muted-foreground">{item.description}</span>}
+							</a>
+						</li>
+					))}
+				</ul>
+			</div>
+		))
+	}
+</div>

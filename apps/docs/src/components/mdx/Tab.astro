@@ -1,0 +1,22 @@
+---
+interface Props {
+	/** Tab label; `title` wins when both are set. */
+	value?: string;
+	title?: string;
+}
+
+const { value, title } = Astro.props;
+// Without a label, the tab is named by its position
+const label = title || value || undefined;
+---
+
+{/* A `<Tabs>` panel. Without JS it's a plain block under its label.
+    The focus outline is drawn inside, so the rounded frame doesn't clip it */}
+<div
+	class="rounded-b-xl p-4 not-last:border-b not-last:border-border focus-visible:-outline-offset-2 group-data-ready/tabs:border-b-0"
+	data-tab
+	data-label={label}
+>
+	{label && <p class="not-content mt-0 mb-2 text-sm font-medium text-muted-foreground group-data-ready/tabs:hidden" data-tab-label>{label}</p>}
+	<div class="*:first:mt-0 *:last:mb-0"><slot /></div>
+</div>

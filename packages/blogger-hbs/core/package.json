@@ -29,7 +29,7 @@
   "scripts": {
     "lint": "biome lint ./src ./test",
     "check": "biome check ./src ./test",
-    "check:types": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "build": "NODE_ENV=production tsdown",
     "dev": "NODE_ENV=development tsdown --watch",
     "test": "vitest run",

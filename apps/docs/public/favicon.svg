@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+	<title>Blogger Kit</title>
+	<style>
+		.tile { fill: #171717; }
+		.bar { fill: #fafafa; }
+		@media (prefers-color-scheme: dark) {
+			.tile { fill: #fafafa; }
+			.bar { fill: #171717; }
+		}
+	</style>
+	<rect class="tile" width="512" height="512" rx="112" />
+	<rect class="bar" x="128" y="128" width="256" height="64" rx="32" />
+	<rect class="bar" x="128" y="224" width="160" height="64" rx="32" />
+	<rect class="bar" x="128" y="320" width="256" height="64" rx="32" />
+</svg>

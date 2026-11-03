@@ -1,0 +1,165 @@
+---
+title: b:tag
+description: Render an HTML element whose name is computed, or that is left out while its content still renders.
+level: advanced
+prerequisites:
+  - blogger-xml/tags/attributes
+  - blogger-xml/expressions
+published: 2026-10-26
+---
+
+`<b:tag>` renders the HTML element named by its `name` attribute. Two things make it different from writing the element: the name can be computed with `expr:name`, and a `cond` can drop the element while keeping what is inside it. A theme uses it for a heading whose level depends on the page, or for a link that only exists when there is somewhere to go.
+
+<CodeTabs>
+
+```xml title="The blog title in the Header widget"
+<b:tag class='header-title' expr:name='data:view.isSingleItem ? "h2" : "h1"'>
+  <b:tag class='header-link' expr:name='data:view.isHomepage ? "span" : "a"'>
+    <b:attr cond='not data:view.isHomepage' expr:value='data:blog.homepageUrl.canonical' name='href'/>
+    <data:title/>
+  </b:tag>
+</b:tag>
+```
+
+```html title="Rendered on the homepage"
+<h1 class='header-title'>
+  <span class='header-link'>
+    Lentils and Lemons
+  </span>
+</h1>
+```
+
+```html title="Rendered on a post"
+<h2 class='header-title'>
+  <a class='header-link' href='https://example.blogspot.com/'>
+    Lentils and Lemons
+  </a>
+</h2>
+```
+
+</CodeTabs>
+
+On a post, the post title is the `h1` of the page, so the blog title steps down to `h2`, and it links back to the homepage. On the homepage, a link to the page itself would be useless, so it is a `span`. This is the title includable of a production theme, with its class names made readable.
+
+## Attributes
+
+| Attribute   | Required | Value                          | Default | Description                                                        | Source                            |
+| ----------- | -------- | ------------------------------ | ------- | ------------------------------------------------------------------ | --------------------------------- |
+| `name`      | Yes      | an element name                |         | The element to render                                              | <BloggerSource kind="observed" /> |
+| `expr:name` | No       | expression                     |         | The element name, computed                                         | <BloggerSource kind="observed" /> |
+| `cond`      | No       | expression                     | `true`  | Renders the element only when true; the content renders either way | <BloggerSource kind="observed" /> |
+| any other   | No       | text, or an `expr:` expression |         | Rendered as attributes of the element                              | <BloggerSource kind="observed" /> |
+
+Google does not document `<b:tag>`. Blogger's own themes use it, in the Header and Image widgets among others. <BloggerSource kind="observed" />
+
+### `name`
+
+The name of the element: `a`, `div`, `span`, `h2`, `input`, `noscript`. With `expr:name`, the result of an expression:
+
+```xml
+<b:tag class='post-title' expr:name='data:view.isSingleItem ? "h1" : "h3"'>
+  <data:post.title/>
+</b:tag>
+```
+
+A computed name and a computed `href` go together for a link that may have no target. The title of a post is a link to the post, except on the post itself:
+
+```xml {3}
+<b:with value='data:view.url != data:post.url' var='isLink'>
+  <b:tag class='post-card-link' expr:name='data:isLink ? "a" : "span"'>
+    <b:attr cond='data:isLink' expr:value='data:post.url' name='href'/>
+    <data:post.title/>
+  </b:tag>
+</b:with>
+```
+
+The `<b:attr>` uses the same test as the name, so a `span` never gets an `href`.
+
+The name is kept in its case: `name='DIV'` renders `<DIV>`. When both `name` and `expr:name` are written, `expr:name` wins. <BloggerSource kind="observed" />
+
+A name that is not a valid element name, such as `a b`, `a"b`, `1a` or an empty one, is a [markup error](../basics/saving.mdx#markup-errors) when the tag renders. So is a missing name, `<b:tag>` without `name`, or an `expr:name` that gives nothing: outside widgets, the page fails with a 500 error, `b:tag missing required name attribute`; in a widget, the widget fails. Like other errors in tags, this only happens when the tag is reached: in a `<b:if>` that is false, nothing fails. <BloggerSource kind="observed" />
+
+Use `<b:tag>` for HTML elements. It is not a way to build the tags of Blogger itself: `name='b:if'` prints a literal `<b:if>` element in the page, which is not processed. <BloggerSource kind="observed" />
+
+### `cond`
+
+When the condition is false, the element is left out but its content still renders. <BloggerSource kind="observed" /> It makes an optional wrapper without writing the content twice:
+
+```xml
+<b:tag class='comments-popup' cond='data:post.commentsUrlOnclick' name='div'>
+  <h3 class='comments-title'><data:messages.comments/></h3>
+  <b:include data='post' name='commentList'/>
+</b:tag>
+```
+
+When comments open in a popup, they get a wrapper to style. Otherwise the title and the list render on their own.
+
+This is not the `cond` of [`<b:include>`](../layout/includables.mdx), of a widget or of a section, which leave out everything. To leave out an element and its content, put it in a [`<b:if>`](./conditionals.mdx).
+
+A `noscript` that only exists for one setting is another case. Here, an image loaded by a script also gets a fallback for browsers without scripts, but only when the theme lazy-loads images:
+
+```xml
+<b:tag cond='data:skin.vars.lazyImages == "2px"' name='noscript'>
+  <img expr:alt='data:post.title' expr:src='data:image'/>
+</b:tag>
+```
+
+When lazy loading is off, the `<img>` renders as a normal image, without the `noscript` around it.
+
+### Other attributes
+
+Every other attribute is copied to the element, as written or computed with `expr:`. <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:tag checked='' class='comments-all' cond='data:post.numberOfComments > 0' hidden='' id='show-all-comments' name='input' type='checkbox'/>
+```
+
+```html title="Rendered for a post with comments"
+<input checked='' class='comments-all' hidden='' id='show-all-comments' type='checkbox'/>
+```
+
+</CodeTabs>
+
+The only attribute that can not be copied is `name`, which names the element. For an element that needs a `name` attribute, set it with [`<b:attr>`](./attributes.mdx#battr) inside the tag:
+
+```xml
+<b:tag name='meta'>
+  <b:attr name='name' value='description'/>
+  <b:attr expr:value='data:blog.metaDescription' name='content'/>
+</b:tag>
+```
+
+The `meta` is rendered with an end tag, see [Void elements](#void-elements).
+
+[`<b:attr>`](./attributes.mdx#battr) and [`<b:class>`](./attributes.mdx#bclass) work inside `<b:tag>` as they do in any element, with or without a condition, including from inside a logic tag.
+
+## Void elements
+
+A self-closed `<b:tag>` renders a void element self-closed, `<img src='a.png'/>`, and any other element with an end tag, `<div></div>`. <BloggerSource kind="observed" />
+
+A `<b:tag>` with content, even only a `<b:attr>`, renders an end tag, whatever the element: <BloggerSource kind="observed" />
+
+```html title="The meta above, rendered"
+<meta content='…' name='description'>
+</meta>
+```
+
+`<b:tag name='br'>` with text inside renders `<br>x</br>`. An `<img>` or `<input>` written with an end tag to hold a `<b:attr>` keeps it too, see [Attributes](./attributes.mdx#placement). To render a void element without an end tag, compute its attributes with `expr:` on a self-closed `<b:tag>`:
+
+```xml
+<b:tag class='cover' expr:alt='data:view.title' expr:src='data:view.featuredImage' name='img'/>
+```
+
+An `expr:` attribute whose data is missing is still rendered, empty: here `alt=''` when the page has no title.
+
+## Placement
+
+- `<b:tag>` works anywhere markup renders, except inside a `<![CDATA[ ]]>` section, where it is text.
+- It nests: a `<b:tag>` can contain other `<b:tag>` elements and any markup.
+- Each one is a level of nesting toward the [limits](../reference/limits.mdx) of a theme.
+
+<BloggerSource kind="observed" />
+
+For the element of a [section](../layout/sections.mdx), use the section's own `tag` attribute, `<b:section tag='aside' …>`, rather than a `<b:tag>` around it.

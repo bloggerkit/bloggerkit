@@ -1,0 +1,33 @@
+---
+import { getTopicCatalog } from '@/lib/content/sections';
+import { resources } from '@/lib/routes';
+import {
+	appDescription,
+	appName,
+	author,
+	githubUrl,
+	publisher,
+} from '@/lib/site';
+
+/** Registers WebMCP tools for in-browser AI agents. The tools are in `src/scripts/webmcp/tools.ts`. */
+// For `get_site_info`. Passed as JSON because browser code can't import the server-only config
+const site = {
+	name: appName,
+	description: appDescription,
+	author,
+	publisher,
+	source: githubUrl,
+	resources: {
+		index: resources.llms,
+		allContent: resources.llmsFull,
+		sitemap: resources.sitemap,
+	},
+};
+---
+
+<script type="application/json" data-webmcp-site set:html={JSON.stringify(site)} />
+{/* For `list_topics` */}
+<script type="application/json" data-webmcp-topics set:html={JSON.stringify(getTopicCatalog())} />
+<script>
+	import '@/scripts/webmcp/register';
+</script>

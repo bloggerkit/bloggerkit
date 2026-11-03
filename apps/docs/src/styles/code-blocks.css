@@ -1,0 +1,225 @@
+/*
+ * Shiki colors and the styles for the transformers in `src/integrations/shiki.ts`.
+ * `CodeBlock.astro` renders the frame and toggles `data-line-*` attributes on the `<figure>`.
+ */
+
+/* Light when chosen and always in print, else dark, like the theme tokens in `globals.css` */
+.code-block,
+.code-block span {
+	color: var(--shiki-light);
+	font-style: var(--shiki-light-font-style);
+	font-weight: var(--shiki-light-font-weight);
+	text-decoration: var(--shiki-light-text-decoration);
+}
+
+@media not print {
+	:root:not([data-theme="light"]) :is(.code-block, .code-block span) {
+		color: var(--shiki-dark);
+		font-style: var(--shiki-dark-font-style);
+		font-weight: var(--shiki-dark-font-weight);
+		text-decoration: var(--shiki-dark-text-decoration);
+	}
+}
+
+.code-block {
+	--code-pad: calc(var(--spacing) * 4);
+	/* Width of the line-number column, before its border and `--code-gap` */
+	--code-gutter: calc(var(--code-pad) + 7 * var(--spacing));
+	--code-gap: calc(var(--spacing) * 3);
+
+	/* Line backgrounds are opaque mixes with the code background,
+	   so the sticky number column hides code scrolling under it */
+	--code-mark-highlight: var(--primary);
+	--code-mark-error: var(--color-error);
+	--code-mark-warning: var(--color-warning);
+	--code-mark-add: var(--color-success);
+	--code-mark-remove: var(--color-error);
+	--code-line-highlight: color-mix(in oklab, var(--foreground) 6%, var(--code));
+	--code-line-error: color-mix(in oklab, var(--color-error) 12%, var(--code));
+	--code-line-warning: color-mix(
+		in oklab,
+		var(--color-warning) 14%,
+		var(--code)
+	);
+	--code-line-add: color-mix(in oklab, var(--color-success) 12%, var(--code));
+	--code-line-remove: color-mix(in oklab, var(--color-error) 12%, var(--code));
+
+	/* Empty lines keep their height */
+	& > code {
+		display: flex;
+		flex-direction: column;
+	}
+
+	& .line {
+		position: relative;
+		padding-inline: var(--code-pad);
+	}
+
+	& .line:empty {
+		height: 1lh;
+	}
+
+	/* `{1,3}`, `[!code highlight]`, `[!code warning]`, `[!code error]` */
+	& .highlighted {
+		padding-left: calc(var(--code-pad) - 2px);
+		border-left: 2px solid var(--code-mark-highlight);
+		background-color: var(--code-line-highlight);
+	}
+
+	& .highlighted.warning {
+		border-color: var(--code-mark-warning);
+		background-color: var(--code-line-warning);
+	}
+
+	& .highlighted.error {
+		border-color: var(--code-mark-error);
+		background-color: var(--code-line-error);
+	}
+
+	/* `/word/` and `[!code word:text]` */
+	& .highlighted-word {
+		margin-block: -1px;
+		padding: 1px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background-color: color-mix(in oklab, var(--foreground) 9%, transparent);
+	}
+
+	/* `[!code ++]`, `[!code --]` (or `add`, `remove`) */
+	& .diff::after {
+		position: absolute;
+		top: 0;
+		left: var(--spacing);
+		user-select: none;
+	}
+
+	& .diff.add {
+		background-color: var(--code-line-add);
+	}
+
+	& .diff.add::after {
+		content: "+";
+		color: var(--code-mark-add);
+	}
+
+	& .diff.remove {
+		background-color: var(--code-line-remove);
+	}
+
+	& .diff.remove::after {
+		content: "-";
+		color: var(--code-mark-remove);
+	}
+
+	/* `[!code focus]` blurs the other lines until the block is hovered */
+	&.has-focused .line:not(.focused) {
+		filter: blur(2px);
+		transition: filter 200ms;
+	}
+
+	&.has-focused:hover .line:not(.focused) {
+		filter: blur(0);
+	}
+}
+
+[data-line-numbers] .code-block {
+	counter-reset: line var(--line-start, 0);
+
+	& .line {
+		padding-left: calc(var(--code-gutter) + var(--code-gap));
+	}
+
+	& .line:not(.diff.remove) {
+		counter-increment: line;
+	}
+
+	& .line::before {
+		content: counter(line);
+		position: absolute;
+		top: 0;
+		left: 0;
+		z-index: 1;
+		display: inline-block;
+		width: var(--code-gutter);
+		height: 100%;
+		text-align: center;
+		user-select: none;
+		border-right: 1px solid var(--border);
+		color: var(--muted-foreground);
+		background-color: var(--code);
+	}
+
+	/* Removed diff lines show a dot instead of a number */
+	& .line.diff.remove::before {
+		content: "\2022";
+	}
+
+	/* A marked line also tints its number cell, slightly stronger */
+	& .highlighted {
+		border-left-width: 0;
+	}
+
+	& .highlighted::before {
+		border-left: 2px solid var(--code-mark-highlight);
+		background-color: color-mix(in oklab, var(--foreground) 10%, var(--code));
+	}
+
+	& .highlighted.warning::before {
+		border-color: var(--code-mark-warning);
+		background-color: color-mix(
+			in oklab,
+			var(--color-warning) 22%,
+			var(--code)
+		);
+	}
+
+	& .highlighted.error::before {
+		border-color: var(--code-mark-error);
+		background-color: color-mix(in oklab, var(--color-error) 20%, var(--code));
+	}
+
+	& .diff.add::before {
+		background-color: color-mix(
+			in oklab,
+			var(--color-success) 20%,
+			var(--code)
+		);
+	}
+
+	& .diff.remove::before {
+		background-color: color-mix(in oklab, var(--color-error) 20%, var(--code));
+	}
+
+	/* With a diff, narrow the column so the +/- sign fits before the code */
+	&.has-diff .line::before {
+		width: calc(var(--code-pad) + 5 * var(--spacing));
+	}
+
+	& .diff::after {
+		left: calc(var(--code-pad) + 6 * var(--spacing));
+	}
+}
+
+/* Line numbers stay in view while code scrolls sideways (not needed when lines wrap, as they always do in print) */
+@media not print {
+	[data-line-numbers][data-line-sticky]:not([data-line-wrapped]) .code-block {
+		& .line {
+			padding-left: 0;
+		}
+
+		& .line::before {
+			position: sticky;
+			margin-right: var(--code-gap);
+		}
+
+		&.has-diff .line::before {
+			margin-right: calc(var(--code-gap) + 2 * var(--spacing));
+		}
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.code-block.has-focused .line:not(.focused) {
+		transition: none;
+	}
+}

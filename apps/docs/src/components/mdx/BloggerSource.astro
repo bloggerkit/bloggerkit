@@ -1,0 +1,22 @@
+---
+import Badge from '@/components/ui/Badge.astro';
+import {
+	BLOGGER_SOURCES,
+	type BloggerSourceKind,
+} from '@/lib/ui/blogger-sources';
+
+interface Props {
+	kind: BloggerSourceKind;
+}
+
+/** Marks where a Blogger fact comes from: `<BloggerSource kind="official" />`. Kinds are in `src/lib/ui/blogger-sources.ts`. */
+const { kind } = Astro.props;
+const source = BLOGGER_SOURCES.get(kind);
+if (!source) {
+	throw new Error(
+		`Unknown source kind "${kind}", one of ${[...BLOGGER_SOURCES.keys()].join(', ')}`,
+	);
+}
+---
+
+<Badge title={source.title} class={source.class}><slot>{source.label}</slot></Badge>

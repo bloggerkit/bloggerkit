@@ -1,0 +1,195 @@
+---
+title: Profile
+description: The Profile widget, which shows the author of a single-author blog, or the members of a team blog.
+published: 2026-10-26
+---
+
+The `Profile` widget, "About Me" in the Layout editor, shows the Blogger profile of the author: photo, name, location, introduction and a link to the full profile. On a team blog, a blog with two members or more, it shows the list of members instead. Everything it prints comes from the Blogger profiles; the widget itself only stores whether to show the location and the introduction.
+
+## Quick example
+
+One includable for each case, chosen with `data:team`. The introduction is shortened with [`snippet`](../expressions/functions.mdx), and a member without a photo gets a placeholder.
+
+<CodeTabs>
+
+```xml title="theme.xml" {27}
+<b:widget id='Profile1' locked='false' title='About' type='Profile' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='showaboutme'>true</b:widget-setting>
+    <b:widget-setting name='showlocation'>true</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main' var='this'>
+    <b:class expr:name='data:team ? "profile-team" : "profile-solo"'/>
+    <h2 class='side-title'><data:title/></h2>
+    <b:include cond='data:team' name='teamProfile'/>
+    <b:include cond='not data:team' name='userProfile'/>
+  </b:includable>
+  <b:includable id='userProfile'>
+    <b:include name='profileImage'/>
+    <a class='profile-name' expr:href='data:userUrl' rel='author noreferrer' target='_blank'><data:displayname/></a>
+    <b:if cond='data:showlocation and data:location != ""'>
+      <p class='profile-location'><data:location/></p>
+    </b:if>
+    <b:if cond='data:aboutme != ""'>
+      <p class='profile-about'><b:eval expr='snippet(data:aboutme, { length: 200, links: true, linebreaks: true })'/></p>
+    </b:if>
+  </b:includable>
+  <b:includable id='teamProfile'>
+    <ul class='profile-members'>
+      <b:loop values='data:authors' var='author'>
+        <li>
+          <a expr:href='data:author.userUrl' rel='noreferrer' target='_blank'>
+            <b:include data='{ authorPhoto: data:author.authorPhoto, name: data:author.display-name }' name='memberImage'/>
+            <span><data:author.display-name/></span>
+          </a>
+        </li>
+      </b:loop>
+    </ul>
+  </b:includable>
+  <b:includable id='profileImage'>
+    <b:if cond='data:authorPhoto.image'>
+      <img class='profile-photo' expr:alt='data:displayname' expr:src='resizeImage(data:authorPhoto.image, 80, "1:1")' height='80' width='80'/>
+    <b:else/>
+      <span class='profile-photo profile-photo-empty'/>
+    </b:if>
+  </b:includable>
+  <b:includable id='memberImage'>
+    <b:if cond='data:authorPhoto.image'>
+      <img expr:alt='data:name' expr:src='resizeImage(data:authorPhoto.image, 40, "1:1")' height='40' width='40'/>
+    <b:else/>
+      <span class='profile-photo-empty'/>
+    </b:if>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered, on a single-author blog"
+<div class='widget Profile profile-solo' data-version='2' id='Profile1'>
+  <h2 class='side-title'>About</h2>
+  <img alt='Jane Doe' class='profile-photo' height='80' src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/…/w80-h80-p-k-no-nu/photo.jpg' width='80'/>
+  <a class='profile-name' href='https://www.blogger.com/profile/01234567890123456789' rel='author noreferrer' target='_blank'>Jane Doe</a>
+  <p class='profile-location'>Pune, Maharashtra, India</p>
+  <p class='profile-about'>I build themes and write about the parts of Blogger nobody documents.</p>
+</div>
+```
+
+</CodeTabs>
+
+`memberImage` is an includable of the theme, called with include data so it reads the same field names as `profileImage`.
+
+## Placement and limits
+
+|                     |                                                                                                          | Source                            |
+| ------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                | `Profile`                                                                                                | <BloggerSource kind="official" /> |
+| Per blog            | 1. A second one is refused when saving, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Width               | 300 pixels or more                                                                                       | <BloggerSource kind="observed" /> |
+| Placement           | A sidebar in Blogger's themes, any section otherwise                                                     | <BloggerSource kind="observed" /> |
+| Locked              | Not usually                                                                                              | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                                                 | <BloggerSource kind="observed" /> |
+| Classic mobile view | Shown by default. Works in Mobile Default 2010, not in Dynamic mobile                                    | <BloggerSource kind="official" /> |
+| Default title       | "About Me" for one author, "Contributors" for a team blog, in the blog language                          | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting        | Values          | Data           | Meaning               | Source                            |
+| -------------- | --------------- | -------------- | --------------------- | --------------------------------- |
+| `showaboutme`  | `true`, `false` | `showaboutme`  | Show the introduction | <BloggerSource kind="observed" /> |
+| `showlocation` | `true`, `false` | `showlocation` | Show the location     | <BloggerSource kind="observed" /> |
+
+On a team blog the Layout editor only offers the title and the visibility, but both settings are still stored.
+
+A Profile written with no settings gets `showaboutme` `true` and `showlocation` `false`. A second Profile widget is refused when the theme is saved. <BloggerSource kind="observed" />
+
+## Widget data
+
+The single-author fields are filled on a blog with one author whose profile is public. The `authors` list exists on a team blog only.
+
+### One author
+
+| Field                                     | V1  | V2  | Type    | Holds                                                                        | Source                            |
+| ----------------------------------------- | --- | --- | ------- | ---------------------------------------------------------------------------- | --------------------------------- |
+| `title`                                   | ✓   | ✓   | string  | The widget title, up to 100 characters                                       | <BloggerSource kind="observed" /> |
+| `userUrl`                                 | ✓   | ✓   | string  | The profile URL, `https://www.blogger.com/profile/PROFILE_ID`                | <BloggerSource kind="official" /> |
+| `displayname`                             | ✓   | ✓   | string  | The display name                                                             | <BloggerSource kind="official" /> |
+| `location`                                | ✓   | ✓   | string  | "City, Region, Country" from the profile. Empty when hidden or private       | <BloggerSource kind="official" /> |
+| `aboutme`                                 | ✓   | ✓   | string  | The introduction, up to 1,200 characters. Empty when switched off or private | <BloggerSource kind="official" /> |
+| `showlocation`                            | ✓   | ✓   | boolean | The setting. A location may still be empty: test `location` as well          | <BloggerSource kind="observed" /> |
+| `showaboutme`                             | ✓   | ✓   | boolean | The setting. Legacy since 2012: `aboutme` is already empty when it is off    | <BloggerSource kind="observed" /> |
+| `photo`                                   | ✓   |     | object  | The photo                                                                    | <BloggerSource kind="official" /> |
+| `photo.url`                               | ✓   |     | string  | Its URL, at 80 pixels                                                        | <BloggerSource kind="official" /> |
+| `photo.width`                             | ✓   |     | number  | Its width                                                                    | <BloggerSource kind="official" /> |
+| `photo.height`                            | ✓   |     | number  | Its height, 80                                                               | <BloggerSource kind="official" /> |
+| `photo.alt`                               | ✓   |     | string  | "My photo", in the blog language, as `data:messages.myPhoto`                 | <BloggerSource kind="observed" /> |
+| `authorPhoto`                             |     | ✓   | object  | The photo                                                                    | <BloggerSource kind="observed" /> |
+| `authorPhoto.image`                       |     | ✓   | image   | The photo, cropped to 113 by 113                                             | <BloggerSource kind="observed" /> |
+| `authorPhoto.width`, `authorPhoto.height` |     | ✓   | number  | Always 113                                                                   | <BloggerSource kind="observed" /> |
+| `authorPhoto.alt`                         |     | ✓   | string  | "My photo". Replaced by `data:messages.myPhoto` in 2017                      | <BloggerSource kind="observed" /> |
+| `viewProfileMsg`                          | ✓   | ✓   | string  | "View my complete profile", as `data:messages.viewMyCompleteProfile`         | <BloggerSource kind="official" /> |
+
+### Team blog
+
+| Field                     | V1  | V2  | Type    | Holds                                                              | Source                              |
+| ------------------------- | --- | --- | ------- | ------------------------------------------------------------------ | ----------------------------------- |
+| `team`                    | ✓   | ✓   | boolean | `true` on a team blog, when `authors` exists                       | <BloggerSource kind="official" />   |
+| `authors`                 | ✓   | ✓   | list    | The members, 2 to 100                                              | <BloggerSource kind="official" />   |
+| `authors[i].userUrl`      | ✓   | ✓   | string  | The profile URL of the member                                      | <BloggerSource kind="observed" />   |
+| `authors[i].display-name` | ✓   | ✓   | string  | The display name of the member                                     | <BloggerSource kind="observed" />   |
+| `authors[i].authorPhoto`  |     | ✓   | object  | The photo: `image` (113 by 113), `width` and `height` (113), `alt` | <BloggerSource kind="observed" />   |
+| `authors[i].profileLogo`  | ✓   | ✓   | string  | Left from Google+, no replacement                                  | <BloggerSource kind="deprecated" /> |
+
+### Retired
+
+| Field              | Holds                                                                                                                 | Source                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `profileLogo`      | The logo of the service hosting the profile. Since Google+ closed in 2019, always `//www.blogger.com/img/logo-16.png` | <BloggerSource kind="deprecated" /> |
+| `hasgoogleprofile` | Whether the profile was a Google+ profile                                                                             | <BloggerSource kind="deprecated" /> |
+
+Google documents the member fields as `authors[].displayname` and `authors[].userURL`, and tests `data:team == "true"`. In practice, Blogger's own markup reads `display-name` and `userUrl`, and tests `data:team` as a boolean. Write those.
+
+The hyphen is part of the path: `data:author.display-name` reads the field, and so does `data:display-name` inside an includable called with `data='author'`.
+
+## Built-in includables
+
+| Includable            | V1  | V2              | Renders                                                                                                                        | Source                              |
+| --------------------- | --- | --------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| `main`                | ✓   | ✓, `var='this'` | Version 1: everything. Version 2: `widget-title`, then `content`                                                               | <BloggerSource kind="observed" />   |
+| `content`             |     | ✓               | `div.widget-content.team` with `teamProfile`, or `div.widget-content.individual` with `userProfile`                            | <BloggerSource kind="observed" />   |
+| `userProfile`         |     | ✓               | `userProfileImage`, then `userProfileInfo`                                                                                     | <BloggerSource kind="observed" />   |
+| `userProfileImage`    |     | ✓               | A link to `userUrl` with `rel='nofollow'` around `profileImage`                                                                | <BloggerSource kind="observed" />   |
+| `userProfileInfo`     |     | ✓               | `div.profile-info > dl.profile-datablock` with `userProfileData`, `userLocation` and `userProfileText`, then `viewProfileLink` | <BloggerSource kind="observed" />   |
+| `userProfileData`     |     | ✓               | `dt.profile-data` with the name, linked with `rel='author nofollow'`                                                           | <BloggerSource kind="observed" />   |
+| `userProfileLink`     |     | ✓               | The linked name of the author. Present in some exports; its built-in markup is not confirmed                                   | <BloggerSource kind="observed" />   |
+| `userLocation`        |     | ✓               | `dd.profile-data.location`                                                                                                     | <BloggerSource kind="observed" />   |
+| `userProfileText`     |     | ✓               | `dd.profile-textblock` with `aboutme`                                                                                          | <BloggerSource kind="observed" />   |
+| `viewProfileLink`     |     | ✓               | `a.profile-link` with `data:messages.viewMyCompleteProfile`                                                                    | <BloggerSource kind="observed" />   |
+| `teamProfile`         |     | ✓               | `ul`, with `li > div.team-member` and `teamProfileLink` for each member                                                        | <BloggerSource kind="observed" />   |
+| `teamProfileLink`     |     | ✓               | `a.profile-link.g-profile` with `profileImage` and `span.profile-name`                                                         | <BloggerSource kind="observed" />   |
+| `profileImage`        |     | ✓               | `authorProfileImage` when there is a photo, `defaultProfileImage` otherwise                                                    | <BloggerSource kind="observed" />   |
+| `authorProfileImage`  |     | ✓               | `img.profile-img` from `authorPhoto`, with `alt` from `data:messages.myPhoto`                                                  | <BloggerSource kind="observed" />   |
+| `defaultProfileImage` |     | ✓               | An empty `div.default-avatar`                                                                                                  | <BloggerSource kind="observed" />   |
+| `userGoogleProfile`   |     | ✓               | The Google+ follow button, `div.g-follow`                                                                                      | <BloggerSource kind="deprecated" /> |
+
+The built-in `teamProfileLink` and `profileImage` are called for each member with `data='author'`, so inside them `data:userUrl`, `data:display-name` and `data:authorPhoto` are the member's. A theme can override them and keep that behavior. Retired includables can be emptied in place, `<b:includable id='userGoogleProfile'/>`.
+
+### Version 1
+
+The version 1 `main` writes the title as an `h2`. On a team blog, it lists `a.profile-name-link.g-profile` per member, with `profileLogo` as a background image. Otherwise it writes the photo linked to the profile, `dl.profile-datablock` with the name, the location when `showlocation` is on, and the introduction when it is not empty, then `a.profile-link` with `data:viewProfileMsg`, then the obsolete `quickedit` include. Some copies also print a `g-follow` element when `hasgoogleprofile` is true. <BloggerSource kind="observed" />
+
+### What Blogger's themes change
+
+The responsive themes override part of the markup: <BloggerSource kind="observed" />
+
+- `main`. Contempo and Essential wrap the content in a `div.wrapper` with the class `solo` on single-author blogs, and print the title only on team blogs, with `data:messages.blogAuthors` as the default title. Emporio and Soho print no title. Notable sets `var='widget'`, the class `solo` and the same default title, then calls `super.main`.
+- `defaultProfileImage` prints the `defaultAvatarIcon` SVG, in all five themes.
+- `userProfileText` puts the introduction in a container that a script can shorten (Contempo, Essential, Notable).
+- `viewProfileLink` uses `data:messages.visitProfile`, as a pill button in Contempo and Essential.
+- `teamProfile` in Emporio passes the members to `extendableItems` with a `limit` of 4, so a "Show more" button reveals the rest.
+- `teamProfileLink` adds `data:messages.visitProfile` under the name (Emporio, Soho).
+- `userLocation` gets the classes `profile-data profile-location` (Notable).
+
+## Things to know
+
+- **Photo size.** In version 1 the photo keeps its proportions within 80 pixels, so a portrait comes out narrower than 80.
+- **Private profiles.** Most single-author fields are empty when the profile is not public.
+- **Legacy.** `profileLogo`, `authors[i].profileLogo`, `hasgoogleprofile` and `userGoogleProfile` are left from Google+. `showaboutme` and `authorPhoto.alt` are legacy. `quickedit` in the version 1 `main` is obsolete.

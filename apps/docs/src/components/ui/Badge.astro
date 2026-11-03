@@ -1,0 +1,21 @@
+---
+interface Props {
+	title?: string;
+	/** One of the tones in `src/lib/ui/badges.ts`. */
+	class?: string;
+	/** `meta` inline with text, `xs` above a page title or inside a card. */
+	size?: 'meta' | 'xs';
+}
+
+/** A small pill for Blogger sources and levels. */
+const { title, class: className, size = 'meta' } = Astro.props;
+const sizes = { meta: 'text-meta', xs: 'text-xs' };
+---
+
+<span
+	title={title}
+	class:list={[
+		`inline-flex items-center rounded-md border px-1.5 py-0.5 align-middle ${sizes[size]} leading-4 font-medium whitespace-nowrap`,
+		className,
+	]}><slot /></span
+>

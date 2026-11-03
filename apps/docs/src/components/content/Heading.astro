@@ -1,0 +1,30 @@
+---
+import Link from '@lucide/astro/icons/link';
+
+interface Props {
+	level: 2 | 3 | 4;
+	id?: string;
+}
+
+/** A heading (h2–h4) with an anchor link shown on hover or focus. */
+const { level, id } = Astro.props;
+const Tag = `h${level}` as const;
+---
+
+{/* The link's accessible name is its label plus the heading text ("Link to section Loops"), via the span's id */}
+<Tag id={id} class="group">
+	<span id={id && `${id}-text`}><slot /></span>
+	{
+		id && (
+			<a
+				href={`#${id}`}
+				id={`${id}-link`}
+				aria-label="Link to section"
+				aria-labelledby={`${id}-link ${id}-text`}
+				class="anchor-link ms-2 inline-flex print:hidden align-middle text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+			>
+				<Link size={14} aria-hidden="true" />
+			</a>
+		)
+	}
+</Tag>

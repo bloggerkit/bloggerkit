@@ -1,0 +1,219 @@
+---
+title: Structure of a theme
+description: The parts of a theme document, from the XML declaration to the closing html tag, and what each one becomes in the rendered page.
+level: beginner
+published: 2026-10-26
+---
+
+A theme is one XML document with a fixed outline: an XML declaration, a doctype, then an `<html>` element holding one `<head>` and one `<body>`. The CSS of the blog goes in a `<b:skin>` inside the head. The widgets go in sections, usually inside the body.
+
+```xml title="The outline of a theme"
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+  <head>
+    <meta content='width=device-width, initial-scale=1' name='viewport'/>
+    <title><data:view.title.escaped/></title>
+    <b:include data='blog' name='all-head-content'/>
+    <b:skin><![CDATA[/* Theme Designer variables and the CSS of the blog */]]></b:skin>
+    <b:template-skin><![CDATA[/* the CSS of the Layout editor */]]></b:template-skin>
+  </head>
+  <body>
+    <header>
+      <b:section id='header' maxwidgets='1' name='Header' showaddelement='no'/>
+    </header>
+    <main>
+      <b:section id='main' maxwidgets='1' name='Posts' showaddelement='no'/>
+    </main>
+    <aside>
+      <b:section id='sidebar' name='Sidebar' preferred='yes'/>
+    </aside>
+  </body>
+</html>
+```
+
+The sections are empty here to show the outline; in a real theme they hold `<b:widget>` elements. [Your first theme](./first-theme.mdx) fills this outline step by step.
+
+## The first two lines
+
+Every theme starts with the same two lines:
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+```
+
+The first is the XML declaration, the second the doctype, written with an uppercase `<!DOCTYPE`. Both are optional. What Blogger refuses in them, such as a blank line before the declaration or `<!doctype html>`, and how it rewrites them, is in [Saving a theme](./saving.mdx#the-xml-declaration-and-the-doctype). <BloggerSource kind="observed" />
+
+In the rendered page, Blogger drops the XML declaration and keeps `<!DOCTYPE html>`, so browsers render the blog in standards mode. <BloggerSource kind="observed" />
+
+## XML, not HTML
+
+A theme is parsed as XML, and a file that is not well-formed XML can not be saved. Markup that a browser forgives is an error here: <BloggerSource kind="observed" />
+
+| Write                                  | Not                                | Why                                             |
+| -------------------------------------- | ---------------------------------- | ----------------------------------------------- |
+| `<br/>`, `<img src='a.png'/>`          | `<br>`, `<img src='a.png'>`        | Every element is closed, void elements included |
+| `href='/search?q=a&amp;max-results=5'` | `href='/search?q=a&max-results=5'` | `&` starts an entity, in attributes and in text |
+| `&#160;`, `&#169;`                     | `&nbsp;`, `&copy;`                 | XML knows only five named entities              |
+
+[Well-formed XML](./saving.mdx#well-formed-xml) lists the other common mistakes with Blogger's messages, and shows the commented CDATA section that lets an inline script or style use `<` and `&` freely. Blogger does not read inside CDATA, so `data:` tags and `expr:` attributes have no effect there.
+
+An element written self-closed, `<div class='clear'/>`, renders with an end tag when it is not void in HTML, see [Empty elements](./saving.mdx#empty-elements-1). <BloggerSource kind="observed" />
+
+## The `<html>` element
+
+`<html>` is the root element of every theme. Its attributes are of three kinds, each described in [Root attributes](../reference/root-attributes.mdx): <BloggerSource kind="observed" />
+
+- the four [namespace declarations](../reference/root-attributes.mdx#namespaces), `xmlns`, `xmlns:b`, `xmlns:data` and `xmlns:expr`, which XML tools need and Blogger does not;
+- the [settings of the theme](../reference/root-attributes.mdx#attributes), as `b:` attributes: the layouts version, the widget version, and the `b:css` and `b:js` switches that leave out what Blogger adds to the page;
+- [any HTML attribute](../reference/root-attributes.mdx#html-attributes), such as `lang`, `dir` or `class`, written as it is or computed with `expr:`. Blogger's themes compute `dir` and `lang` from the settings of the blog.
+
+On the blog, Blogger removes the `b:` attributes, evaluates the `expr:` ones and keeps the namespace declarations as written. [`<b:attr>` and `<b:class>`](../reference/root-attributes.mdx#battr-and-bclass-in-html) written directly in `<html>` set its attributes too. Saving checks none of these attributes, see [The root element](./saving.mdx#the-root-element). <BloggerSource kind="observed" />
+
+A theme that brings all its own CSS and JavaScript sets both switches off and names itself:
+
+```xml
+<html b:css='false' b:defaultwidgetversion='2' b:js='false' b:layoutsVersion='3' b:responsive='true' b:templateUrl='garden.xml' b:templateVersion='1.0.0' expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+```
+
+`<html>` contains `<head>` and `<body>`. In classic themes it also contains, after `</body>`, the `macro:includable` that generates their sidebar sections, see [Classic themes](../reference/classic-themes.mdx).
+
+## The head
+
+A theme has one `<head>`. It holds the [`<b:skin>`](../styles/skin.mdx), the CSS of the blog, which every theme has exactly once. <BloggerSource kind="official" /> Where a skin may be is in [The skins](./saving.mdx#the-skins). Everything else is convention, followed by Blogger's themes and most others:
+
+```xml
+<head>
+  <meta content='width=device-width, initial-scale=1' name='viewport'/>
+  <title><data:view.title.escaped/></title>
+  <b:include data='blog' name='all-head-content'/>
+  <b:skin><![CDATA[ … ]]></b:skin>
+  <b:template-skin><![CDATA[ … ]]></b:template-skin>
+  <b:defaultmarkups>
+    …
+  </b:defaultmarkups>
+  <b:include data='blog' name='google-analytics'/>
+</head>
+```
+
+| Part                     | What it does                                                                                                                                                                                  | Source                            |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `<meta name='viewport'>` | `width=device-width, initial-scale=1` in version 3 themes. Classic themes compute it from `data:blog.isMobile`                                                                                | <BloggerSource kind="observed" /> |
+| `<title>`                | `<data:view.title.escaped/>`: the title of the post or page, or the blog title elsewhere. Classic themes use `<data:blog.pageTitle/>`, the blog title followed by the page name               | <BloggerSource kind="observed" /> |
+| `all-head-content`       | Blogger's standard tags: charset, theme color, generator, favicon, canonical link, feed links, description and Open Graph tags. See [Includables](../layout/includables.mdx#all-head-content) | <BloggerSource kind="observed" /> |
+| `<b:skin>`               | The CSS of the blog and the Theme Designer variables. Required, once                                                                                                                          | <BloggerSource kind="official" /> |
+| `<b:template-skin>`      | The CSS of the Layout editor. Not in version 1 themes                                                                                                                                         | <BloggerSource kind="observed" /> |
+| `<b:defaultmarkups>`     | Includables for every widget of a type, and Common includables. See [Default markups](../layout/default-markups.mdx)                                                                          | <BloggerSource kind="observed" /> |
+| `google-analytics`       | The Google Analytics script, when the blog settings have an Analytics id                                                                                                                      | <BloggerSource kind="official" /> |
+
+Blogger also adds tags of its own to `<head>`, such as two AdSense `<meta>` tags, see [What Blogger adds to the page](./concepts.mdx#what-blogger-adds-to-the-page). <BloggerSource kind="observed" />
+
+The order is a habit, not a rule. Classic themes put `all-head-content` before `<title>`, and themes that write their own meta tags leave `all-head-content` out and write the charset, canonical link and feed links themselves, see [Head and SEO](../guides/head-and-seo.mdx). <BloggerSource kind="observed" />
+
+[What `all-head-content` writes](../guides/head-and-seo.mdx#what-all-head-content-writes) shows the head of a post as Blogger renders it. The skins render as `<style id='page-skin-1' type='text/css'>` and `<style id='template-skin-1' type='text/css'>`, where `<b:skin>` and `<b:template-skin>` are written. <BloggerSource kind="observed" />
+
+Sections can not be placed in `<head>`, see [Content and placement](../layout/sections.mdx#content-and-placement). <BloggerSource kind="observed" /> A `<b:include>` directly in `<head>` works, and a `<b:if>` directly in `<html>` can wrap two whole `<head>` and `<body>` pairs, one for some pages and one for the others; a `<b:skin>` in both branches is refused as two skins. See [Sections](../layout/sections.mdx) and [Widgets as configuration](../guides/widgets-as-configuration.mdx). <BloggerSource kind="observed" />
+
+## The body
+
+A theme has one `<body>`. It contains any HTML, Blogger's tags, and the [sections](../layout/sections.mdx) with their widgets. <BloggerSource kind="official" />
+
+```xml
+<body>
+  <b:class cond='data:view.isHomepage' name='home-view'/>
+  <b:class cond='data:view.isMultipleItems' name='list-view'/>
+  <b:class cond='data:view.isPost' name='post-view'/>
+  <b:class cond='data:view.isPage' name='page-view'/>
+  <b:class cond='data:view.isError' name='error-view'/>
+  <div class='page'>
+    <header class='site-header'>
+      <b:section id='header' maxwidgets='1' name='Header' showaddelement='no'/>
+    </header>
+    <div class='columns'>
+      <main class='main'>
+        <b:section id='main' maxwidgets='1' name='Posts' showaddelement='no'/>
+      </main>
+      <aside class='sidebar'>
+        <b:section id='sidebar' name='Sidebar' preferred='yes'/>
+      </aside>
+    </div>
+  </div>
+  <script defer='defer' src='https://cdn.example.com/garden/1.0.0/theme.js'/>
+</body>
+```
+
+- **Classes per page.** Version 3 themes write `<body>` without a `class` attribute and add classes with [`<b:class>`](../tags/attributes.mdx) children, each with a condition on the page type. CSS then styles each kind of page from one stylesheet. <BloggerSource kind="observed" />
+- **Sections.** A section can be anywhere in the body: inside any HTML, inside `<b:if>` or `<b:with>`. It can not be inside another section, and inside an includable of a widget it saves but the widget fails to render, a [markup error](./saving.mdx#markup-errors). See [Sections](../layout/sections.mdx). <BloggerSource kind="observed" />
+- **Default markups.** `<b:defaultmarkups>` can also be in the body, and a theme can have more than one `<b:defaultmarkup type='Common'>` block. <BloggerSource kind="observed" />
+- **Scripts.** Scripts usually come last. A theme script is loaded from another host, since Blogger hosts no files for themes. Blogger's own widget scripts are added after the theme's, see [What Blogger adds](./concepts.mdx#what-blogger-adds-to-the-page). <BloggerSource kind="observed" />
+
+```html title="Rendered for a post"
+<body class='post-view'>
+```
+
+Blogger's own themes also get a class `variant-…` on `<body>`, such as `variant-indie_light`, which is not in their XML. <BloggerSource kind="observed" />
+
+## `<b:template-script>`
+
+`<b:template-script>` writes a script hosted by Blogger for its own themes: either a `<script>` element that loads the file, or the content of the file inline. Blogger decides which files exist and their versions. <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:template-script async='true' name='indie' version='1.0.0'/>
+```
+
+```html title="Rendered"
+<script type="text/javascript" src="https://resources.blogblog.com/blogblog/data/res/3784151217-indie_compiled.js" async="true"></script>
+```
+
+</CodeTabs>
+
+| Attribute | Value                                                                 | Description                                                                            | Source                            |
+| --------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------- |
+| `name`    | `indie`, `fancy`, `vegeclub`, `rockpool`, `strm`, `threaded_comments` | The script. A theme script has the name of the theme's `b:templateUrl`, without `.xml` | <BloggerSource kind="observed" /> |
+| `version` | `1.0.0`                                                               | The version of the script. Every use in Blogger's themes says `1.0.0`                  | <BloggerSource kind="observed" /> |
+| `async`   | `true`                                                                | Load the script with `async`                                                           | <BloggerSource kind="observed" /> |
+| `inline`  | `true`                                                                | Write the content of the script instead of a link to it                                | <BloggerSource kind="observed" /> |
+
+Each of Blogger's five version 3 themes calls its own script once, as the last element of `<body>`. All five also use the inline form with the name `threaded_comments`, inside the Blog widget, to write the script of threaded comments just before the call that starts them. <BloggerSource kind="observed" />
+
+A custom theme has little use for the tag. The theme scripts only work with the markup of their theme, and `threaded_comments` only with Blogger's markup of threaded comments. Classic themes do not have the tag, and Google does not document it. <BloggerSource kind="observed" />
+
+## What a theme needs
+
+To be saved, a theme needs a root element and one `<b:skin>`. The declaration, the doctype and the namespace declarations are optional, and Blogger does not check the name of the root element. It does not require a section, a widget, a section marked `preferred`, or a Blog widget. <BloggerSource kind="observed" /> A useful theme has more:
+
+- a `<title>` and the standard head tags, from `all-head-content` or written by hand;
+- a Blog widget in a section, or nothing shows the posts;
+- a few more sections where the owner can add widgets, one of them marked `preferred`;
+- a `<b:template-skin>`, so the Layout editor shows the sections in a sensible arrangement.
+
+The smallest theme that shows the posts of a blog:
+
+```xml title="theme.xml"
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:defaultwidgetversion='2' b:layoutsVersion='3' expr:lang='data:blog.locale' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+  <head>
+    <title><data:view.title.escaped/></title>
+    <b:include data='blog' name='all-head-content'/>
+    <b:skin><![CDATA[body { margin: 2rem auto; max-width: 40rem; font: 18px/1.6 Georgia, serif; }]]></b:skin>
+  </head>
+  <body>
+    <b:section id='main' name='Posts' showaddelement='no'>
+      <b:widget id='Blog1' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'>
+        <b:includable id='main'>
+          <b:loop values='data:posts' var='post'>
+            <h2><a expr:href='data:post.url'><data:post.title/></a></h2>
+            <data:post.body/>
+          </b:loop>
+        </b:includable>
+      </b:widget>
+    </b:section>
+  </body>
+</html>
+```
+
+When Blogger stores a widget, it adds a `<b:widget-settings>` element with the widget's settings, before the includables. <BloggerSource kind="observed" /> A theme can have more than one Blog widget, as long as each has its own id, such as `Blog1` and `Blog2`; each one gets the posts of the page. <BloggerSource kind="observed" />

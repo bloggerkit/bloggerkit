@@ -1,3 +1,7 @@
 {
-  "recommendations": ["EditorConfig.EditorConfig", "biomejs.biome"]
+  "recommendations": [
+    "EditorConfig.EditorConfig",
+    "biomejs.biome",
+    "esbenp.prettier-vscode"
+  ]
 }

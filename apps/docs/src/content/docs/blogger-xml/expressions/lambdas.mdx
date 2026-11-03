@@ -1,0 +1,321 @@
+---
+title: Lambdas
+description: Test, count, filter, transform and search lists with the lambda operators any, all, none, count, filter, map and first, and cut them with take and skip.
+level: advanced
+prerequisites:
+  - blogger-xml/expressions/data-paths
+  - blogger-xml/expressions/operators
+published: 2026-10-26
+---
+
+A lambda runs a small expression once for every item of a list. Google added them in May 2016, to apply rules to whole sets of data, posts, comments or labels, rather than one item at a time. <BloggerSource kind="official" />
+
+This class marks the posts labelled News, so that the stylesheet can show a badge on them:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<article expr:class='data:post.labels any (l => l.name == "News") ? "post news" : "post"'>
+  <h2><data:post.title/></h2>
+</article>
+```
+
+```html title="Rendered for a post labelled News and CSS"
+<article class="post news">
+  <h2>Dark mode in CSS</h2>
+</article>
+```
+
+</CodeTabs>
+
+`data:post.labels` is the list, `any` the operator, `l` the name of the current label, and `l.name == "News"` the body. The body runs for each label, and `any` is true as soon as one of them gives true.
+
+## How a lambda is written
+
+```txt
+list operator (parameter => body)
+```
+
+| Part      | Is                                                                           |
+| --------- | ---------------------------------------------------------------------------- |
+| list      | the source: data, a list literal, a call, or any expression in parentheses   |
+| operator  | `any`, `all`, `none`, `count`, `filter`, `where`, `map`, `select` or `first` |
+| parameter | a word naming the current item                                               |
+| `=>`      | the arrow. `>` needs no escape in an attribute                               |
+| body      | an expression, evaluated once per item                                       |
+
+```xml
+<b:if cond='data:widgets any (w => w.sectionId == "sidebar")'>
+<b:with value='["data:blog.", "data:view."] any (prefix => data:input contains prefix)' var='isPath'>
+<b:with value='(data:c.links ?: data:links) filter (l => l.name == data:c.name)' var='matches'>
+```
+
+- **The source** is a value at the tightest level: a path, a list literal, a call or a parenthesized expression. <BloggerSource kind="observed" /> The result of an infix function is not, so wrap it: `(data:url path "x") map (…)`.
+- **The parameter** is one word. The body reads the current item through it, see [The parameter](#the-parameter).
+- **The space before `(`** is optional: `map(l => l.target)` works. <BloggerSource kind="observed" />
+- **The parentheses around the lambda can be left out.** Blogger's own themes write `data:widgets none w => w.sectionId == "sidebar_top"`. <BloggerSource kind="observed" /> The body then runs to the end of the expression, or to the parenthesis that closes around the lambda, so `data:widgets none w => w.sectionId == "a" or data:view.isPreview` puts the `or` inside the body. Keep the parentheses, and the lambda ends where you expect. Without them: <BloggerSource kind="observed" />
+  - two lambdas in a row are an error, `data:l filter x => x > 1 map y => y * 10`, as the second falls inside the first body. Parentheses around the first one end it: `(data:l filter x => x > 1) map y => y * 10`;
+  - a lambda can nest inside the body of another: `data:n map l => l filter x => x > 1`;
+  - a lambda can not sit in the first branch of a ternary, `true ? data:l count x => true : 5`, as its body takes the `:`;
+  - a member after a space goes into the body: `data:l filter x => x > 1 .size` reads `.size` of `x > 1`.
+- **Lambdas are operators, not functions.** `filter(data:posts, …)` does not exist. <BloggerSource kind="observed" />
+
+## The operators
+
+| Operator            | Body        | Gives                                              | Source                            |
+| ------------------- | ----------- | -------------------------------------------------- | --------------------------------- |
+| [`any`](#any)       | a condition | `true` when the body is true for at least one item | <BloggerSource kind="official" /> |
+| [`all`](#all)       | a condition | `true` when the body is true for every item        | <BloggerSource kind="observed" /> |
+| [`none`](#none)     | a condition | `true` when the body is true for no item           | <BloggerSource kind="observed" /> |
+| [`count`](#count)   | a condition | the number of items for which the body is true     | <BloggerSource kind="observed" /> |
+| [`filter`](#filter) | a condition | the list of the items for which the body is true   | <BloggerSource kind="observed" /> |
+| [`map`](#map)       | any value   | the list of the values of the body                 | <BloggerSource kind="observed" /> |
+| [`first`](#first)   | a condition | the first item for which the body is true          | <BloggerSource kind="observed" /> |
+| `where`             | a condition | the same as `filter`                               | <BloggerSource kind="observed" /> |
+| `select`            | any value   | the same as `map`                                  | <BloggerSource kind="observed" /> |
+
+`where` is `filter`, and `select` is `map`, under other names. <BloggerSource kind="observed" /> Blogger's own themes use `any`, `none`, `count`, `filter`, `map` and `first`. None of them uses `all`, which works as its name says. The list Google promised in 2016 was never published: the others were found by testing. [`take` and `skip`](#take-and-skip) cut a list without a lambda.
+
+A condition body read from data is true or false by [truthiness](./evaluation.mdx#truthiness): `data:posts filter (p => p.featuredImage)` keeps the posts that have an image. A body made in the expression must be a boolean or a map: `(x => "a")`, `(x => 1)` and `(x => x + 1)` are errors. <BloggerSource kind="observed" /> See [Conditions inside an expression](./evaluation.mdx#conditions-inside-an-expression).
+
+### `any`
+
+Whether at least one item matches. The common use is to render a section only when it holds widgets, and always in the Layout editor, where the section must exist to receive them:
+
+```xml {2,4}
+<b:if cond='data:view.isLayoutMode or data:widgets any (w => w.sectionId == "theme_section_sidebar")'>
+  <aside class='sidebar'>
+    <b:section class='sidebar-section' id='theme_section_sidebar' showaddelement='true'/>
+  </aside>
+</b:if>
+```
+
+Without the test, an empty section would still render its `<aside>` wrapper.
+
+### `all`
+
+Whether every item matches. On an empty list, `all` is true, and on missing data it is false: <BloggerSource kind="observed" />
+
+```xml
+<div class='posts'>
+  <b:class cond='data:posts.notEmpty and data:posts all (p => p.featuredImage)' name='with-images'/>
+</div>
+```
+
+### `none`
+
+Whether no item matches, the opposite of `any`. This banner can be closed, unless a link of its LinkList turns that off:
+
+```xml
+<b:with value='data:links none (l => l.name == "dismiss" and l.target == "false")' var='dismissible'>
+  <b:if cond='data:dismissible'>
+    <button class='close' type='button'>Close</button>
+  </b:if>
+</b:with>
+```
+
+### `count`
+
+The number of matching items:
+
+```xml
+<b:if cond='data:widgets.HTML count (w => w.title contains "[Ad]") > 0'>
+  <b:include name='adScript'/>
+</b:if>
+<b:eval expr='data:post.labels count (l => l.name != "Featured")'/>
+```
+
+To count every item, read the [`length` property](./properties.mdx#lists): `data:posts.length`. A filtered list can be counted either way: `(data:widgets filter (w => w.sectionId == "footer")).length` and `data:widgets count (w => w.sectionId == "footer")` give the same number.
+
+### `filter`
+
+The items for which the body is true, in their order. The result is a list of the same items, with all their data:
+
+```xml title="The widgets of a carousel section, as slides"
+<b:with value='data:widgets filter (w => w.sectionId == "theme_section_carousel")' var='slides'>
+  <b:if cond='data:slides.length > 1'>
+    <b:loop index='i' values='data:slides' var='slide'>
+      <label expr:for='"slide-" + data:slide.id'><b:eval expr='"Slide " + (data:i + 1)'/></label>
+    </b:loop>
+  </b:if>
+</b:with>
+```
+
+```xml title="Links that hold a real URL"
+<b:loop values='data:links filter (l => l.target not in ["https://", "#"] and ("https://" in l.target or "http://" in l.target))' var='link'>
+  <a expr:href='data:link.target'><data:link.name/></a>
+</b:loop>
+```
+
+### `map`
+
+The value of the body for each item, in the order of the list:
+
+```xml
+<b:with value='data:widgets.FeaturedPost map (w => w.postId)' var='featuredPostIds'>
+<b:with value='data:posts filter (p => p.featuredImage) map (p => p.featuredImage)' var='images'>
+```
+
+- The values keep their type: `map (p => p.featuredImage)` gives images, with the [image properties](./properties.mdx#images). <BloggerSource kind="observed" />
+- The values are read again, as from a variable: a string of digits becomes a number, and `"true"`, `"false"`, `"yes"` and `"no"` become booleans. `["false", "x"] map (x => x)` is `[false,"x"]`. `filter` and `where` keep the items as they are. <BloggerSource kind="observed" /> See [Strings read from data](./evaluation.mdx#strings-read-from-data).
+- The body can build a map or a list, to give every item a new shape: <BloggerSource kind="observed" />
+
+```xml title="Comments with computed flags"
+<b:with value='data:post.comments map (c => { info: data:c, isAnonymous: (data:c.author == "Anonymous" and !data:c.authorUrl), isDeleted: (data:c.isDeleted ? true : false) })' var='comments'>
+  <b:loop values='data:comments' var='c'>
+    <li expr:class='data:c.isAnonymous ? "comment anonymous" : "comment"'><data:c.info.body/></li>
+  </b:loop>
+</b:with>
+```
+
+### `first`
+
+The first item for which the body is true. It gives the item itself, not a list:
+
+```xml
+<b:with value='data:widgets first (w => w.type == "Blog")' var='blogWidget'>
+  <b:if cond='data:blogWidget'>
+    <b:eval expr='data:blogWidget.allBylineItems.author.label'/>
+  </b:if>
+</b:with>
+```
+
+When no item matches, `first` gives missing data. <BloggerSource kind="observed" /> Test the result before reading its members, as above, or give it a fallback: `(data:widgets first (w => w.type == "Blog")) ?: data:fallback`.
+
+`first` without a lambda is the [list property](./properties.mdx#lists) `.first`, the first item. `.any` is also a property, whether the list has items. A word after a dot is a property, a word followed by a lambda is an operator.
+
+## `take` and `skip`
+
+`take` gives the first items of a list, and `skip` all the items but the first ones. They take a count, not a lambda: <BloggerSource kind="observed" />
+
+```xml
+<b:loop values='data:posts take 3' var='post'>
+  <b:include data='post' name='featuredCard'/>
+</b:loop>
+<b:loop values='data:posts skip 3' var='post'>
+  <b:include data='post' name='card'/>
+</b:loop>
+```
+
+| Expression, `data:l` being `[1, 2, 3, 4]` | Result             |
+| ----------------------------------------- | ------------------ |
+| `data:l take 2`                           | `[1,2]`            |
+| `data:l skip 1`                           | `[2,3,4]`          |
+| `data:l take 9`                           | `[1,2,3,4]`        |
+| `data:l skip 9`                           | an empty list      |
+| `data:l take 3 skip 1`                    | `[2,3]`            |
+| `data:l take 1.5`                         | `[1,2]`            |
+| `take(data:l, 2)`, `skip(data:l, 1)`      | `[1,2]`, `[2,3,4]` |
+
+- **`limit` is `take`, and `offset` is `skip`**, in every case. <BloggerSource kind="observed" />
+- **The count** is a number literal, data, or an expression in parentheses: `data:l take (data:n - 1)`. `data:l take 1 + 1` is an error. A string literal is never a count, `take "2"`, while a string of digits read from data works. <BloggerSource kind="observed" />
+- **A decimal count is rounded** half up: `take 1.5` is `take 2`, `take 0.4` is `take 0`. <BloggerSource kind="observed" />
+- **`take` needs 1 or more, `skip` 0 or more.** `take 0` and any negative count are errors. <BloggerSource kind="observed" />
+- **On missing data, a string or a range, both are errors**, unlike the lambdas. Test the list first. <BloggerSource kind="observed" />
+- **`take` can not follow `take`** without parentheses, nor `limit` follow `take`, nor `skip` follow `skip`: write `(data:l take 2) take 1`. `take` and `skip` can alternate: `data:l take 3 skip 1`. <BloggerSource kind="observed" />
+- **They bind tighter than `+` and `==`**: `"n" + data:l take 2` is `n[1,2]`. A lambda can follow them, `data:l take 2 map (x => x * 10)`, and a property needs parentheses: `(data:l take 2).length`. <BloggerSource kind="observed" />
+
+## What each operator gives
+
+| Operator                        | Result              | Use it in                                                     |
+| ------------------------------- | ------------------- | ------------------------------------------------------------- |
+| `any`, `all`, `none`            | a boolean           | `cond`, `and`, `or`, a ternary, a map value                   |
+| `count`                         | a number            | comparisons, arithmetic, `<b:eval>`                           |
+| `filter`, `map`, `take`, `skip` | a list              | `values` of `<b:loop>`, `in`, list properties, another lambda |
+| `first`                         | an item of the list | `.member`, `<b:with>`, `data` of `<b:include>`                |
+
+### On empty and missing lists
+
+A lambda on an empty list, or on data that does not exist, treats it as a list without items, except for `all`: <BloggerSource kind="observed" />
+
+| Operator                           | On `[]`       | On missing data |
+| ---------------------------------- | ------------- | --------------- |
+| `any`                              | `false`       | `false`         |
+| `all`                              | `true`        | `false`         |
+| `none`                             | `true`        | `true`          |
+| `count`                            | `0`           | `0`             |
+| `filter`, `where`, `map`, `select` | an empty list | an empty list   |
+| `first`                            | nothing       | nothing         |
+
+On an empty list, the body never runs. A lambda on a value that is not a list, a string, `""` included, a number, a boolean or a map, is an error while rendering. <BloggerSource kind="observed" /> A string can be tested with [`contains`](./operators.mdx#membership) instead.
+
+## The parameter
+
+In the body, the parameter is the current item. It is written as a bare word <BloggerSource kind="official" />, and can also be read as data, with `data:`: <BloggerSource kind="observed" />
+
+```xml
+<b:with value='data:post.comments filter (c => !data:c.inReplyTo or c.inReplyTo == 0)' var='topLevel'>
+```
+
+- The parameter exists only in the body.
+- The body reads any other data with `data:`: the page, the widget, the variables and loops around it.
+- The parameter hides data of the same name, in both forms. In `data:posts filter (post => post.id != data:post.id)`, both sides are the item, so the test is always false. Pick a name that is not data, such as `p` for a post or `w` for a widget. Names given by tags hide data the same way, see [Names given by tags](./data-paths.mdx#names-given-by-tags).
+- Inside a list or a map in the body, the bare word still works: `map (l => { title: l.name, url: l.target })`.
+- A bare parameter takes only plain members. Write `data:l[0]` and `data:l.post-count`, not `l[0]` or `l.post-count`. See [Lambda parameters](./data-paths.mdx#lambda-parameters).
+- Only `not` is refused as a parameter name. `null`, `nil`, `to`, `in` and `data` are ordinary names. `true` and `yes` are accepted, but in the body they are still the booleans, so such a parameter can not be read: choose a plain name. <BloggerSource kind="observed" />
+
+## Nesting
+
+A body can contain another lambda. Only the innermost parameter is a bare word: the outer one is read with `data:`. <BloggerSource kind="observed" />
+
+```xml title="Whether one of two sections has widgets"
+<b:class cond='["theme_section_sidebar", "theme_section_sticky"] any (id => data:widgets any (w => w.sectionId == data:id))' name='has-sidebar'/>
+```
+
+In the inner lambda, `w` is the widget and `data:id` is the section id of the outer lambda.
+
+Two levels of comments, the replies grouped under each comment, take a `map` with a `filter` inside:
+
+```xml title="A comment thread of two levels" {2}
+<b:with value='data:post.comments filter (c => !data:c.inReplyTo)' var='topLevel'>
+  <b:with value='data:topLevel map (c => { info: data:c, replies: (data:post.comments filter (r => data:r.inReplyTo == data:c.id)) })' var='thread'>
+    <b:loop values='data:thread' var='entry'>
+      <b:include data='entry' name='commentWithReplies'/>
+    </b:loop>
+  </b:with>
+</b:with>
+```
+
+The inner `filter` is a map value that uses an operator, so it is in parentheses.
+
+## Chaining
+
+A lambda can follow another lambda directly, and each works on the result of the one before: <BloggerSource kind="observed" />
+
+```xml
+<b:with value='data:widgets.FeaturedPost filter (w => w.sectionId == "top_widgets") map (w => w.postId)' var='featuredPostIds'>
+```
+
+To read a property, call a function or apply an operator to the result, put the whole chain in parentheses. A `.` right after the closing parenthesis of a lambda is an error: <BloggerSource kind="observed" />
+
+```xml
+<b:with value='(data:links filter (l => l.name == "icon")).last.target ?: data:blog.blogspotFaviconUrl' var='icon'>
+<b:class cond='(data:widgets filter (w => w.sectionId == "footer")).length &lt;= 3' name='three-columns'/>
+<b:if cond='data:post.id in (data:widgets.FeaturedPost map (w => w.postId))'>
+```
+
+Without parentheses around the lambda itself, the chain needs them all the more. Blogger's own themes write `(… filter w => w.sectionId == "page_body").first.postId`, where the outer parentheses end the body before `.first`.
+
+## Patterns
+
+```xml title="Settings stored in a LinkList, by name"
+<b:with value='["home", "label", "search"] map (name => (data:links filter (l => l.name == data:name and l.target not in ["https://", "#"])).last.target + "")' var='values'>
+  <b:eval expr='data:values[0] != "" ? data:values[0] : data:blog.title'/>
+</b:with>
+```
+
+Each name gives the target of the last link with that name, or nothing. `+ ""` turns a missing target into an empty string, so that the list keeps one entry per name.
+
+```xml title="A cover image chosen by the blog owner"
+<b:with value='data:widgets.Blog.first.posts filter (p => p.featuredImage) map (p => p.featuredImage)' var='images'>
+  <b:with value='data:cover == "first_post" ? data:images.first : (data:cover == "last_post" ? data:images.last : data:cover)' var='image'>
+    <img expr:src='resizeImage(data:image, 1280, "16:9")'/>
+  </b:with>
+</b:with>
+```
+
+```xml title="Labels except the internal ones"
+<b:loop index='i' values='data:post.labels filter (l => l.name not in ["Featured", "Sponsored"])' var='label'>
+  <b:if cond='data:i != 0'>, </b:if><a expr:href='data:label.url'><data:label.name/></a>
+</b:loop>
+```

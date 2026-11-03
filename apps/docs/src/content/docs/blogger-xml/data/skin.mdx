@@ -1,0 +1,136 @@
+---
+title: data:skin
+description: Theme Designer variables read with data:skin.vars, how their names and values map, the CSS added in the Theme Designer, and the data:template dictionary.
+level: advanced
+prerequisites:
+  - blogger-xml/styles/theme-designer
+published: 2026-10-26
+---
+
+`data:skin` lets the markup of a theme read its skin. Its member `vars` holds the current value of every Theme Designer variable declared in `<b:skin>`, so one setting can drive the CSS of the skin and the markup at the same time:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:skin><![CDATA[/*
+<Variable default="#482dff" description="Status bar color" name="status.light" type="color" value="#1a73e8"/>
+*/
+.top-bar { background: $(status.light); }
+]]></b:skin>
+
+<meta expr:content='data:skin.vars.status_light' name='theme-color'/>
+```
+
+```html title="Rendered"
+<meta content='#1a73e8' name='theme-color'/>
+```
+
+</CodeTabs>
+
+How variables are declared, grouped and used in CSS with `$(…)` is on [Theme Designer](../styles/theme-designer.mdx), and `<b:skin>` itself on [Skin](../styles/skin.mdx). Google does not document `data:skin`. <BloggerSource kind="observed" />
+
+## Fields
+
+| Field      | Type   | Meaning                                              | Source                            |
+| ---------- | ------ | ---------------------------------------------------- | --------------------------------- |
+| `vars`     | map    | One member per variable of the skin                  | <BloggerSource kind="observed" /> |
+| `override` | string | The CSS added in Theme Designer › Advanced › Add CSS | <BloggerSource kind="observed" /> |
+
+The dictionary is global, but nothing inside `<![CDATA[ ]]>` is evaluated, and the content of `<b:skin>` is CDATA. The skin reads the same values with `$(…)`.
+
+## Names: from `$(a.b)` to `data:skin.vars.a_b`
+
+The member is the name of the variable with each `.` replaced by `_`. The case stays as it is, and a name without a dot is unchanged:
+
+| Declared name    | In the skin CSS              | In the markup                   |
+| ---------------- | ---------------------------- | ------------------------------- |
+| `keycolor`       | `$keycolor` or `$(keycolor)` | `data:skin.vars.keycolor`       |
+| `startSide`      | `$startSide`                 | `data:skin.vars.startSide`      |
+| `status.light`   | `$(status.light)`            | `data:skin.vars.status_light`   |
+| `body.text.font` | `$(body.text.font)`          | `data:skin.vars.body_text_font` |
+| `metatags.feeds` | `$(metatags.feeds)`          | `data:skin.vars.metatags_feeds` |
+| `font.head`      | `$(font.head)`               | `data:skin.vars.font_head`      |
+
+Every variable of Blogger's official themes follows this rule, about 800 of them. <BloggerSource kind="observed" /> The characters a name may contain are in [`name`](../styles/theme-designer.mdx#name). Since `_` is allowed, `a.b` and `a_b` would both map to `data:skin.vars.a_b`; which one the member then holds is not confirmed. Only the variables declared in the current skin exist; any other member is empty.
+
+Paths get long. A theme can name the dictionary once, around its whole document, and write `data:vars.…` everywhere else: <BloggerSource kind="observed" />
+
+```xml
+<b:with value='data:skin.vars' var='vars'>
+  <b:include name='document'/>
+</b:with>
+```
+
+Without such a `<b:with>`, `data:vars` is empty. <BloggerSource kind="observed" /> The rest of this page uses that short form where it helps.
+
+## Values
+
+A member holds the current value of the variable, the one `$(…)` writes into the CSS: the `value` attribute of `<Variable>`, which the Theme Designer updates.
+
+| Type         | Example value                                                                              | Members in the markup                                           | Source                            |
+| ------------ | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------- | --------------------------------- |
+| `color`      | `#1a73e8`                                                                                  | `.red`, `.green`, `.blue`, `.alpha`, `.transparent`, `.inverse` | <BloggerSource kind="observed" /> |
+| `font`       | `normal 400 15px Roboto, sans-serif`                                                       | `.size`, `.family`                                              | <BloggerSource kind="observed" /> |
+| `length`     | `2px`                                                                                      | none                                                            | <BloggerSource kind="observed" /> |
+| `background` | `#dddfe2 url(https://themes.googleusercontent.com/image?id=…) no-repeat scroll top center` | `.color`, `.image`                                              | <BloggerSource kind="observed" /> |
+| `url`        | `url(https://…)`                                                                           | none                                                            | <BloggerSource kind="observed" /> |
+| `string`     | any single line of text                                                                    | none                                                            | <BloggerSource kind="observed" /> |
+| `automatic`  | `left` or `right` for `startSide` and `endSide`                                            | none                                                            | <BloggerSource kind="observed" /> |
+
+The members of a color give its channels, from `0` to `255`, and with `.transparent` and `.inverse` an `rgba()` color. A font gives its size and family, a background its color and its image. The color of a background is a color, with members of its own: `data:skin.vars.body_background.color.red`. What each member prints depends on where it is used, and Blogger's themes only read `.image` and `.image.isResizable` in their markup.
+
+### Values are not plain strings
+
+A Theme Designer value prints like text, but string properties and string operators do not always work on it directly. Themes turn it into a string first, with `+ ""` or with `snippet`: <BloggerSource kind="observed" />
+
+```xml /.cssEscaped/
+<style>
+:root {
+  --font-head: '<b:eval expr='(data:vars.font_head + "").cssEscaped'/>';
+  --label-new: '<b:eval expr='(data:vars.m_new + "").cssEscaped'/>';
+}
+</style>
+<b:with value='snippet(data:vars.status_light)' var='statusColor'>
+  <meta expr:content='data:statusColor' name='theme-color'/>
+</b:with>
+```
+
+A `<style>` element is regular markup, unlike `<b:skin>`, so data tags and `<b:eval>` work inside it. `.cssEscaped` makes a text safe inside a CSS string.
+
+### `transparent` as "off"
+
+A color variable set to `transparent` in the Theme Designer can mean "no color chosen", with a fallback in the markup: `data:vars.status_light != "transparent" ? data:vars.status_light : "#ffffff"`. The pattern, and its use to drop entries from a list of variables, is in [`transparent` as off](../styles/theme-designer.mdx#transparent-as-off).
+
+### `.image` of a background
+
+`data:skin.vars.body_background.image` is the image of a background variable, as an image value: it has `.isResizable` and `resizeImage` accepts it. It has no `$(…)` form and exists only in the markup. Blogger's 2017 themes pass it to their `responsiveImageStyle` includable, with a list of widths, to serve the background at the right size for each screen, and skip that include during previews. Some of them test `.image.isResizable` first.
+
+## Variables as theme settings
+
+The Theme Designer has no switch or menu control, so themes in production declare variables that are not CSS, a `length` slider from `1px` to `2px` read as a switch with `data:vars.related_status == "2px"`, or a `string` variable the owner edits in Edit HTML. <BloggerSource kind="observed" /> These patterns, and theme metadata kept in variables, are in [Patterns](../styles/theme-designer.mdx#patterns).
+
+## `override`
+
+The CSS that the owner adds in Theme Designer › Advanced › Add CSS, as a string. Blogger adds this CSS to the page itself; where it goes is not confirmed. None of Blogger's themes read `data:skin.override`. <BloggerSource kind="observed" />
+
+## Variables of `<b:template-skin>`
+
+Classic themes declared a few lengths inside `<b:template-skin>` with a lowercase `<b:variable>` element: `content.width`, `main.column.left.width` and `main.column.right.width`, the column widths of the old Layout editor. Whether Blogger still accepts that element when saving a theme today is not confirmed. The Theme Designer never reads `<b:template-skin>`, and whether these values reached `data:skin.vars` is not confirmed. See [Skin](../styles/skin.mdx).
+
+## `data:template`
+
+`data:template` describes the official theme the blog uses. It is meant for the Blogger team, to manage official themes and diagnose problems, and theme authors should not depend on it. None of Blogger's themes read it. <BloggerSource kind="observed" />
+
+| Field                  | Type    | Meaning                                                        | Example values                                                                                                                                                  |
+| ---------------------- | ------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                 | string  | The name of the official theme, `Custom` for a custom theme    | `Contempo`, `Emporio`, `Essential`, `Notable`, `Soho`, `Simple`, `Picture Window`, `Awesome Inc.`, `Watermark`, `Ethereal`, `Travel`, `Dynamic Views`, `Custom` |
+| `localizedName`        | string  | The same name in the language of the blog                      | `Soho`; in French `Essentiel`, `Filigrane`                                                                                                                      |
+| `variant`              | string  | The variant of the theme                                       | `indie_light`, `vegeclub_peach`, `rockpool_coral`, `fancy_light`, `strm_light`, `pale`                                                                          |
+| `variantId`            | string  | The id of the variant, with the same values as `variant`       | `fancy_light`                                                                                                                                                   |
+| `isResponsive`         | boolean | The theme is responsive                                        | `true`                                                                                                                                                          |
+| `isCustom`             | boolean | True for a custom theme, false for an unchanged official theme | `false`                                                                                                                                                         |
+| `isAlternateRendering` | boolean | Not confirmed                                                  | `false`                                                                                                                                                         |
+
+On a live blog with the Soho theme, the copy of the data in the page source had `name: 'Soho'`, `localizedName: 'Soho'`, `isResponsive: true`, `isAlternateRendering: false`, `isCustom: false`, `variant: 'fancy_light'` and `variantId: 'fancy_light'`.
+
+The variants of the 2017 themes match the class of their `<body>`, `variant-fancy_light`, and the names of their scripts: `indie` for Contempo, `vegeclub` for Emporio, `strm` for Essential, `rockpool` for Notable and `fancy` for Soho.

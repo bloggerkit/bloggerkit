@@ -1,0 +1,152 @@
+---
+title: Data tags and b:eval
+description: Print a data with a data tag, or the result of any expression with b:eval.
+level: beginner
+published: 2026-10-26
+---
+
+There are two ways to print a value into the page. A data tag, such as `<data:post.title/>`, prints one data. `<b:eval>` prints the result of an [expression](../expressions/index.mdx): a calculation, a choice between two values, an item of a list, the result of a function.
+
+<CodeTabs>
+
+```xml title="The header of a post card"
+<h3 class='post-title'><data:post.title/></h3>
+<span class='post-meta'>
+  <b:eval expr='data:post.numberOfComments + " · " + data:post.labels.length + " labels"'/>
+</span>
+```
+
+```html title="Rendered"
+<h3 class='post-title'>Lentil soup</h3>
+<span class='post-meta'>
+  4 · 2 labels
+</span>
+```
+
+</CodeTabs>
+
+## Data tags
+
+A data tag is a `data:` path written as a self-closed element. Blogger replaces it with the value. <BloggerSource kind="official" />
+
+```xml
+<data:title/>
+<data:blog.title/>
+<data:post.author.name/>
+<data:post.title.escaped/>
+```
+
+- It is always self-closed. Blogger ignores attributes and content written on it: `<data:blog.title expr:x='1'/>` and `<data:blog.title>x</data:blog.title>` both print the title alone. <BloggerSource kind="observed" />
+- The path can go as deep as the data does, and it can end with a [property](../expressions/properties.mdx): `<data:post.date.iso8601/>`, `<data:posts.length/>`, `<data:post.title.jsonEscaped/>`.
+- Names with a hyphen are written as they are: `<data:year.post-count/>` in the BlogArchive widget. <BloggerSource kind="observed" />
+- The names of [`<b:loop>`](./loops.mdx) and [`<b:with>`](./variables.mdx) are data too: `<data:label.name/>` inside a loop over labels, `<data:i/>` for its index.
+- Nothing else of the expression language fits in a data tag: no index such as `[0]`, no operator, no function. Use `<b:eval>` for those. <BloggerSource kind="observed" />
+
+Global data, [`data:blog`](../data/blog.mdx), [`data:view`](../data/view.mdx), [`data:messages`](../data/messages.mdx) and [`data:skin`](../data/skin.mdx), can be printed anywhere in the theme. The data of a widget, such as `data:title` or `data:posts`, exists only in the includables of that widget. <BloggerSource kind="official" /> Outside, a data tag of it prints a comment, see [Missing data](#missing-data).
+
+## `<b:eval>`
+
+| Attribute | Required | Value      | Default | Description             | Source                            |
+| --------- | -------- | ---------- | ------- | ----------------------- | --------------------------------- |
+| `expr`    | Yes      | expression |         | The expression to print | <BloggerSource kind="official" /> |
+
+Google added `<b:eval>` in June 2015, in [Even more expansions to the Blogger template language](https://blogger.googleblog.com/2015/06/even-more-expansions-to-blogger.html). <BloggerSource kind="official" />
+
+`<b:eval>` is empty and self-closed: `<b:eval expr='…'/>`. Content between an opening and a closing tag, a space or text, saves, and is dropped: the tag still prints its value. Other attributes are ignored. <BloggerSource kind="observed" /> `expr` is already an expression, so it takes no `expr:` prefix: `<b:eval expr:expr='…'/>` is a [markup error](../basics/saving.mdx#markup-errors), as is a `<b:eval>` without `expr` or with an empty one. <BloggerSource kind="observed" />
+
+```xml {7}
+<b:eval expr='data:posts[0].title'/>
+<b:eval expr='data:i + 1'/>
+<b:eval expr='data:post.author.name ?: "Anonymous"'/>
+<b:eval expr='data:slide.title contains "[NoTitle]" ? "Slide " + (data:i + 1) : data:slide.title'/>
+<b:eval expr='data:messages.adsGoHere + " (" + data:title + ")"'/>
+<b:eval expr='resizeImage(data:post.featuredImage, 1200, "16:9")'/>
+<b:eval expr='"Navigation menu"'/>
+```
+
+The last line prints a fixed string, which is the same as writing the text in the theme.
+
+### Data tag or `<b:eval>`
+
+| To print                             | Write                                                       |
+| ------------------------------------ | ----------------------------------------------------------- |
+| A data, with or without a property   | `<data:post.title/>`, `<data:post.title.escaped/>`          |
+| An item of a list by its position    | `<b:eval expr='data:post.labels[0].name'/>`                 |
+| A calculation, a ternary, a fallback | `<b:eval expr='data:post.link ?: data:post.url'/>`          |
+| The result of a function             | `<b:eval expr='snippet(data:post.body, { length: 150 })'/>` |
+| A property of a calculation          | `<b:eval expr='(data:blog.title + " feed").escaped'/>`      |
+
+## What is printed
+
+The value takes the place of the tag. Text prints as text, HTML data such as `<data:post.body/>` as HTML, numbers as digits; how lists, maps, booleans and empty strings print is in [What is written](../expressions/evaluation.mdx#what-is-written). Two points are specific to the tags: <BloggerSource kind="observed" />
+
+- A data tag prints neither a list nor a map. It prints a comment instead: `<!--Substitution is not a singleton for tag [l]-->`. Use `<b:eval>`.
+- The string a `<b:eval>` gives is printed without escaping. A string that contains markup prints that markup.
+
+The last point lets a theme print what the XML of the theme could not contain as it is:
+
+```xml
+<b:eval expr='"&lt;!--"'/>
+<b:eval expr='"&lt;head&gt;"'/>
+```
+
+These print `<!--` and `<head>`. Some themes write the opening and closing tags of their `<head>` and `<body>` this way, and open and close HTML comments around markup Blogger adds that they do not want in the page. See [Comments](./comments.mdx#printing-an-html-comment).
+
+Booleans are best printed through a ternary when the text matters, for example in JSON: `<b:eval expr='data:view.isHomepage ? "true" : "false"'/>`.
+
+### Escaping
+
+Blogger escapes some data before printing them, but not all; which ones is not confirmed. <BloggerSource kind="observed" /> When a value goes where a special character would break the code, add the escaping property for that place: `escaped` for HTML text and attributes, `jsEscaped` for a string in JavaScript, `jsonEscaped` for a string in JSON and `cssEscaped` for a string in CSS. On a calculation, wrap it in parentheses first: `(data:post.title + " - " + data:blog.title).escaped`. What they escape, which values take them, and how to turn a value that is not a plain string into one, are in [Strings](../expressions/properties.mdx#strings).
+
+```xml title="A post as JSON"
+<script type='application/json'>{"id":"<data:post.id/>","title":"<data:post.title.jsonEscaped/>","url":"<data:post.url.canonical.jsonEscaped/>"}</script>
+```
+
+## Where they can be used
+
+**In text and elements.** Anywhere markup renders: inside an element, in the branches of [`<b:if>`](./conditionals.mdx), in a loop.
+
+**In `<script>` and `<style>`.** Data tags and `<b:eval>` are replaced inside scripts and styles too, as long as they are outside a CDATA section. Escape the value for its language, `jsEscaped` or `jsonEscaped` in a script and `cssEscaped` in a style. A script that needs CDATA can close it around the value:
+
+```xml
+<script>/*<![CDATA[*/
+  window.theme = window.theme || {};
+  window.theme.config = /*]]>*/{ "trackingId": "<data:blog.analyticsAccountNumber.jsEscaped/>" }/*<![CDATA[*/;
+/*]]>*/</script>
+```
+
+**Not in an attribute.** A tag can not be written inside an attribute value: that is not valid XML. Compute the attribute with [`expr:`](./attributes.mdx):
+
+```xml
+<!-- Wrong: the theme can not be saved -->
+<a href='<data:post.url/>'>…</a> <!-- [!code error] -->
+
+<!-- Right -->
+<a expr:href='data:post.url'>…</a>
+```
+
+**Not in CDATA.** Inside `<![CDATA[ ]]>`, a data tag is plain text and is printed as written. This is why the CSS of [`<b:skin>`](../styles/skin.mdx), which is CDATA, reads Theme Designer values as `$(name)` and not with data tags.
+
+## Missing data
+
+In an expression, missing data is empty, with no error, see [Missing data](../expressions/evaluation.mdx#missing-data); `<b:eval>` of it prints nothing but a line break. <BloggerSource kind="observed" />
+
+A data tag whose data is missing prints a comment instead, whatever the reason: a name that never existed, `<data:missing/>`, the name of a `<b:with>` after its end tag, or the data of a widget, `<data:title/>`, outside widgets. <BloggerSource kind="observed" />
+
+```html
+<!--Can't find substitution for tag [missing]-->
+```
+
+Blogger's own `all-head-content` includable still prints a data that no longer exists, and every page that uses it carries `<!--Can't find substitution for tag [blog.ieCssRetrofitLinks]-->` in its `<head>`. <BloggerSource kind="observed" />
+
+To print a value that may be missing, test it or give it a fallback, so that the page does not get an empty element:
+
+```xml
+<b:if cond='data:post.location'>
+  <span class='post-location'><data:post.location.name/></span>
+</b:if>
+
+<b:eval expr='data:post.author.name ?: "Anonymous"'/>
+```
+
+`?:` falls back only when the value is missing. An empty string or `0` is kept. See [Evaluation](../expressions/evaluation.mdx).

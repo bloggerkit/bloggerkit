@@ -1,0 +1,424 @@
+---
+import ArrowDown from '@lucide/astro/icons/arrow-down';
+import ArrowRight from '@lucide/astro/icons/arrow-right';
+
+/**
+ * Home page hero: a theme snippet types itself, then the posts it renders appear.
+ * Without JS, the finished picture shows.
+ */
+
+// Token colors, matching the code block themes
+type Kind = 'tag' | 'html' | 'attr' | 'str' | 'data' | 'punct' | 'plain';
+const tokens: Record<Kind, string> = {
+	tag: 'text-[#8250df] dark:text-[#d2a8ff]',
+	html: 'text-[#116329] dark:text-[#7ee787]',
+	attr: 'text-[#0550ae] dark:text-[#79c0ff]',
+	str: 'text-[#0a3069] dark:text-[#a5d6ff]',
+	data: 'text-[#953800] dark:text-[#ffa657]',
+	punct: 'text-muted-foreground',
+	plain: 'text-muted-foreground',
+};
+
+// The snippet, as [token kind, text] pairs per line
+const code: [Kind, string][][] = [
+	[
+		['tag', '<b:loop'],
+		['attr', ' values'],
+		['punct', '='],
+		['str', "'data:posts'"],
+		['attr', ' var'],
+		['punct', '='],
+		['str', "'post'"],
+		['tag', '>'],
+	],
+	[
+		['plain', '  '],
+		['html', '<article'],
+		['attr', ' class'],
+		['punct', '='],
+		['str', "'card'"],
+		['html', '>'],
+	],
+	[
+		['plain', '    '],
+		['html', '<h2>'],
+		['data', '<data:post.title/>'],
+		['html', '</h2>'],
+	],
+	[
+		['plain', '    '],
+		['html', '<p>'],
+		['data', '<data:post.snippets.short/>'],
+		['html', '</p>'],
+	],
+	[
+		['plain', '  '],
+		['html', '</article>'],
+	],
+	[['tag', '</b:loop>']],
+];
+const posts = [
+	{
+		title: 'Planting garlic in October',
+		snippet: 'Cloves go in before the ground freezes…',
+	},
+	{
+		title: 'What the first frost did',
+		snippet: 'The tomatoes did not make it, the kale…',
+	},
+	{ title: 'Lentil soup, again', snippet: 'A pot that lasts the whole week…' },
+];
+---
+
+{/* Max width = code column (22rem) + preview column (13rem) */}
+<div data-hero-illustration class="relative w-full max-w-140 justify-self-center lg:justify-self-end" aria-hidden="true">
+	<div class="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/10 dark:shadow-black/40">
+		<div class="flex items-center gap-2 border-b border-border px-4 py-3">
+			<span class="size-3 rounded-full bg-foreground/15"></span>
+			<span class="size-3 rounded-full bg-foreground/15"></span>
+			<span class="size-3 rounded-full bg-foreground/15"></span>
+			<span class="ms-3 rounded-md bg-background px-2.5 py-0.5 font-mono text-xs text-muted-foreground">theme.xml</span>
+		</div>
+		{/* Code column fits its longest line, preview column fits its address bar */}
+		<div class="grid grid-cols-1 sm:grid-cols-[minmax(0,22rem)_13rem]">
+			{/* Positions the badge. Only the code inside scrolls */}
+			<div class="relative min-w-0 border-border bg-code sm:border-e">
+				{/* Lines are divs, not a <pre>, so the template's whitespace doesn't leak into the output */}
+				<div
+					class="overflow-x-auto overflow-y-hidden px-3.5 py-4 font-mono text-meta scrollbar-thin sm:px-4 sm:py-5"
+				>
+					{
+						code.map((line, i) => (
+							<div class="flex h-6 w-max items-center whitespace-pre sm:h-7" data-code-line>
+								{/* Width animates in `ch` to reveal characters (in a mono font, 1 character = 1ch) */}
+								<span class="inline-block shrink-0 overflow-hidden" data-typed={line.map(([, text]) => text).join('').length}>
+									{line.map(([kind, text]) => (
+										<span class={tokens[kind]}>{text}</span>
+									))}
+								</span>
+								{/* A cursor per line, shown while typing. Without JS only the last one shows */}
+								<span class:list={['inline-flex', i < code.length - 1 && 'opacity-0']} data-cursor>
+									<span class="caret ms-px inline-block h-[1.15em] w-[0.5em] bg-foreground/70" />
+								</span>
+							</div>
+						))
+					}
+				</div>
+				<div class="absolute inset-e-4 bottom-4 isolate hidden sm:block">
+					<span class="pointer-events-none absolute inset-0 -z-1 rounded-full text-foreground opacity-0" data-ping></span>
+					<span
+						class="relative flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 font-sans text-xs font-medium text-foreground shadow-lg"
+					>
+						renders
+						<ArrowRight size={14} data-arrow="x" />
+					</span>
+				</div>
+			</div>
+			{/* Phones: the panes stack, so the badge sits on the seam and points down */}
+			<div class="relative z-10 h-0 sm:hidden">
+				<div class="absolute inset-s-1/2 top-0 isolate -translate-1/2">
+					<span class="pointer-events-none absolute inset-0 -z-1 rounded-full text-foreground opacity-0" data-ping></span>
+					<span
+						class="relative flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 font-sans text-xs font-medium text-foreground shadow-lg"
+					>
+						renders
+						<ArrowDown size={12} data-arrow="y" />
+					</span>
+				</div>
+			</div>
+			<div class="flex flex-col gap-2 border-t border-border bg-background/60 px-3.5 pt-6 pb-3.5 sm:gap-3 sm:border-t-0 sm:px-4 sm:py-5">
+				<div class="flex min-w-0 items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5 font-mono text-xs leading-5 text-muted-foreground sm:gap-1.5 sm:px-2 sm:py-1 sm:text-[0.625rem]">
+					<span class="size-2 shrink-0 rounded-full bg-success"></span>
+					<span class="truncate">fieldnotes.blogspot.com</span>
+				</div>
+				{/* A "waiting" placeholder covers the posts while the code types. The posts set the height */}
+				<div class="relative">
+					<div class="flex flex-col gap-2 sm:gap-3">
+						{
+							posts.map((post, i) => (
+								<div class:list={['rounded-lg border border-border bg-card px-3.5 py-2.5 sm:p-3', i > 1 && 'max-sm:hidden']} data-post>
+									<div class="truncate text-sm leading-snug font-semibold text-foreground sm:text-[0.8rem] sm:whitespace-normal">
+										{post.title}
+									</div>
+									<div
+										class="mt-1 truncate text-meta leading-snug text-muted-foreground sm:text-[0.72rem] sm:whitespace-normal"
+									>
+										{post.snippet}
+									</div>
+								</div>
+							))
+						}
+					</div>
+					{/* Hidden without JS. The script shows it until the posts appear */}
+					<div class="absolute inset-0 flex flex-col gap-2 opacity-0 sm:gap-3" data-waiting>
+						<div class="flex items-center gap-2 px-1 font-mono text-[0.7rem] text-muted-foreground">
+							<span class="waiting-dots flex gap-0.5">
+								<span class="size-1 rounded-full bg-current"></span>
+								<span class="size-1 rounded-full bg-current"></span>
+								<span class="size-1 rounded-full bg-current"></span>
+							</span>
+							Waiting for theme.xml
+						</div>
+						{
+							posts.map((_, i) => (
+								<div
+									class:list={[
+										'flex flex-1 flex-col justify-center gap-1.5 rounded-lg border border-dashed border-border px-3.5 py-2 sm:gap-2 sm:p-3',
+										i > 1 && 'max-sm:hidden',
+									]}
+								>
+									<span class="shimmer h-2.5 w-3/4 rounded-full" />
+									<span class="shimmer h-2 w-full rounded-full" />
+									{/* Posts are one line on phones, so drop the third placeholder bar */}
+									<span class="shimmer h-2 w-1/2 rounded-full max-sm:hidden" />
+								</div>
+							))
+						}
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<style>
+	.caret {
+		animation: blink 1s steps(1) infinite;
+	}
+	/* Placeholder bars with a light sweeping across */
+	.shimmer {
+		background: linear-gradient(
+				90deg,
+				color-mix(in srgb, var(--foreground) 6%, transparent) 30%,
+				color-mix(in srgb, var(--foreground) 14%, transparent) 50%,
+				color-mix(in srgb, var(--foreground) 6%, transparent) 70%
+			)
+			0 0 / 300% 100%;
+		animation: shimmer 1.6s linear infinite;
+	}
+	.waiting-dots > span {
+		animation: dot 1.2s ease-in-out infinite;
+	}
+	.waiting-dots > span:nth-child(2) {
+		animation-delay: 0.15s;
+	}
+	.waiting-dots > span:nth-child(3) {
+		animation-delay: 0.3s;
+	}
+	@keyframes shimmer {
+		from {
+			background-position: 100% 0;
+		}
+		to {
+			background-position: 0 0;
+		}
+	}
+	@keyframes dot {
+		0%,
+		60%,
+		100% {
+			opacity: 0.3;
+		}
+		30% {
+			opacity: 1;
+		}
+	}
+	@keyframes blink {
+		50% {
+			opacity: 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.caret,
+		.shimmer,
+		.waiting-dots > span {
+			animation: none;
+		}
+	}
+</style>
+
+<script>
+	import { onPage, prefersReducedMotion } from '@/scripts/page';
+
+	/** One loop in ms: type, show the posts, clear. */
+	const CYCLE = 10_000;
+	/** Typing speed in ms per character. */
+	const PER_CHARACTER = 22;
+	/** Delay before typing starts, in ms. */
+	const PAUSE = 300;
+
+	onPage((signal) => {
+		const root = document.querySelector<HTMLElement>(
+			'[data-hero-illustration]',
+		);
+		if (!root || prefersReducedMotion()) {
+			return;
+		}
+		const lines = [...root.querySelectorAll<HTMLElement>('[data-code-line]')];
+		const posts = [...root.querySelectorAll<HTMLElement>('[data-post]')];
+		// Time in ms → keyframe offset (0–1)
+		const at = (ms: number) => Math.min(ms / CYCLE, 1);
+
+		// Each line types after the previous one, for a time based on its length
+		let time = PAUSE;
+		const timing = lines.flatMap((line) => {
+			const text = line.querySelector<HTMLElement>('[data-typed]');
+			const cursor = line.querySelector<HTMLElement>('[data-cursor]');
+			if (!text || !cursor) {
+				return [];
+			}
+			const length = Number(text.getAttribute('data-typed'));
+			const start = time;
+			time += length * PER_CHARACTER + 120;
+			return [
+				{ text, cursor, length, start, end: start + length * PER_CHARACTER },
+			];
+		});
+		const typed = time;
+		const clear = CYCLE - 1400;
+		const cleared = clear + 450;
+
+		const animations: Animation[] = [];
+		const run = (element: Element, keyframes: Keyframe[]) =>
+			animations.push(
+				element.animate(keyframes, {
+					duration: CYCLE,
+					iterations: Number.POSITIVE_INFINITY,
+					fill: 'both',
+				}),
+			);
+
+		timing.forEach(({ text, cursor, length, start, end }, i) => {
+			// Reveal characters one by one, then erase all lines together
+			run(text, [
+				{ width: '0ch', offset: 0 },
+				{ width: '0ch', offset: at(start), easing: `steps(${length}, end)` },
+				{ width: `${length}ch`, offset: at(end) },
+				{ width: `${length}ch`, offset: at(clear), easing: 'ease-in' },
+				{ width: '0ch', offset: at(cleared) },
+				{ width: '0ch', offset: 1 },
+			]);
+			// A line shows the cursor from when it starts typing until the next line starts.
+			// The first line also shows it before typing and after clearing.
+			const to = i === timing.length - 1 ? clear : timing[i + 1].start;
+			const shownFor: [number, number][] =
+				i === 0
+					? [
+							[0, to],
+							[cleared, CYCLE],
+						]
+					: [[start, to]];
+			// `steps(1, end)`: on or off, no fade
+			const step = 'steps(1, end)';
+			const keyframes: Keyframe[] = [{ opacity: 0, offset: 0, easing: step }];
+			for (const [from, until] of shownFor) {
+				keyframes.push(
+					{ opacity: 1, offset: at(from), easing: step },
+					{ opacity: 0, offset: at(until), easing: step },
+				);
+			}
+			if (keyframes.at(-1)?.offset !== 1) {
+				keyframes.push({ opacity: 0, offset: 1 });
+			}
+			run(cursor, keyframes);
+		});
+
+		// The placeholder shows first, hides when the first post appears, and returns after clearing
+		const waiting = root.querySelector('[data-waiting]');
+		if (waiting) {
+			const first = typed + 400;
+			run(waiting, [
+				{ opacity: 1, offset: 0 },
+				{ opacity: 1, offset: at(first) },
+				{ opacity: 0, offset: at(first + 250) },
+				{ opacity: 0, offset: at(cleared) },
+				{ opacity: 1, offset: at(cleared + 300) },
+				{ opacity: 1, offset: 1 },
+			]);
+		}
+		// Posts appear one by one after the code is typed, and clear with it
+		posts.forEach((post, i) => {
+			const start = typed + 400 + i * 250;
+			run(post, [
+				{ opacity: 0, transform: 'translateY(8px) scale(0.98)', offset: 0 },
+				{
+					opacity: 0,
+					transform: 'translateY(8px) scale(0.98)',
+					offset: at(start),
+					easing: 'ease-out',
+				},
+				{ opacity: 1, transform: 'none', offset: at(start + 350) },
+				{ opacity: 1, transform: 'none', offset: at(clear) },
+				{ opacity: 0, transform: 'translateY(-4px)', offset: at(cleared) },
+				{ opacity: 0, transform: 'translateY(8px) scale(0.98)', offset: 1 },
+			]);
+		});
+
+		// Both badges ping twice as the page "renders". The ring is a spread box-shadow, so it follows the pill shape
+		const ring = (spread: number) => `0 0 0 ${spread}px currentColor`;
+		for (const ping of root.querySelectorAll('[data-ping]')) {
+			const keyframes: Keyframe[] = [
+				{ boxShadow: ring(0), opacity: 0, offset: 0 },
+			];
+			// Keyframe offsets must increase, so pings are added in order
+			for (const delay of [0, 650]) {
+				keyframes.push(
+					{ boxShadow: ring(0), opacity: 0, offset: at(typed + delay) },
+					{
+						boxShadow: ring(0),
+						opacity: 0.22,
+						offset: at(typed + delay + 50),
+						easing: 'cubic-bezier(0, 0, 0.2, 1)',
+					},
+					{ boxShadow: ring(10), opacity: 0, offset: at(typed + delay + 600) },
+				);
+			}
+			keyframes.push({ boxShadow: ring(0), opacity: 0, offset: 1 });
+			run(ping, keyframes);
+		}
+		// The arrow nudges toward the posts, twice
+		for (const arrow of root.querySelectorAll<SVGElement>('[data-arrow]')) {
+			const nudge =
+				arrow.getAttribute('data-arrow') === 'y'
+					? 'translateY(3px)'
+					: 'translateX(3px)';
+			run(arrow, [
+				{ transform: 'none', offset: 0 },
+				{ transform: 'none', offset: at(typed) },
+				{ transform: nudge, offset: at(typed + 160), easing: 'ease-in-out' },
+				{ transform: 'none', offset: at(typed + 360) },
+				{ transform: nudge, offset: at(typed + 810), easing: 'ease-in-out' },
+				{ transform: 'none', offset: at(typed + 1010) },
+				{ transform: 'none', offset: 1 },
+			]);
+		}
+
+		// Pause all animations, CSS ones too, when off-screen or in a hidden tab.
+		// Pausing them together keeps them in sync
+		let onScreen = false;
+		const update = () => {
+			const play = onScreen && document.visibilityState === 'visible';
+			for (const animation of root.getAnimations({ subtree: true })) {
+				if (play) {
+					animation.play();
+				} else {
+					animation.pause();
+				}
+			}
+		};
+		const observer = new IntersectionObserver(([entry]) => {
+			onScreen = entry.isIntersecting;
+			update();
+		});
+		observer.observe(root);
+		document.addEventListener('visibilitychange', update, { signal });
+
+		// Clean up when the client router navigates away
+		signal.addEventListener('abort', () => {
+			observer.disconnect();
+			for (const animation of animations) {
+				animation.cancel();
+			}
+		});
+	});
+</script>

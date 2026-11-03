@@ -1,0 +1,120 @@
+---
+import Check from '@lucide/astro/icons/check';
+import ChevronsUpDown from '@lucide/astro/icons/chevrons-up-down';
+import LayoutGrid from '@lucide/astro/icons/layout-grid';
+import { getSections, type Section } from '@/lib/content/sections';
+import { docsRoute } from '@/lib/routes';
+import SectionItem from './SectionItem.astro';
+
+interface Props {
+	current: Section;
+}
+
+/** Dropdown at the top of the sidebar for switching sections. */
+const { current } = Astro.props;
+const sections = getSections();
+const box =
+	'flex items-center gap-2 rounded-lg border border-border bg-secondary p-1.5';
+---
+
+<div class="relative z-10 shrink-0 px-4 pt-4 pb-2 md:px-3">
+	<details class="relative" data-section-switcher>
+		<summary
+			class:list={[
+				box,
+				'cursor-pointer list-none transition-colors hover:bg-accent [details[open]>&]:bg-accent',
+			]}
+		>
+			<SectionItem section={current} />
+			<ChevronsUpDown size={16} class="ms-auto text-muted-foreground" aria-hidden="true" />
+			<span class="sr-only">Change section</span>
+		</summary>
+		{/*
+		  As tall as its content, capped to the space below the switcher (9.5rem covers the header and the switcher, and
+		  the sidebar's `--footer-overlap` the footer once it scrolls in), but never capped below 10rem. The sections
+		  scroll; "All sections" stays put
+		*/}
+		<div class="absolute inset-x-0 top-[calc(100%+0.25rem)] z-10 flex max-h-[max(10rem,calc(100dvh-9.5rem-var(--footer-overlap,0px)))] flex-col rounded-lg border border-border bg-popover p-1 shadow-lg">
+		<ul class="m-0 flex min-h-0 list-none flex-col gap-0.5 overflow-y-auto overscroll-contain p-0 scrollbar-subtle">
+			{sections.map((section) => (
+				<li>
+					<a
+						href={section.url}
+						class="flex items-start gap-2 rounded-md p-1.5 no-underline hover:bg-accent focus-visible:bg-accent aria-current:bg-primary/10"
+						aria-current={section.id === current.id ? 'true' : undefined}
+					>
+						<SectionItem section={section} wrap />
+						{section.id === current.id && <Check size={16} class="ms-auto mt-0.5 text-primary" aria-hidden="true" />}
+					</a>
+				</li>
+			))}
+		</ul>
+		{/* The divider is on a wrapper, straight, while the link keeps its rounded highlight */}
+		<div class="mt-1 shrink-0 border-t border-border pt-1">
+			<a
+				href={docsRoute}
+				class="flex items-center gap-2 rounded-md p-1.5 text-sm text-muted-foreground no-underline hover:bg-accent hover:text-foreground focus-visible:bg-accent"
+			>
+				<LayoutGrid size={16} aria-hidden="true" />
+				All sections
+			</a>
+		</div>
+		</div>
+	</details>
+</div>
+
+<script>
+	import { onPage } from '@/scripts/page';
+
+	onPage((signal) => {
+		for (const details of document.querySelectorAll<HTMLDetailsElement>(
+			'[data-section-switcher]',
+		)) {
+			const summary = details.querySelector('summary');
+			if (!summary) {
+				continue;
+			}
+			const links = () => [...details.querySelectorAll<HTMLAnchorElement>('a')];
+			// Opened by keyboard: focus the current section, like a native menu
+			details.addEventListener('toggle', () => {
+				if (details.open && details.matches(':focus-within')) {
+					(links().find((link) => link.ariaCurrent) ?? links()[0])?.focus({
+						preventScroll: true,
+					});
+				}
+			});
+			// Arrow keys move between links and wrap around
+			details.addEventListener('keydown', (event) => {
+				if (!details.open) {
+					return;
+				}
+				const all = links();
+				const index = all.indexOf(document.activeElement as HTMLAnchorElement);
+				if (event.key === 'Escape') {
+					details.open = false;
+					summary.focus({ preventScroll: true });
+				} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+					event.preventDefault();
+					const step = event.key === 'ArrowDown' ? 1 : -1;
+					all[(index + step + all.length) % all.length]?.focus({
+						preventScroll: true,
+					});
+				}
+			});
+			details.addEventListener('focusout', (event) => {
+				if (!details.contains(event.relatedTarget as Node)) {
+					details.open = false;
+				}
+			});
+			document.addEventListener(
+				'click',
+				(event) => {
+					if (!details.contains(event.target as Node)) {
+						details.open = false;
+					}
+				},
+				{ signal },
+			);
+		}
+	});
+</script>

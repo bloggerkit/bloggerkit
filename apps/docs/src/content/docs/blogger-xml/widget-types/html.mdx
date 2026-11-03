@@ -1,0 +1,158 @@
+---
+title: HTML
+description: The HTML/JavaScript widget, which prints the code its owner types, unescaped.
+published: 2026-10-26
+---
+
+The `HTML` widget, "HTML/JavaScript" in the Layout editor, prints whatever its owner typed in its code editor: markup, CSS, scripts or plain text. Custom themes use it more than any other type, for visible blocks such as menus and ad slots, and for content that a theme's own markup takes over. It has the same data as the [Text](./text.mdx) widget; only the editor differs.
+
+## Quick example
+
+A footer line. The owner can replace it by typing in the widget; while the widget is empty, the theme prints its own default.
+
+<CodeTabs>
+
+```xml title="theme.xml" {8}
+<b:widget id='HTML21' locked='true' title='Copyright' type='HTML' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='content'/>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:class name='footer-copyright'/>
+    <b:if cond='data:content != ""'>
+      <data:content/>
+    <b:else/>
+      &#169; <a expr:href='data:blog.homepageUrl.canonical'><data:blog.title/></a>. All rights reserved.
+    </b:if>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered, while the widget is empty"
+<div class='widget HTML footer-copyright' data-version='2' id='HTML21'>
+  © <a href='https://example.blogspot.com/'>My Blog</a>. All rights reserved.
+</div>
+```
+
+</CodeTabs>
+
+`<data:content/>` prints the content as it is, without escaping. Scripts in it run like any other script of the page.
+
+## Placement and limits
+
+|                     |                                                                                                                 | Source                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                | `HTML`                                                                                                          | <BloggerSource kind="official" /> |
+| Per blog            | At least 2; a higher maximum is not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Width               | Any                                                                                                             | <BloggerSource kind="observed" /> |
+| Placement           | Any section                                                                                                     | <BloggerSource kind="observed" /> |
+| Locked              | Not usually: widgets added by the owner are unlocked                                                            | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                                                        | <BloggerSource kind="observed" /> |
+| Classic mobile view | Hidden by default                                                                                               | <BloggerSource kind="official" /> |
+| Dynamic Views       | Not supported; the Text widget is                                                                               | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting   | Values   | Data      | Meaning                      | Source                            |
+| --------- | -------- | --------- | ---------------------------- | --------------------------------- |
+| `content` | any text | `content` | The code typed in the editor | <BloggerSource kind="observed" /> |
+
+Blogger stores the code in a CDATA section when it holds `&`, `<`, `>`, `"` or `'`, and as plain text otherwise, trimmed at both ends. It needs no escaping in the theme file. <BloggerSource kind="observed" />
+
+An empty widget has no `content` setting. A new HTML widget written with no settings gets none, and an empty `<b:widget-setting name='content'/>` is removed when the theme is saved, with the whole `<b:widget-settings>`. An HTML widget with no content renders nothing at all, not even its wrapper `div`, even with a `main` includable of its own. <BloggerSource kind="observed" />
+
+A hand-written theme can ship default content:
+
+```xml
+<b:widget-settings>
+  <b:widget-setting name='content'><![CDATA[<a class='button' href='/p/contact.html'>Contact</a>]]></b:widget-setting>
+</b:widget-settings>
+```
+
+## Widget data
+
+Google: "The Text widget and the HTML/JavaScript widget work the same way and have the same two pieces of data." <BloggerSource kind="official" />
+
+| Field     | V1  | V2  | Type   | Holds                                                                  | Source                            |
+| --------- | --- | --- | ------ | ---------------------------------------------------------------------- | --------------------------------- |
+| `title`   | ✓   | ✓   | string | The widget title, up to 100 characters                                 | <BloggerSource kind="observed" /> |
+| `content` | ✓   | ✓   | string | The code of the widget, as an HTML string. No size limit is documented | <BloggerSource kind="official" /> |
+
+## Built-in includables
+
+| Includable | V1  | V2  | Renders                                               | Source                            |
+| ---------- | --- | --- | ----------------------------------------------------- | --------------------------------- |
+| `main`     | ✓   | ✓   | The title, then `div.widget-content` with the content | <BloggerSource kind="observed" /> |
+
+The built-in markup has no other includable, in either version.
+
+- **Version 2.** `main` includes the Common `widget-title`, which writes `h3.title` when the title is not empty, then `div.widget-content` holding `<data:content/>`.
+- **Version 1.** `main` writes `h2.title` itself when `data:title` is not empty, then `div.widget-content`, then includes `quickedit`, the admin's edit link, now obsolete.
+
+Some exported themes have a `main` that only includes a built-in, `<b:include name='html-content'/>`. It is defined in no theme and not documented. In a test HTML widget, `<b:include name='html-content'/>` failed with a [markup error](../basics/saving.mdx#markup-errors), so a theme should not rely on it. <BloggerSource kind="observed" />
+
+## Writing your own markup
+
+### Content with a fallback
+
+A widget that installs with a placeholder comment, such as `<!--[ Customizable through Edit HTML ]-->`, still has that comment as `data:content`. Compare against every placeholder the theme ships, and fall back to the theme's markup:
+
+```xml {3}
+<b:includable id='main'>
+  <ul class='main-menu'>
+    <b:if cond='data:content not in ["", "&lt;!--[ Customizable through Edit HTML ]--&gt;"]'>
+      <data:content/>
+    <b:else/>
+      <li><a expr:href='data:blog.homepageUrl.canonical'><data:messages.home/></a></li>
+      <li><a href='/p/about.html'>About</a></li>
+    </b:if>
+  </ul>
+</b:includable>
+```
+
+`<` is written `&lt;` inside the attribute. `>` may stay as it is, but writing `&gt;` is also fine.
+
+### Flags in the title
+
+The title is free text the owner edits, which makes it a convenient switch. A widget can hide its own title, or turn into an ad slot, from a tag typed in it:
+
+```xml
+<b:includable id='main'>
+  <b:if cond='data:title contains "[Ad]"'>
+    <div class='ad-slot'><data:content/></div>
+  <b:else/>
+    <b:include cond='data:title not contains "[NoTitle]"' name='widget-title'/>
+    <div class='widget-content'><data:content/></div>
+  </b:if>
+</b:includable>
+```
+
+The same test works in the `cond` of the widget, to show a widget only to phones or only to desktops:
+
+```xml
+<b:widget cond='(data:title contains "[Mobile]" and data:blog.isMobileRequest) or (data:title contains "[Desktop]" and not data:blog.isMobileRequest) or (data:title not contains "[Mobile]" and data:title not contains "[Desktop]")' id='HTML85' locked='true' title='Sticky Ad [Desktop]' type='HTML' version='2' visible='true'>
+```
+
+### A widget that ignores its content
+
+A theme can lock an HTML widget and give it a `main` that never prints `data:content`, to reserve a place in the Layout editor for a feature the theme renders itself, such as a table of contents on post pages. The content then only holds a note for the owner:
+
+```xml
+<b:widget cond='data:view.isPost' id='HTML11' locked='true' title='Table of contents' type='HTML' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='content'><![CDATA[<!--[ Filled in on post pages by the theme's script ]-->]]></b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <nav class='toc' hidden='' id='post-toc'>
+      <b:attr expr:value='data:title != "" ? data:title : "Contents"' name='aria-label'/>
+    </nav>
+  </b:includable>
+</b:widget>
+```
+
+The owner can still hide or rename it in the Layout editor, and the theme reads `data:title`.
+
+## Things to know
+
+- **Size and scripts.** No limit on the size of `content` and no restriction on scripts is documented.
+- **HTTPS.** The Text widget is compatible with HTTPS blogs. Whether the HTML widget counts as compatible is not confirmed; in practice its content decides whether the page loads insecure resources.

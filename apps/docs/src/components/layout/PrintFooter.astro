@@ -1,0 +1,24 @@
+---
+import { normalizePath } from '@/lib/routes';
+import { author, copyrightSince, publisher, site } from '@/lib/site';
+
+const pageUrl = new URL(normalizePath(Astro.url.pathname), site).href;
+// As in the site footer
+const year = new Date().getFullYear();
+const years =
+	year > copyrightSince ? `${copyrightSince}–${year}` : `${copyrightSince}`;
+const separator = 'px-0.5 align-[0.0625rem] text-[0.625rem]';
+---
+
+{/* Print only. The print date is set by `src/scripts/print.ts` */}
+<div class="mt-10 hidden flex-col gap-1 border-t border-border pt-3 text-xs text-muted-foreground print:flex" aria-hidden="true">
+	<div class="flex justify-between gap-6">
+		<p class="m-0">
+			© {years}{' '}<span class={separator}>•</span>{' '}<span class="text-foreground">{author.name}</span>{' '}<span
+				class={separator}>•</span
+			>{' '}Made by <span class="text-foreground">{publisher.name}</span>
+		</p>
+		<span class="shrink-0" data-print-date></span>
+	</div>
+	<span class="break-all">{pageUrl}</span>
+</div>

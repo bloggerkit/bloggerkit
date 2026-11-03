@@ -1,0 +1,247 @@
+---
+title: b:skin and b:template-skin
+description: The CSS of the blog and the CSS of the Layout editor, what Blogger accepts inside them, and how it renders them.
+level: beginner
+published: 2026-10-26
+---
+
+A theme has two places for CSS that Blogger treats specially:
+
+- `<b:skin>` is the stylesheet of the blog. It also holds the declarations of the [Theme Designer](./theme-designer.mdx) variables, and its CSS can use them as `$(name)`.
+- `<b:template-skin>` is the stylesheet of the Layout editor, where the blog owner moves widgets around.
+
+Both hold plain CSS text, usually in one CDATA section, and Blogger turns each into a `<style>` element.
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<head>
+  <title><data:view.title.escaped/></title>
+  <b:include data='blog' name='all-head-content'/>
+  <b:skin><![CDATA[/*
+<Variable name="body.background.color" description="Background color" type="color" default="#ffffff" value="#ffffff"/>
+<Variable name="body.link.color" description="Link color" type="color" default="#0b57d0" value="#0b57d0"/>
+*/
+body {
+  background: $(body.background.color);
+  margin: 0;
+}
+a {
+  color: $(body.link.color);
+}
+]]></b:skin>
+  <b:template-skin><![CDATA[
+body#layout .main {
+  float: left;
+  width: 64%;
+}
+body#layout .sidebar {
+  float: right;
+  width: 34%;
+}
+]]></b:template-skin>
+</head>
+```
+
+```html title="Rendered"
+<style id='page-skin-1' type='text/css'><!--
+body {
+background: #ffffff;
+margin: 0;
+}
+a {
+color: #0b57d0;
+}
+--></style>
+<style id='template-skin-1' type='text/css'><!--
+body#layout .main {
+float: left;
+width: 64%;
+}
+body#layout .sidebar {
+float: right;
+width: 34%;
+}
+--></style>
+```
+
+</CodeTabs>
+
+The comment with the `<Variable>` declarations is gone, every `$(…)` is replaced by its value, and the indentation is removed. <BloggerSource kind="observed" />
+
+## How Blogger reads the content
+
+Blogger reads `<b:skin>` and `<b:template-skin>` as text. Nothing in them is a Blogger tag: `<b:if>`, `<data:x/>` and `expr:` are not evaluated there, and a `<data:blog.title/>` in the skin reaches the rendered `<style>` as it is written. The only syntax Blogger looks for is the variables of the skin, `$name` and `$(…)`, and, in `<b:skin>` only, the `<Variable>` and `<Group>` declarations. <BloggerSource kind="observed" />
+
+The content may be:
+
+- one or more CDATA sections, taken as they are;
+- plain text, where the entities are decoded, `&lt;` to `<`, `&amp;` to `&`;
+- a mix of both, joined in order.
+
+<BloggerSource kind="observed" />
+
+In `<b:skin>`, anything else, an element such as `<style>`, an XML comment outside the CDATA or a processing instruction, is refused when the theme is saved, see [The skins](../basics/saving.mdx#the-skins). <BloggerSource kind="observed" />
+
+Blogger stores the content as a single CDATA section, whatever form it was written in, see [Skins](../basics/saving.mdx#skins). A `]]>` inside the CSS is stored as it is and breaks the XML of the saved theme: in CSS, write `\5d\5d>` instead. <BloggerSource kind="observed" />
+
+CDATA is the form to write: without it, every `<` and `&` of the CSS and of the declarations must be escaped. Inside CDATA, `>` in a selector, `&` in a URL and the `<Variable>` tags are written as they are.
+
+In `<b:skin>`, Blogger only reads `<Variable>` and `<Group>` tags. Every other `<` is text: `content: "<del>"`, a comment such as `/* keep <b> bold */` or `<!-- <foo> -->`, `a<1` and `<br/>` all save. <BloggerSource kind="observed" /> The full rules are on [Theme Designer](./theme-designer.mdx#how-blogger-reads-the-declarations).
+
+## `<b:skin>`
+
+| Attribute | Required | Value   | Default | Description                   | Source                            |
+| --------- | -------- | ------- | ------- | ----------------------------- | --------------------------------- |
+| `version` | No       | `x.y.z` |         | A version number for the skin | <BloggerSource kind="observed" /> |
+
+Blogger does not check the attributes of `<b:skin>`: `foo='1'` is saved and kept. <BloggerSource kind="observed" />
+
+### Rules
+
+- Every theme has exactly one `<b:skin>`, outside `<body>`. Google documents it as required. <BloggerSource kind="official" /> It may be empty. Blogger refuses a theme with none or with two, two in the branches of a `<b:if>` included; the messages are in [The skins](../basics/saving.mdx#the-skins). <BloggerSource kind="observed" />
+- A skin inside `<b:if cond='false'>` still defines its variables: `data:skin.vars` reads them on every page. <BloggerSource kind="observed" />
+- Blogger's own themes put it in `<head>`, after the `<title>` and the `all-head-content` include, and before `<b:template-skin>` and `<b:defaultmarkups>`. <BloggerSource kind="observed" />
+- Some themes write it inside an includable, in a `<b:defaultmarkup type='Common'>`, and include it in `<head>`. Whether Blogger reads a skin written there is not confirmed.
+
+### `version`
+
+A number in three parts. Blogger's own themes carry one (`1.3.3` in the 2017 themes, `1.4.0` in recent copies of Emporio, `1.0.1` in Essential), and the classic themes have none. What Blogger does with it is not confirmed, and a skin without it works the same. <BloggerSource kind="observed" />
+
+The `version-1-3-3` class seen on the `<body>` of some blogs does not come from this attribute: their theme writes it with a `<b:class>`.
+
+## `<b:template-skin>`
+
+`<b:template-skin>` has no attributes. It is not checked like `<b:skin>`: an attribute such as `foo='x'`, a second `<b:template-skin>` and an XML comment in it all save. A theme without `b:layoutsVersion` on `<html>` is refused with `template-skin only available for templates version 2 and above`; see [The skins](../basics/saving.mdx#the-skins). <BloggerSource kind="observed" />
+
+- Its CSS can use the skin variables with `$(name)`, as in `<b:skin>`, but it can not declare any: `<Variable>` and `<Group>` tags written in it are plain text. <BloggerSource kind="observed" />
+- Blogger renders it after the skin, as `<style id='template-skin-1' type='text/css'>`, on every page that renders it, not only in the Layout editor.
+
+Because it reaches the blog too, its rules start with `body#layout`: only the Layout editor gives `<body>` the id `layout`. A rule without that prefix styles the live blog. <BloggerSource kind="observed" />
+
+### Rendering it only in the Layout editor
+
+To keep the Layout editor CSS off the blog, put `<b:template-skin>` in an includable and include it only when [`data:view.isLayoutMode`](../data/view.mdx) is true. Some themes do this: <BloggerSource kind="observed" />
+
+```xml
+<b:defaultmarkups>
+  <b:defaultmarkup type='Common'>
+    <b:includable id='theme:layout'>
+      <b:template-skin><![CDATA[
+body#layout .main-row {
+  display: flex;
+  gap: 8px;
+}
+body#layout::before {
+  content: "My Theme 2.0";
+}
+]]></b:template-skin>
+    </b:includable>
+  </b:defaultmarkup>
+</b:defaultmarkups>
+```
+
+```xml {3}
+<head>
+  <b:include name='theme:skin'/>
+  <b:include cond='data:view.isLayoutMode' name='theme:layout'/>
+</head>
+```
+
+## How Blogger renders the skin
+
+| In the theme        | On the page                                                                     |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `<b:skin>`          | `<style id='page-skin-1' type='text/css'>`, its CSS wrapped in `<!--` and `-->` |
+| `<b:template-skin>` | `<style id='template-skin-1' type='text/css'>`, the same way, right after it    |
+
+<BloggerSource kind="observed" />
+
+- Every `$name` and `$(…)` is replaced by its value, and the arithmetic in `$(…)` is computed. No `$(` is left in the output.
+- The indentation at the start of the lines is removed.
+- Data tags and other Blogger tags in the text are not processed: they are printed as written.
+- In layouts version 3 themes, the comment holding the `<Variable>` and `<Group>` declarations is removed. In classic themes it stays in the rendered CSS.
+- The web fonts named in `font` variables (Lato, Roboto, Montserrat…) are loaded by a `<style>` of `@font-face` rules that Blogger adds before `page-skin-1`. The theme adds nothing for them.
+
+<BloggerSource kind="observed" />
+
+Whether an empty `<b:skin>` still renders an empty `page-skin-1` is not confirmed.
+
+### Theme Designer CSS
+
+The CSS the blog owner adds in Theme Designer › Advanced › Add CSS is available to the theme as [`data:skin.override`](../data/skin.mdx#override). <BloggerSource kind="observed" /> Where Blogger outputs it in the page is not confirmed.
+
+### The CSS Blogger adds
+
+Besides the skin, Blogger links stylesheets of its own in every page, the default styles of the widgets and the styles of the admin controls. `<html b:css='false'>` removes them, not the skin. See [`b:css`](../reference/root-attributes.mdx#bcss) and [What Blogger adds to the page](../basics/concepts.mdx#what-blogger-adds-to-the-page).
+
+## A skin of declarations only
+
+The skin does not have to hold the CSS. A theme can keep only the variable declarations in `<b:skin>`, inside one CSS comment so that nothing reaches the page, and write its CSS in a `<style>` element of `<head>`. There, Blogger tags work, and the variables are read with [`data:skin.vars`](../data/skin.mdx#names-from-ab-to-dataskinvarsa_b). <BloggerSource kind="observed" />
+
+```xml
+<b:skin><![CDATA[/*
+<Variable name="accent.color" description="Accent color" type="color" default="#1e88e5" value="#1e88e5"/>
+<Variable name="dark.background" description="Dark background" type="color" default="#121212" value="#121212"/>
+*/]]></b:skin>
+```
+
+```xml /data:skin.vars.accent_color/
+<style>
+:root {
+  --accent: <data:skin.vars.accent_color/>;
+}
+<b:if cond='data:view.isPost'>
+.post-body img {
+  border-radius: 8px;
+}
+</b:if>
+</style>
+```
+
+In `data:skin.vars`, the dots of a name become underscores: `accent.color` is `data:skin.vars.accent_color`. See [Names](../data/skin.mdx#names-from-ab-to-dataskinvarsa_b). <BloggerSource kind="observed" />
+
+The declarations do not need to render: a skin inside `<b:if cond='false'>` still fills `data:skin.vars` on every page. <BloggerSource kind="observed" /> Some themes include their skin only in the Layout editor and rely on the same; whether a skin inside an includable is read is not confirmed.
+
+## The Layout editor
+
+In the Layout editor, Blogger renders the theme in a special mode: `<body>` has `id='layout'`, [`data:view.isLayoutMode`](../data/view.mdx) is true, and sections and widgets are boxes that Blogger styles itself. <BloggerSource kind="observed" /> Style them in `<b:template-skin>` with `body#layout` rules; the elements, their selectors, the properties that need `!important`, and a banner with `body#layout::before` are in [Styling the editor](../guides/layout-editor.mdx#styling-the-editor).
+
+## `<b:variable>` in classic themes
+
+The classic themes (Simple, Picture Window, Awesome Inc., Watermark, Ethereal, Travel) and Dynamic Views declare the widths of their columns with a lowercase `<b:variable>` element, written in `<b:template-skin>` before the CDATA, and use them in its CSS: <BloggerSource kind="observed" />
+
+```xml {2-3}
+<b:template-skin>
+  <b:variable default='940px' name='content.width' type='length'/>
+  <b:variable default='300px' name='main.column.right.width' type='length'/>
+  <![CDATA[
+body {
+  min-width: $(content.width);
+}
+.main-inner .columns {
+  padding-right: $(main.column.right.width);
+}
+]]>
+</b:template-skin>
+```
+
+| Attribute | Required | Value           | Description                                                                                                  |
+| --------- | -------- | --------------- | ------------------------------------------------------------------------------------------------------------ |
+| `default` | Yes      | a length        | The width, `960px`, `310px` or `0` in Blogger's themes                                                       |
+| `name`    | Yes      | a variable name | `content.width`, `main.column.left.width`, `main.column.right.width`; `faviconpanel.height` in Dynamic Views |
+| `type`    | Yes      | `length`        | Always `length`                                                                                              |
+
+<BloggerSource kind="observed" />
+
+It is not the `<Variable>` of the Theme Designer: it is in the `b:` namespace, outside the CSS, and has no `description` or `value`. Its names match the "Adjust widths" pane of the classic Theme Designer. It is the only element Blogger's own themes put inside a skin element, and only in classic themes. Do not use it in a layouts version 3 theme, whose skins hold text and CDATA only.
+
+## Common mistakes
+
+- **Blogger tags in the skin.** `<b:if>`, `<data:x/>` and `expr:` are text inside a skin. CSS that depends on the page goes in a `<style>` element, where they work, or in classes set with [`b:class`](../tags/attributes.mdx).
+- **A `<style>` element in `<b:skin>`.** Google's help shows one, and Blogger refuses it today. Write the CSS directly in the CDATA of `<b:skin>`.
+- **A second `<b:skin>`.** Blogger refuses to save it. Extra CSS goes in the same skin or in `<style>` elements.
+- **Single quotes on `<Variable>` and `<Group>`.** Blogger does not read single-quoted attributes on them, and refuses the theme. Write their attributes in double quotes, see [Theme Designer](./theme-designer.mdx#how-blogger-reads-the-declarations).
+- **`]]>` in the CSS.** Blogger stores it inside its CDATA section as it is, which breaks the XML of the saved theme. Write `\5d\5d>` in CSS.
+- **Layout CSS without `body#layout`.** `<b:template-skin>` reaches the blog, so a rule without the prefix applies to every page.
+- **Declarations in `<b:template-skin>`.** The Theme Designer only reads `<Variable>` and `<Group>` in `<b:skin>`.

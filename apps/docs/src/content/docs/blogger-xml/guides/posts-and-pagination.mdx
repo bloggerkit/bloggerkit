@@ -1,0 +1,319 @@
+---
+title: Posts and pagination
+description: List posts as cards or in full, write snippets and jump links, link older and newer pages, set posts per page, and build numbered pages and related posts.
+level: intermediate
+prerequisites:
+  - blogger-xml/tags/loops
+  - blogger-xml/data/post
+published: 2026-10-26
+---
+
+The posts of a page come from the [Blog widget](../widget-types/blog.mdx), as `data:posts`. On the homepage and the other lists, it holds the posts of the current page; on a post or a static page, the one item; on the 404 page, nothing. A theme loops over it, and shows each post as a card on lists and in full on items.
+
+```xml title="The loop of the Blog widget"
+<b:includable id='main' var='this'>
+  <div class='posts'>
+    <b:loop values='data:posts' var='post'>
+      <b:if cond='data:view.isMultipleItems'>
+        <b:include data='post' name='postCard'/>
+      <b:else/>
+        <b:include data='post' name='postFull'/>
+      </b:if>
+    </b:loop>
+  </div>
+  <b:include cond='data:view.isMultipleItems' name='postPagination'/>
+</b:includable>
+```
+
+`data='post'` passes the loop variable by name; inside the includable, `var='post'` names it again. See [includables](../layout/includables.mdx).
+
+## Which posts a page has
+
+| Page                                 | `data:posts`                                            |
+| ------------------------------------ | ------------------------------------------------------- |
+| Homepage                             | the newest posts, as many as the posts per page setting |
+| Older pages, `/search?updated-max=…` | the next posts, older than the date in the URL          |
+| Label page                           | the newest posts with that label                        |
+| Search                               | the posts matching the query, most relevant first       |
+| Archive                              | the posts of the period                                 |
+| Post, static page                    | the item alone                                          |
+| 404                                  | none                                                    |
+
+<BloggerSource kind="observed" />
+
+- A label no post has gives an empty list on a normal page, not a 404. `data:posts.empty` is then true. <BloggerSource kind="observed" />
+- `data:posts` is the Blog widget's data. Other widgets read it through `data:widgets.Blog.first.posts`. See [data:widgets](../data/widgets.mdx).
+- A theme can have several Blog widgets; each one gets the same posts. Production themes use a second Blog widget, hidden, to print the posts of the page as JSON for their scripts. <BloggerSource kind="observed" />
+
+The fields of a post are on [post data](../data/post.mdx).
+
+## Cards
+
+A card links to the post, with its image, title, date and a short text:
+
+<CodeTabs>
+
+```xml title="postCard" {9,11}
+<b:includable id='postCard' var='post'>
+  <article class='card'>
+    <b:if cond='data:post.featuredImage'>
+      <a class='card-media' expr:href='data:post.url'>
+        <img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 480, "16:9")' height='270' loading='lazy' width='480'/>
+      </a>
+    </b:if>
+    <h2 class='card-title'>
+      <a expr:href='data:post.url'><b:eval expr='data:post.title ?: "Untitled"'/></a>
+    </h2>
+    <time class='card-date' expr:datetime='data:post.date.iso8601'><b:eval expr='format(data:post.date, "MMM d, yyyy")'/></time>
+    <p class='card-text'><data:post.snippets.short/></p>
+    <b:if cond='data:post.hasJumpLink'>
+      <a class='card-more' expr:href='fragment(data:post.url, "more")'><data:blog.jumpLinkMessage/></a>
+    </b:if>
+  </article>
+</b:includable>
+```
+
+```html title="Rendered"
+<article class='card'>
+  <a class='card-media' href='https://example.blogspot.com/2026/03/first-frost.html'>
+    <img alt='First frost' height='270' loading='lazy' src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh/w480-h270-p-k-no-nu/frost.jpg' width='480'/>
+  </a>
+  <h2 class='card-title'><a href='https://example.blogspot.com/2026/03/first-frost.html'>First frost</a></h2>
+  <time class='card-date' datetime='2026-03-14T07:30:00-08:00'>Mar 14, 2026</time>
+  <p class='card-text'>The first cold night of the year came early, and the garden was not ready for it. Here is what survived and…</p>
+  <a class='card-more' href='https://example.blogspot.com/2026/03/first-frost.html#more'>Read more</a>
+</article>
+```
+
+</CodeTabs>
+
+- A post can have no title: `?:` gives it a fallback.
+- `format` writes the date with a pattern; `.iso8601` gives the machine-readable form for `datetime`. See [functions](../expressions/functions.mdx).
+- The image is resized for the card, see [Images](./images.mdx).
+
+## Snippets
+
+A snippet is the text of a post without its markup, short enough for a card or a description. Blogger gives two with each post, `data:post.snippets.short` and `data:post.snippets.long` (`snippet` and `longSnippet` in version 1 widgets), see [`snippets`](../data/post.mdx#snippets). The `snippet` function cuts any text, with options for the length, the ellipsis, the links and the line breaks, see [`snippet`](../expressions/functions.mdx#snippet):
+
+```xml
+<p><b:eval expr='snippet(data:post.snippets.long, { length: 220 })'/></p>
+<meta expr:content='snippet(data:post.body, { length: 160, linebreaks: false, links: false }).escaped' name='description'/>
+```
+
+- With `links` or `linebreaks` on, the result can hold links and line breaks: escape it before putting it in an attribute, or turn both off.
+- `snippet` of the body counts the text of the whole post, so it can go past the jump break, unlike `snippets.long`.
+
+## Jump breaks
+
+The post editor's "Insert jump break" button puts a `<!--more-->` marker in the post. On lists, Blogger cuts the body there, and the post gets a "Read more" link; on the post itself, the marker becomes an anchor named `more`. <BloggerSource kind="observed" />
+
+| Field                               | On lists                                                             | On items                       |
+| ----------------------------------- | -------------------------------------------------------------------- | ------------------------------ |
+| `data:post.body`                    | the HTML before the jump break                                       | the whole post                 |
+| `data:post.hasJumpLink`             | true when the post has a jump break                                  | always false                   |
+| `data:post.snippets.short`, `.long` | the text before the jump break                                       | the text before the jump break |
+| `data:blog.jumpLinkMessage`         | the text of the link, set in the Blog widget, `Read more` by default |                                |
+
+A theme that shows the body on lists, rather than a snippet, adds the link itself:
+
+```xml title="postBody on a list"
+<div class='post-body'><data:post.body/></div>
+<b:if cond='data:post.hasJumpLink'>
+  <a class='jump-link' expr:href='fragment(data:post.url, "more")' expr:title='data:post.title'><data:blog.jumpLinkMessage/></a>
+</b:if>
+```
+
+The link opens the post at the jump break, `#more`. Use `data:post.url` alone to open it at the top.
+
+Jump breaks also keep list pages light: without one, the whole post, with every image, is in the body on the homepage. See [posts per page](#posts-per-page).
+
+## Older and newer links
+
+The Blog widget gives two URLs:
+
+| Data                | On lists                     | On items                                    |
+| ------------------- | ---------------------------- | ------------------------------------------- |
+| `data:olderPageUrl` | the next page of older posts | the previous post, the one published before |
+| `data:newerPageUrl` | the page of newer posts      | the next post                               |
+
+Either is missing when there is nothing in that direction: no `olderPageUrl` on the last page, no `newerPageUrl` on the homepage. <BloggerSource kind="official" />
+
+The older pages of a list are `/search` URLs with the date of the last post shown: <BloggerSource kind="observed" />
+
+```txt
+https://example.blogspot.com/search?updated-max=2026-02-01T09:15:00-08:00&max-results=7
+https://example.blogspot.com/search/label/Garden?updated-max=2026-02-01T09:15:00-08:00&max-results=7
+```
+
+So the second page of the homepage is a search page: `data:view.isHomepage` is false there, and `data:view.isSearch` is true. See [page types](../data/page-types.mdx).
+
+```xml title="postPagination" {6}
+<b:includable id='postPagination'>
+  <nav class='pager' id='blog-pager'>
+    <b:if cond='data:newerPageUrl'>
+      <a class='pager-newer' expr:href='data:newerPageUrl' rel='prev'><data:messages.newerPosts/></a>
+    </b:if>
+    <b:if cond='data:view.url != data:blog.homepageUrl'>
+      <a class='pager-home' expr:href='data:blog.homepageUrl.canonical'><data:messages.home/></a>
+    </b:if>
+    <b:if cond='data:olderPageUrl'>
+      <a class='pager-older' expr:href='data:olderPageUrl' rel='next'><data:messages.olderPosts/></a>
+    </b:if>
+  </nav>
+</b:includable>
+```
+
+- `data:view.url != data:blog.homepageUrl` hides the Home link on the homepage itself.
+- `rel='prev'` and `rel='next'` tell browsers and crawlers the order of the pages.
+- The Blog widget's own `main` calls `postPagination` only on lists. On items, the same two URLs make a "previous post, next post" pair. Version 1 widgets also give their titles, `data:newerPageTitle` and `data:olderPageTitle`.
+
+### No posts
+
+A new blog, or a label no post has, renders an empty list. A theme can tell the two apart: the homepage with no older page has no posts at all. <BloggerSource kind="observed" />
+
+```xml {5}
+<b:if cond='data:posts.empty'>
+  <b:if cond='data:view.url == data:blog.homepageUrl and !data:olderPageUrl'>
+    <p class='empty'><data:messages.noResultsFound/></p>
+  <b:else/>
+    <b:include name='noContentPlaceholder'/>
+  </b:if>
+</b:if>
+```
+
+`noContentPlaceholder` is a built-in includable that prints Blogger's own message. See [includables](../layout/includables.mdx).
+
+### The pager for scripts
+
+A script that loads the next page in place, as an infinite scroll or a "Load more" button, needs the two URLs. Production themes print them as JSON, with `null` when a page is missing: <BloggerSource kind="observed" />
+
+```xml
+<script id='pager-data' type='application/json'>{"newer": <b:if cond='data:newerPageUrl'>"<data:newerPageUrl.jsonEscaped/>"<b:else/>null</b:if>, "older": <b:if cond='data:olderPageUrl'>"<data:olderPageUrl.jsonEscaped/>"<b:else/>null</b:if>}</script>
+```
+
+The script fetches the older page as HTML, takes its posts and its own older URL, and repeats. Fetching the page rather than the feed keeps the markup of the theme. <BloggerSource kind="observed" />
+
+## Posts per page
+
+The number of posts of the homepage is a setting of the Blog widget in the Layout editor, "Number of posts on the main page". The older-posts links carry it as `max-results`, so the next pages keep the same count. <BloggerSource kind="observed" />
+
+| URL                                   | Posts shown                                     |
+| ------------------------------------- | ----------------------------------------------- |
+| `/`                                   | the setting                                     |
+| `/?max-results=3`                     | the setting: the homepage ignores `max-results` |
+| `/search?max-results=3`               | 3                                               |
+| `/search/label/Garden?max-results=12` | 12                                              |
+
+<BloggerSource kind="observed" />
+
+Blogger also limits the size of a page of posts. When the posts are long, a page shows fewer posts than asked, and the older-posts link starts after the last one shown. The limit is a size, not a count, and Blogger does not publish it. <BloggerSource kind="observed" /> Two things keep every page full:
+
+- a jump break in long posts, so lists only carry their beginning;
+- cards with a snippet and a resized image instead of the full body.
+
+A theme can also show fewer posts than it receives, with the index of the loop. A landing homepage showing three posts:
+
+```xml {2}
+<b:loop index='i' values='data:posts' var='post'>
+  <b:if cond='!data:view.isHomepage or data:i &lt; 3'>
+    <b:include data='post' name='postCard'/>
+  </b:if>
+</b:loop>
+```
+
+`&lt;` is required in the attribute: a raw `<` breaks the XML. `index` counts from `0`. See [loops](../tags/loops.mdx).
+
+### Something every few posts
+
+The index also places something between posts. A theme can put an ad after every third post of a list: <BloggerSource kind="observed" />
+
+```xml
+<b:loop index='i' values='data:posts' var='post'>
+  <b:include data='post' name='postCard'/>
+  <b:if cond='(data:i + 1) % 3 == 0 and !data:view.isPreview'>
+    <div class='in-feed-ad'>…</div>
+  </b:if>
+</b:loop>
+```
+
+Blogger's own inline ads use `data:post.includeAd` instead, from the "posts between ads" setting. See [Blog](../widget-types/blog.mdx).
+
+## Numbered pages
+
+Blogger only links the next and previous pages. Numbered pages, 1 2 3 … 12, are built by a script from the [feed](./feeds.mdx): the feed knows the total, and gives the date that starts each page.
+
+1. The number of posts per page: the `max-results` of the older-posts link, or the number of posts on the page.
+2. The total: `openSearch$totalResults` of the feed, requested with `max-results=0`. On a label page, a theme can read the count of the Label widget instead.
+3. The URL of page `n`: the date of the last post of page `n - 1` as `updated-max`.
+
+```js title="The URL of page n" {10-11}
+async function pageUrl(n, perPage, label) {
+  const list = label ? `/search/label/${encodeURIComponent(label)}` : '/search';
+  if (n === 1) return label ? list : '/';
+  const feed = label ? `/feeds/posts/summary/-/${encodeURIComponent(label)}` : '/feeds/posts/summary';
+  const response = await fetch(`${feed}?alt=json&max-results=1&start-index=${(n - 1) * perPage}`);
+  const entry = (await response.json()).feed.entry?.[0];
+  if (!entry) return null;
+  // 2026-02-01T09:15:00.000-08:00 → 2026-02-01T09:15:00-08:00
+  const published = entry.published.$t;
+  const updatedMax = (published.slice(0, 19) + published.slice(23)).replace('+', '%2B');
+  return `${list}?updated-max=${updatedMax}&max-results=${perPage}&start=${(n - 1) * perPage}&by-date=false`;
+}
+```
+
+- The feed gives dates with milliseconds; the page URLs have none. A script removes them, and writes the `+` of a positive time zone as `%2B`, since a bare `+` in a URL is a space. <BloggerSource kind="observed" />
+- `start` and `by-date=false` are added by the theme: its script reads `start` back to know the current page number. <BloggerSource kind="observed" />
+- One feed request per page link is a lot. Request the dates of every page at once, with a larger `max-results`, and pick every `perPage`-th entry.
+
+## Related posts
+
+A theme can not ask Blogger for other posts while it renders a post: `data:posts` only holds the post itself. Related posts are filled in on the client, from a placeholder that carries what the script needs: <BloggerSource kind="observed" />
+
+```xml title="The placeholder, in the post"
+<b:if cond='data:view.isPost and data:post.labels.notEmpty'>
+  <section class='related' data-max='4' expr:data-label='data:post.labels.first.name' expr:data-post-id='data:post.id' id='related'>
+    <h2><data:messages.youMayLikeThesePosts/></h2>
+  </section>
+</b:if>
+```
+
+```js title="The script"
+const box = document.getElementById('related');
+if (box) {
+  const { label, postId, max } = box.dataset;
+  // one extra post, since the feed of the label includes the current one
+  fetch(`/feeds/posts/summary/-/${encodeURIComponent(label)}?alt=json&max-results=${Number(max) + 1}`)
+    .then((response) => response.json())
+    .then(({ feed }) => {
+      const list = document.createElement('ul');
+      (feed.entry || [])
+        .filter((entry) => !entry.id.$t.endsWith(`.post-${postId}`))
+        .slice(0, Number(max))
+        .forEach((entry) => {
+          const link = document.createElement('a');
+          link.href = entry.link.find((l) => l.rel === 'alternate').href;
+          link.textContent = entry.title.$t;
+          const item = document.createElement('li');
+          item.append(link);
+          list.append(item);
+        });
+      box.append(list);
+    });
+}
+```
+
+- The feed of a label lists the newest posts with that label, the current post among them. A script can ask for one more post than it shows, and removes the current one. <BloggerSource kind="observed" />
+- The id of an entry ends with `.post-` and the post id, `tag:blogger.com,1999:blog-4815162342108.post-7310984426`.
+- `textContent` keeps a title with `<` or `&` from becoming markup.
+- `data:messages.youMayLikeThesePosts` is Blogger's translated heading for related posts.
+- A theme can also fetch label pages as HTML instead of the feed, to show related posts with the theme's own cards. <BloggerSource kind="observed" />
+
+On the server, the closest thing is the PopularPosts widget, filtered so it never shows the post being read:
+
+```xml
+<b:loop values='data:posts filter (p => p.id != data:view.postId)' var='post'>
+  <b:include data='post' name='postCard'/>
+</b:loop>
+```
+
+That shows popular posts, not related ones, but it needs no script. See [PopularPosts](../widget-types/popular-posts.mdx).

@@ -1,0 +1,175 @@
+---
+title: Label
+description: The Labels widget, which lists the labels of published posts as a list or a cloud, with their post counts.
+published: 2026-10-26
+---
+
+The `Label` widget, "Labels" in the Layout editor, lists the labels used by published posts and links each one to its label page. It shows all labels or a chosen set, sorted by name or by number of posts, as a list or as a cloud where the size follows the number of posts, with or without the counts.
+
+## Quick example
+
+Six labels are visible; a "Show more" toggle, built with a hidden checkbox and CSS, reveals the rest. The label of the page being viewed is not a link. In cloud mode each item also gets a size class.
+
+<CodeTabs>
+
+```xml title="theme.xml" {18}
+<b:widget id='Label1' locked='false' title='Labels' type='Label' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='display'>LIST</b:widget-setting>
+    <b:widget-setting name='selectedLabelsList'/>
+    <b:widget-setting name='showFreqNumbers'>true</b:widget-setting>
+    <b:widget-setting name='showType'>ALL</b:widget-setting>
+    <b:widget-setting name='sorting'>ALPHA</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main' var='this'>
+    <b:class expr:name='data:this.display == "cloud" ? "labels-cloud" : "labels-list"'/>
+    <b:include cond='data:title != ""' name='widget-title'/>
+    <b:with value='6' var='visibleCount'>
+      <b:if cond='data:labels.length > data:visibleCount'>
+        <input class='labels-toggle' expr:id='data:widget.instanceId + "-more"' hidden='' type='checkbox'/>
+      </b:if>
+      <div class='labels'>
+        <b:loop index='i' values='data:labels' var='label'>
+          <b:tag expr:name='data:blog.url == data:label.url ? "span" : "a"'>
+            <b:class cond='data:i &lt; data:visibleCount' name='visible'/>
+            <b:class cond='data:this.display == "cloud"' expr:name='"size-" + data:label.cssSize'/>
+            <b:attr cond='data:blog.url != data:label.url' expr:value='data:label.url' name='href'/>
+            <b:attr cond='data:this.showFreqNumbers' expr:value='data:label.count' name='data-count'/>
+            <data:label.name/>
+          </b:tag>
+        </b:loop>
+      </div>
+      <b:if cond='data:labels.length > data:visibleCount'>
+        <label class='labels-more' expr:for='data:widget.instanceId + "-more"'>
+          <data:messages.showMore/> (<b:eval expr='data:labels.length - data:visibleCount'/>)
+        </label>
+      </b:if>
+    </b:with>
+  </b:includable>
+  <b:includable id='cloud'/>
+  <b:includable id='content'/>
+  <b:includable id='list'/>
+</b:widget>
+```
+
+```html title="Rendered, on the label page of Guides"
+<div class='widget Label labels-list' data-version='2' id='Label1'>
+  <h3 class='title'>Labels</h3>
+  <input class='labels-toggle' hidden='' id='Label1-more' type='checkbox'/>
+  <div class='labels'>
+    <a class='visible' data-count='3' href='https://example.blogspot.com/search/label/Comments'>Comments</a>
+    <span class='visible' data-count='8'>Guides</span>
+    …
+    <a data-count='2' href='https://example.blogspot.com/search/label/Widgets'>Widgets</a>
+  </div>
+  <label class='labels-more' for='Label1-more'>Show more (3)</label>
+</div>
+```
+
+</CodeTabs>
+
+`data:blog.url` is the URL of the page being viewed, so comparing it with `data:label.url` finds the current label.
+
+## Placement and limits
+
+|                     |                                                                                                                 | Source                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                | `Label`                                                                                                         | <BloggerSource kind="official" /> |
+| Per blog            | At least 2; a higher maximum is not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Width               | 100 pixels or more                                                                                              | <BloggerSource kind="observed" /> |
+| Placement           | A sidebar in Blogger's themes, any section otherwise                                                            | <BloggerSource kind="observed" /> |
+| Locked              | Not usually                                                                                                     | <BloggerSource kind="observed" /> |
+| XML                 | Editable                                                                                                        | <BloggerSource kind="observed" /> |
+| Classic mobile view | Hidden by default                                                                                               | <BloggerSource kind="official" /> |
+| Compatibility       | Not Mobile Default 2010 or Dynamic mobile                                                                       | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting              | Values                                    | Data              | Meaning                                               | Source                            |
+| -------------------- | ----------------------------------------- | ----------------- | ----------------------------------------------------- | --------------------------------- |
+| `sorting`            | `ALPHA`, `FREQUENCY`                      | none              | By name, or by number of posts                        | <BloggerSource kind="observed" /> |
+| `display`            | `LIST`, `CLOUD`                           | `display`         | List or cloud                                         | <BloggerSource kind="observed" /> |
+| `showType`           | `ALL`, `USER_SELECTED`                    | none              | Every label, or only the ones in `selectedLabelsList` | <BloggerSource kind="observed" /> |
+| `selectedLabelsList` | label names separated by commas, or empty | none              | The chosen labels, for `USER_SELECTED`                | <BloggerSource kind="observed" /> |
+| `showFreqNumbers`    | `true`, `false`                           | `showFreqNumbers` | Show the number of posts of each label                | <BloggerSource kind="observed" /> |
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A Label widget written with no settings gets the title `Labels`, `sorting` `ALPHA`, `display` `LIST`, `selectedLabelsList` empty, `showType` `ALL` and `showFreqNumbers` `false`. One written with only some settings gets the others.
+- The values are case-sensitive. `showType` `SELECTED` is refused on a blog with no labels selected; whether `USER_SELECTED` is accepted is not confirmed.
+- `selectedLabelsList` is cleared of labels the blog does not have: `a,b` on a blog without them is stored empty.
+
+`display` is stored in upper case, but `data:display` is in lower case: compare it with `"list"` and `"cloud"`. `sorting`, `showType` and `selectedLabelsList` do not reach the data; their effect is already applied to `data:labels`.
+
+## Widget data
+
+Google lists `title` and `labels`, with `name`, `count` and `url`.
+
+| Field               | V1  | V2  | Type    | Holds                                                                                     | Source                            |
+| ------------------- | --- | --- | ------- | ----------------------------------------------------------------------------------------- | --------------------------------- |
+| `title`             | ✓   | ✓   | string  | The widget title, up to 100 characters                                                    | <BloggerSource kind="observed" /> |
+| `display`           | ✓   | ✓   | string  | `list` or `cloud`                                                                         | <BloggerSource kind="observed" /> |
+| `showFreqNumbers`   | ✓   | ✓   | boolean | Show the counts                                                                           | <BloggerSource kind="observed" /> |
+| `labels`            | ✓   | ✓   | list    | The labels, sorted and filtered by the settings. Empty until a published post has a label | <BloggerSource kind="official" /> |
+| `labels[i].name`    | ✓   | ✓   | string  | The label, up to 200 characters                                                           | <BloggerSource kind="official" /> |
+| `labels[i].url`     | ✓   | ✓   | string  | Its label page, `/search/label/NAME`                                                      | <BloggerSource kind="official" /> |
+| `labels[i].count`   | ✓   | ✓   | number  | The number of posts with the label, at least 1                                            | <BloggerSource kind="official" /> |
+| `labels[i].cssSize` | ✓   | ✓   | number  | The size in a cloud, from `1` (fewest posts) to `5` (most), relative to the other labels  | <BloggerSource kind="observed" /> |
+
+`labels[i].url` is a plain string: URL properties such as `.canonical` do not apply to it. <BloggerSource kind="observed" />
+
+## Built-in includables
+
+| Includable | V1  | V2              | Renders                                                                                                                 | Source                            |
+| ---------- | --- | --------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `main`     | ✓   | ✓, `var='this'` | Version 1: everything. Version 2: `widget-title`, then `content`                                                        | <BloggerSource kind="observed" /> |
+| `content`  |     | ✓               | `div.widget-content` with the class `list-label-widget-content` or `cloud-label-widget-content`, then `list` or `cloud` | <BloggerSource kind="observed" /> |
+| `list`     |     | ✓               | A `ul` with one `li > a.label-name` per label, and `span.label-count` inside the link when counts are on                | <BloggerSource kind="observed" /> |
+| `cloud`    |     | ✓               | One `span.label-size.label-size-N` per label, holding `a.label-name` and the count                                      | <BloggerSource kind="observed" /> |
+
+The version 2 `main` is the same shape as the BlogArchive and Profile ones: title, then `content`.
+
+### Version 1
+
+The version 1 `main` writes the title as an `h2`, then `div.widget-content` with the class `list-label-widget-content` or `cloud-label-widget-content`. In a list, each label is an `li`; in a cloud, a `span.label-size.label-size-N`. The current label, found with `data:blog.url == data:label.url`, is a `span` instead of a link, and every name carries `dir` from `data:blog.languageDirection`. The count follows in parentheses, in `span.label-count` with `dir='ltr'`. Then the obsolete `quickedit` include.
+
+### What Blogger's themes change
+
+- `main`, in all five responsive themes, wraps `super.main` in `<details class='collapsible extendable'>`, open on label pages, and sets `renderAsDetails` and the default title `data:messages.labels`. <BloggerSource kind="observed" />
+- `list` and `cloud` hand the labels to the Common `extendableItems` with `itemsMarkup: "super.list"` or `"super.cloud"`: the first labels show, then a "Show more" button. More than 10 labels trigger it, the default `limit` of `extendableItems`. <BloggerSource kind="observed" />
+- `cloud` in Notable only includes `list`, so that theme has no cloud.
+
+## Writing your own markup
+
+### Counts as JSON
+
+A Label widget in a hidden section gives scripts the label counts, for example to build a sitemap page or label suggestions:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:includable id='main' var='this'>
+  <script id='labels-json' type='application/json'>{<b:loop index='i' values='data:labels' var='label'>"<data:label.name.jsonEscaped/>":<data:label.count/><b:if cond='data:i &lt; data:labels.length - 1'>,</b:if></b:loop>}</script>
+</b:includable>
+```
+
+```html title="Rendered"
+<script id='labels-json' type='application/json'>{"Comments":3,"Guides":8,"Widgets":2}</script>
+```
+
+</CodeTabs>
+
+### Hiding some labels
+
+Labels used as internal flags, such as `Sponsored` or `Fullpage`, can be dropped from the widget with a filter:
+
+```xml
+<b:loop values='data:labels filter (l => l.name not in ["Sponsored", "Fullpage"])' var='label'>
+  <a expr:href='data:label.url'><data:label.name/></a>
+</b:loop>
+```
+
+## Things to know
+
+- **Number of labels.** No maximum is documented. <BloggerSource kind="observed" />
+- **Unpublished posts.** Labels used only by drafts or scheduled posts are not listed.

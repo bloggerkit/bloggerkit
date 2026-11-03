@@ -1,0 +1,176 @@
+---
+title: ContactForm
+description: The Contact Form widget, which lets a visitor send a message by email to every administrator of the blog.
+published: 2026-10-26
+---
+
+`ContactForm` ("Contact Form" in the Layout editor) asks for a name, an email address and a message, and Blogger emails the message to **every administrator** of the blog, at the address of their Blogger profile. The email comes from `no-reply@blogger.com`. The theme only draws the form. Sending is a request to Blogger, made by a script; the browser never submits the form by itself.
+
+## Quick example
+
+A form that keeps the ids and classes Blogger's script looks for, with lighter markup around them:
+
+<CodeTabs>
+
+```xml title="theme.xml" {17}
+<b:widget id='ContactForm1' locked='false' title='Write to us' type='ContactForm' version='2' visible='true'>
+  <b:includable id='main'>
+    <b:include name='widget-title'/>
+    <form class='contact' name='contact-form'>
+      <label>
+        <data:contactFormNameMsg/>
+        <input class='contact-form-name' expr:id='data:widget.instanceId + "_contact-form-name"' name='name' type='text'/>
+      </label>
+      <label>
+        <data:contactFormEmailMsg/> *
+        <input class='contact-form-email' expr:id='data:widget.instanceId + "_contact-form-email"' name='email' type='email'/>
+      </label>
+      <label>
+        <data:contactFormMessageMsg/> *
+        <textarea class='contact-form-email-message' expr:id='data:widget.instanceId + "_contact-form-email-message"' name='email-message' rows='5'/>
+      </label>
+      <input class='contact-form-button contact-form-button-submit' expr:id='data:widget.instanceId + "_contact-form-submit"' expr:value='data:contactFormSendMsg' type='button'/>
+      <p class='contact-form-error-message' expr:id='data:widget.instanceId + "_contact-form-error-message"'/>
+      <p class='contact-form-success-message' expr:id='data:widget.instanceId + "_contact-form-success-message"'/>
+    </form>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered"
+<div class='widget ContactForm' data-version='2' id='ContactForm1'>
+<h3 class='title'>
+Write to us
+</h3>
+<form class='contact' name='contact-form'>
+<label>
+Name
+<input class='contact-form-name' id='ContactForm1_contact-form-name' name='name' type='text'/>
+</label>
+<label>
+Email *
+<input class='contact-form-email' id='ContactForm1_contact-form-email' name='email' type='email'/>
+</label>
+<label>
+Message *
+<textarea class='contact-form-email-message' id='ContactForm1_contact-form-email-message' name='email-message' rows='5'></textarea>
+</label>
+<input class='contact-form-button contact-form-button-submit' id='ContactForm1_contact-form-submit' type='button' value='Send'/>
+<p class='contact-form-error-message' id='ContactForm1_contact-form-error-message'></p>
+<p class='contact-form-success-message' id='ContactForm1_contact-form-success-message'></p>
+</form>
+</div>
+```
+
+</CodeTabs>
+
+The button is `type='button'`, not `submit`: pressing it runs the script, which reads the fields by their ids.
+
+## Placement and limits
+
+| Property                 | Value                                                                           | Source                            |
+| ------------------------ | ------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `ContactForm`                                                                   | <BloggerSource kind="official" /> |
+| Per blog                 | Not confirmed, see [Widgets per type](../reference/limits.mdx#widgets-per-type) |                                   |
+| Suggested width          | 300px                                                                           | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | Any section. The 2017 themes do not style it                                    | <BloggerSource kind="observed" /> |
+| Locked                   | Usually not (`locked='false'` in 5 of 6 user exports)                           | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                        | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                           | <BloggerSource kind="official" /> |
+| Not available in         | Dynamic Views, Mobile Default 2010                                              | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+None. The widget has no `<b:widget-settings>`, in the theme or in exports. The only choice in the editor is the title. Written with no settings, it gets the title `Contact Form`. <BloggerSource kind="observed" />
+
+## Widget data
+
+The data is the same in both widget versions. Every field is a string, and the texts follow the language of the blog.
+
+| Field                          | English text                                         | Used for                  | Source                            |
+| ------------------------------ | ---------------------------------------------------- | ------------------------- | --------------------------------- |
+| `title`                        | The widget title, up to 100 characters               | Heading                   | <BloggerSource kind="observed" /> |
+| `contactFormNameMsg`           | "Name"                                               | Name label                | <BloggerSource kind="observed" /> |
+| `contactFormEmailMsg`          | "Email"                                              | Email label               | <BloggerSource kind="observed" /> |
+| `contactFormMessageMsg`        | "Message"                                            | Message label             | <BloggerSource kind="observed" /> |
+| `contactFormSendMsg`           | "Send"                                               | Button                    | <BloggerSource kind="observed" /> |
+| `contactFormMessageSendingMsg` | "Sending..."                                         | While the request runs    | <BloggerSource kind="observed" /> |
+| `contactFormMessageSentMsg`    | "Your message has been sent."                        | Success                   | <BloggerSource kind="observed" /> |
+| `contactFormMessageNotSentMsg` | "Message could not be sent. Please try again later." | Failure                   | <BloggerSource kind="observed" /> |
+| `contactFormInvalidEmailMsg`   | "A valid email address is required."                 | Bad address               | <BloggerSource kind="observed" /> |
+| `contactFormEmptyMessageMsg`   | "Message field cannot be empty."                     | Empty message             | <BloggerSource kind="observed" /> |
+| `submitUrl`                    | `https://www.blogger.com/contact-form.do`            | Where the message is sent | <BloggerSource kind="observed" /> |
+| `contactFormToken`             | A token issued by Blogger                            | Sent with the message     | <BloggerSource kind="observed" /> |
+
+The default form writes only the labels and the button text. The status texts are for the script, which shows them in the two message paragraphs.
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders                                                             | Source                            |
+| ---------- | --- | --- | --------------------------------------------------------------------------- | --------------------------------- |
+| `main`     | Yes | Yes | v1: the title, the form and `quickedit`. v2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`  | No  | Yes | The form                                                                    | <BloggerSource kind="observed" /> |
+
+Both versions draw the same form, `.contact-form-widget > .form > form[name='contact-form']`, with the labels as bare text separated by `<p/>` and `<br/>`, and an asterisk after the email and message labels. Its elements, with ids built from `data:widget.instanceId`:
+
+| Element                          | Class                                            | Id                                |
+| -------------------------------- | ------------------------------------------------ | --------------------------------- |
+| `input[name='name']`             | `contact-form-name`                              | `ID_contact-form-name`            |
+| `input[name='email']`            | `contact-form-email`                             | `ID_contact-form-email`           |
+| `textarea[name='email-message']` | `contact-form-email-message`                     | `ID_contact-form-email-message`   |
+| `input[type='button']`           | `contact-form-button contact-form-button-submit` | `ID_contact-form-submit`          |
+| `p`                              | `contact-form-error-message`                     | `ID_contact-form-error-message`   |
+| `p`                              | `contact-form-success-message`                   | `ID_contact-form-success-message` |
+
+Whether Blogger's contact script finds the form through these ids and classes is not confirmed, so a restyled form should keep them.
+
+## Writing your own markup
+
+### Send the message yourself
+
+A theme that drops Blogger's widget script (`b:js='false'` on `<html>`) can still use the widget: it only needs `submitUrl` and `contactFormToken`. Expose them, and the texts, to your script as JSON:
+
+```xml
+<b:widget id='ContactForm1' locked='true' title='Contact' type='ContactForm' version='2' visible='true'>
+  <b:includable id='main'>
+    <script id='contact-config' type='application/json'>{"url":"<data:submitUrl.jsonEscaped/>","token":"<data:contactFormToken.jsonEscaped/>","sent":"<data:contactFormMessageSentMsg.jsonEscaped/>","failed":"<data:contactFormMessageNotSentMsg.jsonEscaped/>"}</script>
+  </b:includable>
+</b:widget>
+```
+
+The request is a `POST` of form-encoded fields:
+
+| Field     | Value                           |
+| --------- | ------------------------------- |
+| `name`    | The visitor's name, optional    |
+| `email`   | The visitor's address           |
+| `message` | The message                     |
+| `blogID`  | The blog id, `data:blog.blogId` |
+| `token`   | `contactFormToken`              |
+
+Blogger answers with JSON preceded by `)]}'`, a guard that has to be cut before parsing. The message went out when `type` is not `error` and `details.emailSentStatus` is the string `"true"`:
+
+```js title="contact.js"
+const config = JSON.parse(document.getElementById('contact-config').textContent);
+
+async function sendMessage({ name, email, message }, blogId) {
+  const body = new URLSearchParams({ email, message, blogID: blogId, token: config.token });
+  if (name) body.set('name', name);
+  const response = await fetch(config.url, { method: 'POST', body });
+  const text = await response.text();
+  const json = JSON.parse(text.replace(/^\)\]\}',?\s*/, ''));
+  return json.type !== 'error' && json.details?.emailSentStatus === 'true';
+}
+```
+
+Check the address and the message before sending, and show `contactFormInvalidEmailMsg` or `contactFormEmptyMessageMsg` yourself: the script is now yours.
+
+### A contact page without a sidebar box
+
+The widget does not have to be visible. Put it in a section that only renders its JSON, and build the form inside a static page or anywhere in the theme. The token is what matters, and it only exists while a ContactForm widget is in the layout.
+
+## Things to know
+
+- **Who receives it.** Every administrator of the blog, not authors. Whether their address is shown is a setting of each Blogger profile, not of the widget.
+- **No settings to export.** Moving the theme to another blog keeps the widget; the recipients are always that blog's administrators.
+- **`quickedit`** in the version 1 `main` no longer does anything.

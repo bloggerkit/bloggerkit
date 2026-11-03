@@ -1,0 +1,164 @@
+---
+title: Limits
+description: The limits of the theme language and of the data, from the size of an expression to the number of widgets of a type, and the limits that are not confirmed.
+published: 2026-10-26
+---
+
+Google documents few limits of the theme language. This page collects the ones that are known, each with its source, and lists the ones that are not confirmed.
+
+## Expressions
+
+### Size
+
+An expression may have at most **40 nodes**. Characters do not count: a string of 50,000 characters is fine, and a list literal holds 39 items. Past the limit, the expression fails like an invalid one, in every attribute that holds an expression. [Size limit](../expressions/evaluation.mdx#size-limit) says what counts as a node, and how to split a long expression with `<b:with>`. <BloggerSource kind="observed" />
+
+### Ranges
+
+A range in `<b:loop values>` is written `A to B`, whose ends are expressions, or `A..B`, whose ends are whole-number literals with no spaces. See [Ranges](../tags/loops.mdx#ranges). <BloggerSource kind="observed" />
+
+### `snippet`
+
+The `length` option of `snippet` has no default: without it, the text is not cut. A length under 50 counts as 50, there is no upper limit, and the ellipsis, `&#8230;`, counts in the length. See [`snippet`](../expressions/functions.mdx#snippet). <BloggerSource kind="observed" />
+
+### Nesting depth
+
+The limit is on variables, not on tags: at most **40** nested `<b:with>` and `<b:loop>`, in any mix. The 41st is a [markup error](../basics/saving.mdx#markup-errors). <BloggerSource kind="observed" />
+
+| Nested                             | Result                     |
+| ---------------------------------- | -------------------------- |
+| 40 `<b:with>` or `<b:loop>`        | Works                      |
+| 41 `<b:with>` or `<b:loop>`        | Markup error               |
+| An includable that includes itself | Works 40 deep, fails at 42 |
+| 100 `<b:if>`                       | Works                      |
+| 51 `<b:tag>`                       | Works                      |
+| 200 HTML elements                  | Works                      |
+
+No limit was found for `<b:if>`, `<b:tag>` and HTML elements.
+
+## Tags
+
+| Limit                                   | Value                                                                      | Source                            |
+| --------------------------------------- | -------------------------------------------------------------------------- | --------------------------------- |
+| `<b:skin>` in a theme                   | exactly 1                                                                  | <BloggerSource kind="official" /> |
+| `<b:template-skin>` in a theme          | any number; two save                                                       | <BloggerSource kind="observed" /> |
+| `<b:else>` in a `<b:if>`                | 1 that counts, after every `<b:elseif>`; a second one saves and is ignored | <BloggerSource kind="official" /> |
+| `<b:elseif>` in a `<b:if>`              | any number                                                                 | <BloggerSource kind="official" /> |
+| `<b:default>` in a `<b:switch>`         | 1 that counts, after a `<b:case>`; a second one saves and is ignored       | <BloggerSource kind="observed" /> |
+| `<b:case>` in a `<b:switch>`            | any number, none included                                                  | <BloggerSource kind="observed" /> |
+| `<b:widget-settings>` in a `<b:widget>` | at most 1                                                                  | <BloggerSource kind="observed" /> |
+| `<b:includable>` in a `<b:widget>`      | any number, ids unique, none included                                      | <BloggerSource kind="observed" /> |
+| `<b:param>` in a `<b:message>`          | any number, none included                                                  | <BloggerSource kind="observed" /> |
+
+What a separator out of its place does is in [Placement of the separators](../tags/conditionals.mdx#placement-of-the-separators) and [Placement and matching](../tags/conditionals.mdx#placement-and-matching).
+
+Google documents `main` as the includable a widget renders. <BloggerSource kind="official" /> A widget written with no includable at all, even self-closed, is still accepted: a new one gets Blogger's default `main`. <BloggerSource kind="observed" />
+
+A theme needs no section, no section marked `preferred`, no widget and no Blog widget: a theme without any of them saves. <BloggerSource kind="observed" /> For widget types, see [Widgets per type](#widgets-per-type).
+
+Sources: [Widget Tags for Layouts](https://support.google.com/blogger/answer/46995), [Customize CSS tags for layouts](https://support.google.com/blogger/answer/46871).
+
+## Names and ids
+
+| Name                      | Rule                                                                                                                                                                                                                     | Source                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| Section `id`              | Unique in the theme, not blank. Google asks for letters and numbers; Blogger's themes also use `_` and `-`, `page_body`, `sidebar-right-1`, and saving accepts more, see [Section ids](../basics/saving.mdx#section-ids) | <BloggerSource kind="official" /> |
+| Widget `id`               | Unique in the theme: the exact type followed by a whole number up to 1000, `HTML1`, `LinkList901`, `Blog010`. `html1`, `HTML`, `HTML1a`, `HTML1001` are refused                                                          | <BloggerSource kind="observed" /> |
+| Widget `id`, once saved   | Can not change without deleting the widget                                                                                                                                                                               | <BloggerSource kind="official" /> |
+| Section and widget ids    | Separate: a section and a widget may share an id                                                                                                                                                                         | <BloggerSource kind="observed" /> |
+| Includable `id`           | Unique in its widget, or among the `<b:defaultmarkup>` of a type. Ids such as `widget-title` and `theme:skin` work. The ids of Blogger's built-in includables are taken                                                  | <BloggerSource kind="official" /> |
+| Skin variable `name`      | Unique in the skin; ASCII letters, digits, `.` and `_` only                                                                                                                                                              | <BloggerSource kind="observed" /> |
+| Group `description`       | Unique among the groups of the skin                                                                                                                                                                                      | <BloggerSource kind="observed" /> |
+| `<b:message name>`        | An existing message, `messages.NAME`                                                                                                                                                                                     | <BloggerSource kind="observed" /> |
+| `<b:widget-setting name>` | Fixed for each widget type                                                                                                                                                                                               | <BloggerSource kind="observed" /> |
+
+Blogger numbers the widgets it creates from 1 for each type, `HTML1`, `HTML2`. The exact rules for widget ids are in [Widget types and ids](../basics/saving.mdx#widget-types-and-ids). <BloggerSource kind="observed" />
+
+Sources: [Page elements tags for layouts](https://support.google.com/blogger/answer/46888), [Widget Tags for Layouts](https://support.google.com/blogger/answer/46995).
+
+## Sections and widgets
+
+### Widgets per type
+
+How many widgets of a type a blog can have: <BloggerSource kind="observed" />
+
+| Maximum       | Types                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------- |
+| 1             | Attribution, FeaturedPost, Header, Profile, ReportAbuse, Stats, Translate, Wikipedia                    |
+| 2             | BlogArchive, Followers                                                                                  |
+| at least 2    | Blog, BlogList, BlogSearch, HTML, Label, PopularPosts                                                   |
+| not confirmed | AdSense, BloggerButton, ContactForm, Feed, Image, LinkList, Navbar, PageList, Subscribe, Text, TextList |
+
+The counts are per blog. One more widget than the maximum is refused: `The new widget with id "Profile2" is invalid, as the limit for the widgets of type Profile has been exceeded.` The types of the last two rows were not tried with more than two widgets, or not at all, so a maximum of 999 for them, as sometimes given, is not confirmed. A page with 57 HTML widgets renders. FollowByEmail widgets are deleted when saved. <BloggerSource kind="observed" />
+
+No type is required. A theme with no widget at all saves; neither Blog nor Attribution is required, and without a Blog widget `data:widgets.Blog` is an empty list. <BloggerSource kind="observed" />
+
+### Widgets per section
+
+`maxwidgets` sets how many widgets the Layout editor lets a section hold, with no limit by default. <BloggerSource kind="official" /> Saving does not check it: `0`, `-1` and `x` save, and so does a section with `maxwidgets='1'` and two widgets. Blogger's layouts version 3 themes do not use it. See [`maxwidgets`](../layout/sections.mdx#maxwidgets). <BloggerSource kind="observed" />
+
+### Titles
+
+| Text                        | Maximum                                                    | Source                            |
+| --------------------------- | ---------------------------------------------------------- | --------------------------------- |
+| The `title` of a widget     | 100 characters, may be empty; a longer one is stored empty | <BloggerSource kind="observed" /> |
+| The title of the blog       | 100 characters                                             | <BloggerSource kind="observed" /> |
+| The description of the blog | 500 characters                                             | <BloggerSource kind="observed" /> |
+
+## Data
+
+Limits of the data a theme reads, set by Blogger and by the settings of the blog. <BloggerSource kind="observed" />
+
+### Text
+
+| Data                                                  | Maximum                                                                                             |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `data:blog.metaDescription`, the search description   | 150 characters                                                                                      |
+| `data:view.description`                               | 500 characters: the search description when it is on, else the blog description or the post snippet |
+| `data:post.snippets.short`, `data:post.snippet`       | 140 characters and "…"                                                                              |
+| `data:post.snippets.long`, `data:post.longSnippet`    | 1,000 characters                                                                                    |
+| `data:post.title`                                     | Not confirmed                                                                                       |
+| A label, `data:label.name`                            | 200 characters                                                                                      |
+| A comment, `data:comment.body`                        | 1 MB                                                                                                |
+| The comment form message, `data:messages.blogComment` | 4,096 characters                                                                                    |
+| The custom 404 message, in `data:navMessage`          | 10,240 characters                                                                                   |
+| The "About me" of a profile                           | 1,200 characters                                                                                    |
+| The copyright of the Attribution widget               | 200 characters                                                                                      |
+| A feed URL, Feed widget                               | 2,083 characters                                                                                    |
+| The latest post snippet, BlogList widget              | 160 characters                                                                                      |
+| A post title in the BlogArchive widget                | 50 characters and "..."                                                                             |
+| The favicon                                           | 100 KB                                                                                              |
+
+### Lists
+
+| Data                                                  | Maximum  |
+| ----------------------------------------------------- | -------- |
+| Labels of a post, `data:post.labels`                  | 20       |
+| Comments of a post on one page, `data:post.comments`  | 200      |
+| Posts of the PopularPosts widget                      | 10       |
+| Blogs of the BlogList widget                          | 10       |
+| Posts of a period, BlogArchive widget                 | 100      |
+| Share platforms, `data:blog.sharing.platforms`        | 6        |
+| Post options, `headerByline.items`, `allBylineItems`  | 7        |
+| Footer lines, `data:widgets.Blog.first.footerBylines` | 3        |
+| Authors of a team blog, Profile widget                | 2 to 100 |
+
+Each data page of this guide gives the limits of its fields. See [Data](../data/index.mdx).
+
+## Skin
+
+The bounds of a `length` variable are set by the theme with `min` and `max`, and the Theme Designer keeps the value between them, in `px` or `em`. See [Theme Designer](../styles/theme-designer.mdx#min-and-max). <BloggerSource kind="observed" />
+
+## Files
+
+A theme is one XML file. Blogger stores nothing else for it: scripts, stylesheets and fonts come from absolute URLs on another host. Images can be uploaded through a widget, such as an Image widget, which gives them a Blogger URL. <BloggerSource kind="observed" />
+
+## Limits not confirmed
+
+No limit is confirmed for:
+
+- the size of the theme file, of a skin, or of the content of an HTML widget;
+- the number of sections, includables or widgets in a theme;
+- the number of skin variables;
+- the length of an attribute value.
+
+For scale, Blogger's own themes measure from about 70 KB (Dynamic Views) to 180 KB (Emporio), and a production theme of about 6,900 lines saves and renders.

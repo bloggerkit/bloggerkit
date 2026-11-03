@@ -1,0 +1,51 @@
+---
+import Menu from '@lucide/astro/icons/menu';
+import GithubIcon from '@/components/ui/GithubIcon.astro';
+import Logo from '@/components/ui/Logo.astro';
+import { githubUrl } from '@/lib/site';
+import Search from './Search.astro';
+import SectionTabs from './SectionTabs.astro';
+import ThemeSelect from './ThemeSelect.astro';
+
+interface Props {
+	/** Shows the button that opens the sidebar on small screens. */
+	hasSidebar?: boolean;
+}
+
+// Header controls are 2rem tall so they line up. The outer ones are pulled out by their icon padding (`-ms-1.75`,
+// `-me-2`), so the icons align with the page content. The menu button's `-me-2` also keeps the logo gap even
+const iconButton =
+	'inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground';
+---
+
+<header
+	class="sticky top-0 z-20 flex h-14 print:hidden items-center gap-4 border-b border-border bg-background/85 px-4 backdrop-blur-md"
+>
+	{
+		Astro.props.hasSidebar && (
+			<button
+				type="button"
+				class:list={[iconButton, '-ms-1.75 -me-2 md:hidden']}
+				data-toggle-sidebar
+				aria-expanded="false"
+				aria-controls="sidebar"
+			>
+				<Menu size={18} aria-hidden="true" />
+				<span class="sr-only">Menu</span>
+			</button>
+		)
+	}
+	<a href="/" class="flex shrink-0 items-center no-underline"><Logo /></a>
+	<SectionTabs />
+	{/* Persisted so the search index and filters survive navigation. Fixed width, so it doesn't grow when tabs move
+	    into "More" */}
+	<div class="flex flex-1 justify-end max-sm:-me-3 lg:ms-auto lg:w-68 lg:flex-none lg:ps-4" transition:persist="search"><Search /></div>
+	<div class="-me-2 flex items-center gap-1">
+		{/* Hidden on very narrow phones; the footer links to GitHub too */}
+		<a href={githubUrl} class:list={[iconButton, 'max-[360px]:hidden']} target="_blank" rel="noreferrer noopener">
+			<GithubIcon size={18} />
+			<span class="sr-only">GitHub</span>
+		</a>
+		<ThemeSelect />
+	</div>
+</header>

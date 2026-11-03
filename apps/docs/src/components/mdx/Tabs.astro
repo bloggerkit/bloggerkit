@@ -1,0 +1,75 @@
+---
+interface Props {
+	/** Groups with the same key (including `<CodeTabs>`) stay on the same tab across pages. */
+	syncKey?: string;
+	/** Accessible name of the tab list. */
+	label?: string;
+}
+
+const { syncKey, label } = Astro.props;
+---
+
+{/* The tab list is built from each `<Tab>`'s label. Without JS every panel shows, under its label */}
+<div
+	class="group/tabs my-5 overflow-hidden rounded-xl border border-border"
+	data-tabs
+	data-sync-key={syncKey}
+>
+	{/* Keep empty: the script fills it. The bottom line is a shadow so the selected tab's bar covers it */}
+	<div
+		class="not-content hidden h-9.5 overflow-x-auto overscroll-x-contain bg-card px-1.5 shadow-[inset_0_-1px_var(--color-border)] scrollbar-none group-data-ready/tabs:flex"
+		role="tablist"
+		aria-label={label}
+	></div>
+	<slot />
+</div>
+
+<script>
+	import { onPage } from '@/scripts/page';
+	import { setupTabs } from '@/scripts/tabs';
+
+	onPage((signal) => {
+		document.querySelectorAll<HTMLElement>('[data-tabs]').forEach((root, n) => {
+			const list = root.querySelector<HTMLElement>(':scope > [role=tablist]');
+			const panels = [
+				...root.querySelectorAll<HTMLElement>(':scope > [data-tab]'),
+			];
+			if (!list || panels.length === 0) {
+				return;
+			}
+			for (const panel of panels) {
+				panel.tabIndex = 0;
+			}
+			setupTabs({
+				list,
+				panels,
+				labels: panels.map(
+					(panel, i) => panel.getAttribute('data-label') || `${i + 1}`,
+				),
+				baseId: root.id || `tabs-${n + 1}`,
+				syncKey: root.getAttribute('data-sync-key') ?? undefined,
+				// The same tabs as `<CodeTabs>`
+				tabClass:
+					"relative flex shrink-0 cursor-pointer items-center rounded-md px-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground outline-none transition-colors after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary after:opacity-0 after:transition-opacity after:content-[''] hover:text-foreground focus-visible:ring-2 focus-visible:ring-border focus-visible:ring-inset aria-selected:text-foreground aria-selected:after:opacity-100",
+				// Keep the selected tab in view when the list scrolls sideways (only the list, never the page)
+				onSelect: (index) => {
+					const tab = list.querySelectorAll<HTMLElement>('[role=tab]')[index];
+					if (!tab) {
+						return;
+					}
+					if (tab.offsetLeft < list.scrollLeft) {
+						list.scrollLeft = tab.offsetLeft;
+					} else if (
+						tab.offsetLeft + tab.offsetWidth >
+						list.scrollLeft + list.clientWidth
+					) {
+						list.scrollLeft =
+							tab.offsetLeft + tab.offsetWidth - list.clientWidth;
+					}
+				},
+				signal,
+			});
+			root.setAttribute('data-ready', '');
+		});
+	});
+</script>

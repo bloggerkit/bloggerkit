@@ -1,0 +1,312 @@
+---
+title: b:if and b:switch
+description: Choose what a page renders, with conditions tested in order or with one value compared against a list of cases.
+level: beginner
+published: 2026-10-26
+---
+
+A theme often needs different markup for different pages, posts or settings. Blogger gives it two tags for that:
+
+- `<b:if>` tests a condition. `<b:elseif>` adds more conditions, tried in turn, and `<b:else>` catches everything left.
+- `<b:switch>` computes one value and compares it with fixed values, one per `<b:case>`, with `<b:default>` for no match.
+
+Both render a single branch, the first one that matches, and skip the rest.
+
+<CodeTabs>
+
+```xml title="The state of the comment form of a post"
+<b:if cond='not data:widgets.Blog.first.allBylineItems.comments'>
+  <p class='comments-note'>Comments are turned off on this blog.</p>
+<b:elseif cond='not data:post.allowComments'/>
+  <p class='comments-note'>Comments are hidden on this post.</p>
+<b:elseif cond='not data:post.allowNewComments'/>
+  <p class='comments-note'>This post no longer takes new comments.</p>
+<b:else/>
+  <b:include data='post' name='commentForm'/>
+</b:if>
+```
+
+```html title="Rendered on a post whose comments are closed"
+<p class='comments-note'>This post no longer takes new comments.</p>
+```
+
+</CodeTabs>
+
+The four branches follow the four states a post's comments can be in. The first condition that is true wins, so the order matters: a blog with comments turned off never reaches the per-post tests.
+
+## `<b:if>`
+
+```xml
+<b:if cond='CONDITION'>
+  rendered when CONDITION is true
+<b:elseif cond='OTHER_CONDITION'/>
+  rendered when CONDITION is false and OTHER_CONDITION is true
+<b:else/>
+  rendered when no condition is true
+</b:if>
+```
+
+| Tag        | Attribute | Required | Value      | Default | Description                                                                          | Source                            |
+| ---------- | --------- | -------- | ---------- | ------- | ------------------------------------------------------------------------------------ | --------------------------------- |
+| `b:if`     | `cond`    | Yes      | expression |         | The first condition. Its content, up to the first separator, renders when it is true | <BloggerSource kind="official" /> |
+| `b:elseif` | `cond`    | Yes      | expression |         | Starts a branch tried when every condition before it is false                        | <BloggerSource kind="official" /> |
+| `b:else`   |           |          |            |         | Starts the branch rendered when every condition is false                             | <BloggerSource kind="official" /> |
+
+Only `<b:if>` is required. Add as many `<b:elseif>` as needed, and one `<b:else/>` at the end. Google added `<b:elseif>` in June 2015, in [Even more expansions to the Blogger template language](https://blogger.googleblog.com/2015/06/even-more-expansions-to-blogger.html). Before that, themes nested a second `<b:if>` inside the `<b:else/>` branch. <BloggerSource kind="official" />
+
+### `cond`
+
+`cond` holds an [expression](../expressions/index.mdx), already: write `cond='data:view.isPost'`, not `expr:cond`. Its result is read as true or false by the rules of [truthiness](../expressions/evaluation.mdx#truthiness): `false`, `no`, missing data, `""` and the strings `"false"` and `"no"` are false; everything else is true, any number, `0` included, and any list, even an empty one. <BloggerSource kind="observed" />
+
+The empty list is the one that surprises. To test whether a list has items, read one of its [properties](../expressions/properties.mdx) instead of the list itself: `cond='data:post.labels.notEmpty'`, `cond='data:posts.length > 0'` or `cond='data:widgets any (w => w.sectionId == "sidebar")'`. Test a number with a comparison too: `cond='data:post.numberOfComments > 0'`.
+
+Any operator works in `cond`: comparisons, `and`, `or`, `not`, `in`, lambdas, the ternary. Some conditions from production themes:
+
+```xml {4}
+<b:if cond='data:view.isMultipleItems and not data:view.isHomepage'>…</b:if>
+<b:if cond='data:view.isPost and data:post.labels.notEmpty'>…</b:if>
+<b:if cond='data:blog.view contains "-Preview"'>…</b:if>
+<b:if cond='data:i &lt; (data:labels.length - 1)'>…</b:if>
+<b:if cond='data:posts any (p => p.featuredImage)'>…</b:if>
+```
+
+The theme is XML, so `<` is written `&lt;` inside an attribute, as in the fourth line. `>` and `=>` can stay as they are. Prefer `and` and `or` to `&&` and `||`, which would have to be written `&amp;&amp;`.
+
+With `expr:cond`, Blogger evaluates `cond` once, then evaluates its result again as an expression. It is the same double reading as [dynamic paths](../expressions/data-paths.mdx#dynamic-paths), and is never what a plain condition needs. <BloggerSource kind="observed" />
+
+### Placement of the separators
+
+`<b:elseif>` and `<b:else>` are separators, not containers. They are written self-closed, and the content of a branch runs from one separator to the next.
+
+- They are direct children of their `<b:if>`. A `<b:else/>` inside a `<div>` or a `<b:loop>` that sits in the `<b:if>` saves, but it is not a branch of the `<b:if>`.
+- `<b:else/>` comes last, once. Blogger does not check it: with two `<b:else/>`, the theme saves and the first one wins; a `<b:elseif>` after `<b:else/>` saves and is never reached.
+- They are empty. `<b:else></b:else>` and `<b:else> </b:else>` save, and so does a separator with content, but the content is dropped: `<b:else>B</b:else>C` renders `C` as the else branch.
+- Each nested `<b:if>` has its own separators.
+- Outside a `<b:if>`, they are not tags at all. A `<b:else/>` or `<b:elseif>` written elsewhere saves, and fails when it renders, with `The tag 'else' is not a known Blogger tag.`
+
+<BloggerSource kind="observed" />
+
+Blogger keeps other attributes written on `<b:if>` and ignores them: `<b:if cond='data:olderPageUrl' rel='previous'>` saves and renders like `<b:if cond='data:olderPageUrl'>`. A `<b:if>` without `cond`, or with an empty one, saves, and is a [markup error](../basics/saving.mdx#markup-errors) when it is reached. A `<b:elseif>` without `cond` is the same: an error when it is reached, nothing when an earlier branch is taken. <BloggerSource kind="observed" />
+
+A `<b:if>` with nothing inside is saved self-closed, `<b:if cond='data:view.isPost'/>`, and renders nothing. Every other `<b:if>` has a closing `</b:if>`. <BloggerSource kind="observed" />
+
+### Which branch renders
+
+Blogger tests the conditions from the top and renders the content of the first true one. When none is true and there is no `<b:else/>`, the tag renders nothing.
+
+Data that does not exist is not an error in a condition: it is simply false, and so is an item past the end of a list. A `<b:if>` is the usual guard around markup that only makes sense when a value is there; see [Missing data](../expressions/evaluation.mdx#missing-data). <BloggerSource kind="observed" />
+
+```xml
+<b:if cond='data:post.location'>
+  <span class='post-location'><data:post.location.name/></span>
+</b:if>
+```
+
+## `<b:switch>`
+
+```xml
+<b:switch var='EXPRESSION'>
+<b:case value='VALUE'/>
+  rendered when EXPRESSION equals VALUE
+<b:case value='OTHER_VALUE'/>
+  rendered when EXPRESSION equals OTHER_VALUE
+<b:default/>
+  rendered when no case matches
+</b:switch>
+```
+
+| Tag         | Attribute    | Required | Value                                   | Default | Description                                     | Source                            |
+| ----------- | ------------ | -------- | --------------------------------------- | ------- | ----------------------------------------------- | --------------------------------- |
+| `b:switch`  | `var`        | Yes      | expression, a string, number or boolean |         | The value compared with each case               | <BloggerSource kind="official" /> |
+| `b:case`    | `value`      | Yes      | text                                    |         | Starts the branch rendered when `var` equals it | <BloggerSource kind="official" /> |
+| `b:case`    | `expr:value` | No       | expression                              |         | The value of the case, computed                 | <BloggerSource kind="observed" /> |
+| `b:default` |              |          |                                         |         | Starts the branch rendered when no case matches | <BloggerSource kind="official" /> |
+
+`<b:switch>` came with `<b:elseif>`, in June 2015. <BloggerSource kind="official" />
+
+A switch reads better than a chain of `<b:elseif>` when every branch compares the same value. This one picks an icon from the name of a menu link:
+
+```xml title="An icon per menu link"
+<b:includable id='linkIcon' var='name'>
+  <b:switch var='data:name'>
+  <b:case value='Home'/>
+    <b:include name='icon.home'/>
+  <b:case value='About'/>
+    <b:include name='icon.user'/>
+  <b:case value='Contact'/>
+    <b:include name='icon.mail'/>
+  <b:default/>
+    <b:include name='icon.folder'/>
+  </b:switch>
+</b:includable>
+```
+
+### `var`
+
+On `<b:switch>`, `var` is the expression to compare, not the name of a variable as on [`<b:loop>`](./loops.mdx) or [`<b:with>`](./variables.mdx). Any expression works: `var='data:blog.pageType'`, `var='data:link.name'`, `var='data:posts.length'`.
+
+The value is a string, or a type built on a string (URL, date, message), a number or a boolean. <BloggerSource kind="observed" />
+
+### `value`
+
+The `value` of a `<b:case>` is plain text, not an expression. `value='item'` is the string `item`: do not add quotes around it.
+
+It is compared with `var` as text: the value of `var`, printed, against the text of `value`. So a number matches its digits, and `"2"` matches `<b:case value='2'/>`. <BloggerSource kind="observed" />
+
+| `var` gives        | Case that matches        |
+| ------------------ | ------------------------ |
+| the string `item`  | `<b:case value='item'/>` |
+| the number `0`     | `<b:case value='0'/>`    |
+| the boolean `true` | `<b:case value='true'/>` |
+
+Since the comparison is on text, a list matches its printed form: `var='[1]'` matches `<b:case value='[1]'/>`. `value='1+2'` is the text `1+2`, and does not match `var='3'`. <BloggerSource kind="observed" />
+
+With `expr:value`, the case is an expression and its result is compared: `<b:case expr:value='data:view.postId'/>`. <BloggerSource kind="observed" />
+
+### Placement and matching
+
+- `<b:case>` and `<b:default>` are empty, self-closed separators, direct children of their `<b:switch>`. Content written inside one saves and is dropped.
+- The first child of a switch is a `<b:case>`. A switch that starts with `<b:default/>` saves, but the page fails with a 500 error, `b:switch must have 'case' element as first child`. Whether a switch with only a `<b:default/>` renders is not confirmed.
+- One `<b:default/>`, after the last case. Blogger does not check it: with two, the theme saves and the first one wins.
+- Cases are tried in order and the first match wins. Only the content up to the next separator renders: one case never runs into the next.
+- Outside a `<b:switch>`, `<b:case>` is not a tag: it saves, and fails when it renders, with `The tag 'case' is not a known Blogger tag.`
+- `<b:switch>` needs `var`, and `<b:case>` needs `value` or `expr:value`: without them, the switch is a markup error when it renders. `expr:var` does not replace `var`.
+
+<BloggerSource kind="observed" />
+
+There is no way to list several values in one case. To render the same thing for several values, use `in` in a `<b:if>`:
+
+```xml
+<b:if cond='data:blog.pageType in ["index", "archive"]'>…</b:if>
+```
+
+## Patterns
+
+**A title per page type.** The `<title>` is the classic `<b:if>` chain, from the most specific page to the general one. This one is a shorter form of the title includable of a production theme:
+
+```xml title="The title of the page"
+<b:if cond='data:view.isHomepage'>
+  <title><data:blog.title/></title>
+<b:elseif cond='data:view.isLabelSearch'/>
+  <title><b:eval expr='data:blog.pageName + " - " + data:blog.title'/></title>
+<b:elseif cond='data:view.isSearch'/>
+  <b:if cond='data:view.search.query'>
+    <title><b:eval expr='data:messages.search + ": " + data:view.search.query'/></title>
+  <b:else/>
+    <title><data:blog.title/></title>
+  </b:if>
+<b:elseif cond='data:view.isError'/>
+  <title>Page not found</title>
+<b:else/>
+  <title><b:eval expr='data:blog.pageName + " - " + data:blog.title'/></title>
+</b:if>
+```
+
+The search branch nests a second `<b:if>`: a search page without a query is the list of all posts, `/search`.
+
+**A widget that may be gone.** A theme that reads one of its own widgets tests the widget first. When the user deletes it, `data:widgets.LinkList71` is missing and the theme falls back:
+
+```xml
+<b:if cond='data:widgets.LinkList71'>
+  <b:include name='customTitle'/>
+<b:else/>
+  <title><data:view.title.escaped/></title>
+</b:if>
+```
+
+**A section with widgets.** Skip a section and its wrapper when no widget is in it, but keep it in the Layout editor so that widgets can still be added; see [Three ways to hide a section](../guides/page-layouts.mdx#three-ways-to-hide-a-section):
+
+```xml
+<b:if cond='data:view.isLayoutMode or data:widgets any (w => w.sectionId == "sidebar")'>
+  <aside class='sidebar'>
+    <b:section class='sidebar' id='sidebar' name='Sidebar'/>
+  </aside>
+</b:if>
+```
+
+**Conditions in a JSON block.** A branch can be as small as one word. Here the pager of the Blog widget becomes JSON, with `null` when a link does not exist:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<script id='pager' type='application/json'>{"newer":<b:if cond='data:newerPageUrl'>"<data:newerPageUrl.jsonEscaped/>"<b:else/>null</b:if>,"older":<b:if cond='data:olderPageUrl'>"<data:olderPageUrl.jsonEscaped/>"<b:else/>null</b:if>}</script>
+```
+
+```html title="Rendered on the homepage"
+<script id='pager' type='application/json'>{"newer":null,"older":"https://example.blogspot.com/search?updated-max=2025-03-01T10:00:00%2B05:30&max-results=7"}</script>
+```
+
+</CodeTabs>
+
+**A setting mapped to CSS.** A switch fits inside a CSS value. Theme Designer length variables make good switches, because their values are fixed steps, `1px`, `2px` and so on:
+
+```xml
+<style>
+  :root {
+    --title-weight: <b:switch var='data:skin.vars.titleWeight'><b:case value='1px'/>400<b:case value='2px'/>600<b:case value='3px'/>700<b:default/>400</b:switch>;
+  }
+</style>
+```
+
+**A class per setting.** The branches of a switch can hold [`<b:class>`](./attributes.mdx#bclass) or [`<b:attr>`](./attributes.mdx#battr) tags: they apply to the element around the `<b:switch>`. See [Attributes](./attributes.mdx#inside-logic-tags).
+
+```xml
+<nav class='menu'>
+  <b:switch var='data:skin.vars.menuStyle'>
+  <b:case value='2px'/>
+    <b:class name='menu-pills'/>
+  <b:case value='3px'/>
+    <b:class name='menu-underline'/>
+  <b:default/>
+    <b:class name='menu-plain'/>
+  </b:switch>
+  …
+</nav>
+```
+
+## Conditions inside CDATA
+
+Inside a `<![CDATA[ ]]>` section, Blogger tags are plain text: a `<b:if>` there is printed as it is. To vary the CSS or the script of a page, end the CDATA section before the tag and open a new one after it:
+
+```xml
+<style>/*<![CDATA[*/
+  .post { margin: 0 auto; }
+/*]]>*/<b:if cond='data:view.isSingleItem'>/*<![CDATA[*/
+  .post { max-width: 720px; }
+/*]]>*/<b:else/>/*<![CDATA[*/
+  .post { display: grid; }
+/*]]>*/</b:if></style>
+```
+
+The `/* */` around the markers keep the browser from reading them as CSS. Only the branch for the current page is in the rendered `<style>`.
+
+## Mistakes
+
+**A closing tag for a separator.** `<b:else>…</b:else>` does not wrap the else branch: the content inside it is dropped, and the branch is what follows the closing tag. Write a self-closed `<b:else/>`.
+
+```xml
+<!-- Wrong -->
+<b:if cond='data:view.isPost'>
+  A
+  <b:else>B</b:else> <!-- [!code error] -->
+</b:if>
+
+<!-- Right -->
+<b:if cond='data:view.isPost'>
+  A
+<b:else/>
+  B
+</b:if>
+```
+
+**A separator inside an element of the branch.** Close the HTML elements of a branch before the next separator. A `<b:else/>` inside a `<div>` is not a separator of the outer `<b:if>`. The theme saves, and the else branch silently never renders.
+
+**Raw `<` or `&` in `cond`.** `cond='data:i < 3 && data:view.isHomepage'` is not valid XML. Write `cond='data:i &lt; 3 and data:view.isHomepage'`.
+
+**Quotes.** Strings in a condition use double quotes, `data:view.type == "item"`, inside the single quotes of the attribute.
+
+**A condition inside an attribute.** A tag can not be written inside an attribute value. To change an attribute, use a ternary with [`expr:`](./attributes.mdx), or [`<b:attr>` and `<b:class>`](./attributes.mdx) with a `cond`:
+
+```xml
+<article expr:class='data:post.featuredImage ? "post has-image" : "post"'>…</article>
+```

@@ -1,0 +1,147 @@
+---
+title: b:comment
+description: Write notes in a theme that never reach the page, and know which HTML, CSS and script comments do.
+level: beginner
+published: 2026-10-26
+---
+
+`<b:comment>` is a note for the people who read the theme. Blogger drops it, with everything inside, when it renders a page: the visitor never sees it, not even in the page source. Only a line break is left in its place. <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="A note above a title rule"
+<b:comment>Leave out the blog name when the whole title would pass 57 characters.</b:comment>
+<title><b:eval expr='(data:blog.pageName + data:blog.title).length > 57 ? data:blog.pageName.escaped : data:blog.pageName.escaped + " - " + data:blog.title'/></title>
+```
+
+```html title="Rendered"
+<title>Lentil soup - Lentils and Lemons</title>
+```
+
+</CodeTabs>
+
+Only the `<title>` is in the page. Google uses `<b:comment>` the same way in the example of [Widget Tags for Layouts](https://support.google.com/blogger/answer/46995), with `<b:comment>Only include the first 10 posts</b:comment>`. <BloggerSource kind="official" />
+
+## Attributes
+
+| Attribute | Required | Value | Default | Description                            | Source                            |
+| --------- | -------- | ----- | ------- | -------------------------------------- | --------------------------------- |
+| `render`  | No       | text  |         | Outputs the comment as an HTML comment | <BloggerSource kind="observed" /> |
+
+Google does not document `render`. With `render='true'`, Blogger outputs the `<b:comment>` as an HTML comment, `<!--…-->`. Its content is then processed like any markup: data tags and `<b:eval>` are replaced, tags are printed, and entities are decoded. <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:comment render='true'>Theme <data:skin.vars.version/></b:comment>
+```
+
+```html title="Rendered"
+<!--Theme 3.2.0-->
+```
+
+</CodeTabs>
+
+`false`, `False` and an empty value hide the comment. Every other value tested shows it: `true`, `TRUE`, `yes`, even `0`. `expr:render` works too, `expr:render='1 == 1'`. A rendered comment with nothing inside prints nothing. When the rendered content contains `--`, the comment is a [markup error](../basics/saving.mdx#markup-errors). Other attributes, such as `foo`, are ignored. <BloggerSource kind="observed" />
+
+To put a comment in the page, write an HTML comment, or print one, as explained in [HTML comments](#html-comments).
+
+## Content
+
+A `<b:comment>` can hold text, markup and Blogger tags. Without `render`, none of it renders, and the Blogger tags inside are not run: an invalid expression, an unknown include or an unknown message inside it causes no error. <BloggerSource kind="observed" />
+
+The content is still part of the XML of the theme. It must be well-formed: `<` and `&` written `&lt;` and `&amp;`, and every tag closed. A `<b:comment>` with nothing inside can be self-closed.
+
+Three uses follow from this.
+
+**Notes.** Explain a rule of the theme next to it, as above.
+
+**Switching off a block.** Wrapping markup in a `<b:comment>` takes it out of the page while keeping it in the theme, to bring back later. The block must stay valid XML:
+
+```xml
+<b:comment>
+  <b:include data='post' name='relatedPosts'/>
+</b:comment>
+```
+
+An HTML comment around the same block would not work the same way. See below.
+
+**Markers in the source.** An HTML comment inside a `<b:comment>` is a label that only shows in the theme code. Themes commonly mark their parts this way, and a theme can also wrap its license header in one:
+
+```xml
+<b:comment><!--[ Document structure ]--></b:comment>
+<b:comment><!--[ <body> ]--></b:comment>
+```
+
+A build step can also rely on such markers. The theme keeps a pair of them where generated CSS belongs, the build replaces what is between them, and Blogger drops the markers from the page:
+
+```xml
+<style><b:comment><!--critical-css:begin--></b:comment><b:comment><!--critical-css:end--></b:comment></style>
+```
+
+Inside a `<![CDATA[ ]]>` section, `<b:comment>` is plain text and is printed. <BloggerSource kind="observed" />
+
+## HTML comments
+
+A theme can also contain ordinary `<!-- … -->` comments. Their content is not XML: Blogger does not read the tags inside, so an HTML comment hides anything, even markup that is not valid. The one rule is that the text of a comment can not contain `--`, or the theme can not be saved. <BloggerSource kind="observed" />
+
+Whether an HTML comment reaches the page depends on where it is written: <BloggerSource kind="observed" />
+
+| Where the comment is                                   | In the page                         |
+| ------------------------------------------------------ | ----------------------------------- |
+| In `<head>`, including in a branch of a `<b:if>`       | Yes                                 |
+| In `<body>`, outside the includables of widgets        | Yes                                 |
+| In an includable of a widget                           | No, removed                         |
+| In a `<b:widget>` or a `<b:section>`, between the tags | No: deleted when the theme is saved |
+
+So an HTML comment is not a reliable way to switch off markup: depending on its place, the markup may be shipped in the page, inside a comment. Use `<b:comment>`.
+
+A theme that needs a comment in the page can count on the first two rows. For example, a theme can write a pair of comments in its `<head>` on a development view only, for a tool that finds them, and turn them into `<b:comment>` markers on every other view:
+
+```xml
+<b:if cond='data:blog.view contains "-DevServer"'>
+  <!--head:begin--><!--head:end-->
+<b:else/>
+  <b:comment><!--head:begin--></b:comment><b:comment><!--head:end--></b:comment>
+</b:if>
+```
+
+Blogger adds HTML comments of its own: its `all-head-content` includable writes `<!-- Chrome, Firefox OS and Opera -->` and `<!-- Windows Phone -->` above some `<meta>` tags, and a data tag Blogger does not know prints `<!--Can't find substitution for tag [NAME]-->`, see [Missing data](./output.mdx#missing-data).
+
+### Printing an HTML comment
+
+Where a written HTML comment does not reach the page, as in an includable, a theme can print the two halves of one with [`<b:eval>`](./output.mdx#beval), whose strings are printed without escaping:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:eval expr='"&lt;!--"'/>
+Built with care, version <data:skin.vars.version/>
+<b:eval expr='"--&gt;"'/>
+```
+
+```html title="Rendered"
+<!--
+Built with care, version 3.2.0
+-->
+```
+
+</CodeTabs>
+
+The text between the halves is markup like any other, so data tags in it are replaced. It must not produce `--`, which would end the comment early in the browser.
+
+A theme can use this to hide markup that Blogger adds and it can not remove, such as the `<div>` wrappers of a section whose widgets write head tags; see [Sections that render no wrapper](../layout/sections.mdx#sections-that-render-no-wrapper).
+
+## Comments in CSS and scripts
+
+Inside a `<![CDATA[ ]]>` section, such as the CSS of [`<b:skin>`](../styles/skin.mdx) or a script, neither `<b:comment>` nor `<!-- -->` is a comment: both are text. Use the comments of the language, `/* … */` in CSS and `//` or `/* … */` in JavaScript.
+
+In a `<script>` or `<style>` without CDATA, Blogger tags are processed as anywhere else: data tags, `<b:if>`, `<b:loop>`, `<b:eval>`, `<b:message>` render, and a `<b:comment>` is removed. Inside a `/*<![CDATA[*/ … /*]]>*/` section, nothing is processed, and the tags are printed as written. <BloggerSource kind="observed" />
+
+A script or style that uses CDATA puts the markers in a comment of its language, `/*<![CDATA[*/` and `/*]]>*/`, so that the browser ignores them. Closing and reopening the section around a Blogger tag is shown in [Conditions inside CDATA](./conditionals.mdx#conditions-inside-cdata).
+
+### The skin
+
+In `<b:skin>`, the CSS comment that holds the [Theme Designer](../styles/theme-designer.mdx) `<Variable>` and `<Group>` tags is there for the browser, not for Blogger, which reads those two tags anywhere in the skin, even in a comment; see [Finding the tags](../styles/theme-designer.mdx#finding-the-tags). <BloggerSource kind="observed" />
+
+In the rendered page of a layouts version 3 theme, `<style id='page-skin-1'>` no longer has the comment with the variables. Comments that start with `/*!`, the convention for licenses, are kept. <BloggerSource kind="observed" />

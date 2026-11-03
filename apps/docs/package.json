@@ -1,0 +1,41 @@
+{
+  "name": "@bloggerkit/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "lint": "biome lint --max-diagnostics=100 --log-kind=compact .",
+    "check": "biome check --max-diagnostics=150 --log-kind=compact . && prettier --check --ignore-path ../../.gitignore --ignore-path ../../.prettierignore .",
+    "check:fix": "biome check --max-diagnostics=150 --log-kind=compact --write . && prettier --write --ignore-path ../../.gitignore --ignore-path ../../.prettierignore .",
+    "typecheck": "astro check",
+    "deploy": "astro build && wrangler deploy",
+    "preview:cloudflare": "astro build && wrangler dev"
+  },
+  "dependencies": {
+    "@astrojs/markdown-satteri": "^0.4.6",
+    "@astrojs/mdx": "^8.1.2",
+    "@astrojs/sitemap": "^3.7.4",
+    "@fontsource-variable/dm-sans": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource/dm-sans": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@lucide/astro": "^1.66.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.4.4",
+    "pagefind": "^1.6.0",
+    "satori": "^0.63.2",
+    "satteri": "^0.10.5",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@shikijs/transformers": "^4.6.0",
+    "@shikijs/types": "^4.6.0",
+    "rolldown": "1.2.16",
+    "simple-icons": "^16.36.0",
+    "wrangler": "^4.156.1"
+  }
+}

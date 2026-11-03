@@ -1,0 +1,391 @@
+---
+title: Functions
+description: The functions of Blogger expressions, path, params, appendParams, fragment, format, resizeImage, sourceSet and snippet, their arguments, results and edge cases.
+level: intermediate
+published: 2026-10-26
+---
+
+Blogger has eight functions of its own. They rewrite URLs, write dates, resize images and turn HTML into short text. A post card uses most of them:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<article class='card'>
+  <img expr:alt='data:post.title' expr:src='resizeImage(data:post.featuredImage, 640, "16:9")'/>
+  <h2><a expr:href='data:post.url.canonical'><data:post.title/></a></h2>
+  <time expr:datetime='data:post.date.iso8601'><b:eval expr='format(data:post.date, "MMM d, yyyy")'/></time>
+  <p><b:eval expr='snippet(data:post.snippets.long, { length: 120, links: false, linebreaks: false })'/></p>
+  <a expr:href='fragment(data:post.url.canonical, "comment")'>Comments</a>
+</article>
+```
+
+```html title="Rendered"
+<article class='card'>
+  <img alt='Dark mode in CSS' src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh/w640-h360-p-k-no-nu/dark-mode.png'/>
+  <h2><a href='https://www.example.com/2026/03/dark-mode-in-css.html'>Dark mode in CSS</a></h2>
+  <time datetime='2026-03-09T08:30:00+05:30'>Mar 9, 2026</time>
+  <p>A color scheme that follows the system setting of the visitor takes two custom properties and one med&#8230;</p>
+  <a href='https://www.example.com/2026/03/dark-mode-in-css.html#comment'>Comments</a>
+</article>
+```
+
+</CodeTabs>
+
+Google documents none of these functions. Everything on this page comes from Blogger's themes and from testing. <BloggerSource kind="observed" />
+
+| Function                                             | Gives                                             | Infix form |
+| ---------------------------------------------------- | ------------------------------------------------- | ---------- |
+| [`path(url, path)`](#path)                           | the URL with another path                         | yes        |
+| [`params(url, map)`](#params-and-appendparams)       | the URL with parameters set in its query          | yes        |
+| [`appendParams(url, map)`](#params-and-appendparams) | the URL with parameters added to its query        | yes        |
+| [`fragment(url, name)`](#fragment)                   | the URL with another `#fragment`                  | yes        |
+| [`format(date, pattern)`](#format)                   | the date written with a pattern                   | yes        |
+| [`resizeImage(image, width, ratio?)`](#resizeimage)  | the image at a width, cropped to a ratio          | yes        |
+| [`sourceSet(image, widths, ratio?)`](#sourceset)     | a `srcset` value with the image at several widths | yes        |
+| [`snippet(text, options?)`](#snippet)                | the text of HTML, cut to a length                 | yes        |
+
+Two lambda operators also have a function form, [`take(list, count)` and `skip(list, count)`](./lambdas.mdx#take-and-skip), and so does every operator: `+(1, 2, 3)`, `and(…)`, `==(…)`. See [Operator functions](./operators.mdx#operator-functions). <BloggerSource kind="observed" />
+
+There are no other functions. Any other name followed by `(`, `lower("x")`, is an error when the page renders it. The lambdas and the properties are not functions either: `map(…)`, `size(…)` and `length(…)` are errors. <BloggerSource kind="observed" />
+
+## Arguments
+
+A call is the name of the function, then its arguments in parentheses, separated by commas: `resizeImage(data:post.featuredImage, 640, "16:9")`. Spaces around the arguments are free, and a comma after the last one is accepted. <BloggerSource kind="observed" />
+
+- **Arguments are positional.** There are no named arguments, and an optional argument is left out from the end.
+- **Only a function name can be called.** `data:helper()` is an error.
+- **The number of arguments is fixed** for each function. A wrong number is an error when the call is computed, not when the theme is saved. <BloggerSource kind="observed" />
+- **Each argument is a single value**: a literal, data with its properties, a call, or anything in parentheses. An argument that uses an operator, a ternary, elvis, a lambda or an infix function goes in parentheses, and so does a property of a literal or a call: `snippet(("abc".length))`: <BloggerSource kind="observed" />
+
+```xml
+<a expr:href='path(data:blog.bloggerUrl, ("blog/post/edit/" + data:blog.blogId + "/" + data:post.id))'>Edit</a>
+<b:with value='resizeImage((data:post.featuredImage ?: snippet(data:skin.vars.default_thumbnail)), 1280, "16:9")' var='image'>
+```
+
+- **Arguments of the wrong kind are errors when the call is computed.** `path(data:url, 5)` saves, and fails when the page reaches it. Data is not converted to fit: `path(data:url, data:n)` is an error when `data:n` holds a number. What each argument accepts is given with each function. <BloggerSource kind="observed" />
+- **The result takes properties directly**, without parentheses, when the call stands alone: `snippet(data:post.body, { links: false }).jsonEscaped`, `resizeImage(data:image, 1280).width`. <BloggerSource kind="observed" />
+
+### Infix form
+
+Every function can also be written between its two arguments: <BloggerSource kind="observed" />
+
+| Call                                              | Infix                                           |
+| ------------------------------------------------- | ----------------------------------------------- |
+| `path(data:blog.homepageUrl.canonical, "search")` | `data:blog.homepageUrl.canonical path "search"` |
+| `params(data:view.url, { hl: "en" })`             | `data:view.url params { hl: "en" }`             |
+| `appendParams(data:view.url, { m: 0 })`           | `data:view.url appendParams { m: 0 }`           |
+| `fragment(data:post.url, "more")`                 | `data:post.url fragment "more"`                 |
+| `format(data:post.date, "MMM d")`                 | `data:post.date format "MMM d"`                 |
+| `resizeImage(data:image, 640)`                    | `data:image resizeImage 640`                    |
+| `sourceSet(data:image, [320, 640])`               | `data:image sourceSet [320, 640]`               |
+| `snippet(data:post.body, { length: 100 })`        | `data:post.body snippet { length: 100 }`        |
+
+- The right side is a single value. Put a computed one in parentheses: `data:url path ("p/" + data:slug)`.
+- A property after the right side reads the whole result: `data:url path "x".length` is `(data:url path "x").length`, the length of the URL. It applies to everything on its left, so put the call in parentheses: `(data:post.url fragment "more").https`. See [What a member applies to](./data-paths.mdx#what-a-member-applies-to).
+- An infix function can not follow another one directly. `data:url path "search" appendParams { q: "css" }` is an error: write `(data:url path "search") appendParams { q: "css" }`, or calls.
+- It binds tightly: `"Read: " + data:post.url fragment "more"` is `"Read: " + (data:post.url fragment "more")`.
+- It can follow a lambda without parentheses: `data:links map (l => l.target) path "x"` applies `path` to the list.
+
+## `path`
+
+`path(url, path)` replaces the path of a URL. It keeps the scheme and the host, and the query and fragment of the URL: <BloggerSource kind="observed" />
+
+```xml {3}
+<link expr:href='path(data:blog.homepageUrl.canonical, "sitemap.xml")' rel='sitemap' type='application/xml'/>
+<a expr:href='path(data:blog.homepageUrl.canonical, "p/about.html")'>About</a>
+<b:class cond='data:view.url.canonical == path(data:blog.homepageUrl.canonical, "search")' name='on-blog'/>
+```
+
+The last line is true only on `/search`, the list of every post, and not on a search with a query, a label or the homepage.
+
+| Expression                                                        | Result                                   |
+| ----------------------------------------------------------------- | ---------------------------------------- |
+| `path("https://www.example.com/", "search")`                      | `https://www.example.com/search`         |
+| `path("https://www.example.com/2026/03/a.html", "/p/about.html")` | `https://www.example.com/p/about.html`   |
+| `path("https://www.example.com/?m=1#top", "search")`              | `https://www.example.com/search?m=1#top` |
+| `path("//www.example.com/a.html", "feeds/posts/default")`         | `//www.example.com/feeds/posts/default`  |
+| `path("https://www.example.com/a.html?m=1", "")`                  | `https://www.example.com?m=1`            |
+| `path("https://www.example.com/", "//x")`                         | `https://www.example.com//x`             |
+
+- **The path** is written as it is, without encoding. One leading `/` is the same as none, and two are kept. An empty path removes the path, its `/` included. <BloggerSource kind="observed" />
+- **The path must be a string**, or missing data, read as `""`. A number, a boolean, a list or a map is an error: join a number with `""` first, `path(data:blog.homepageUrl, (data:post.date.year + ""))`. <BloggerSource kind="observed" />
+- **The URL must not be `""` or missing data**: both are errors. A URL without `//` and a host, `"a.com/b"`, gives the path alone, `/search`, and so does a number, a boolean or a list. <BloggerSource kind="observed" />
+
+## `params` and `appendParams`
+
+Both write query parameters from a map, where each key is a name and each value its value. `params` sets its parameters: a name already in the query is replaced in place, and the other parameters are kept. `appendParams` adds every parameter at the end, even a name already there: <BloggerSource kind="observed" />
+
+```xml
+<a expr:href='params("https://www.facebook.com/sharer.php", { u: data:post.url.canonical })'>Facebook</a>
+<a expr:href='params("mailto:", { subject: data:post.title, body: data:post.url.canonical })'>Email</a>
+<b:with value='appendParams(data:post.commentFormIframeSrc, { skin: "contempo" })' var='commentFormSrc'>
+<link expr:href='params(data:blog.homepageUrl.canonical.https, { utm_source: "homescreen", view: "-App" })' rel='start'/>
+```
+
+| Expression                                              | Result                            |
+| ------------------------------------------------------- | --------------------------------- |
+| `params("https://a.com/x?p=1#top", { q: "css" })`       | `https://a.com/x?p=1&q=css#top`   |
+| `params("https://a.com/x?q=html&p=1", { q: "css" })`    | `https://a.com/x?q=css&p=1`       |
+| `appendParams("https://a.com/x?p=1#top", { q: "css" })` | `https://a.com/x?p=1&q=css#top`   |
+| `appendParams("https://a.com/?skin=a", { skin: "b" })`  | `https://a.com/?skin=a&skin=b`    |
+| `params("https://a.com/", { q: "dark mode" })`          | `https://a.com/?q=dark+mode`      |
+| `params("https://a.com/", { m: 0, ref: data:missing })` | `https://a.com/?m=0`              |
+| `params("https://a.com/", { tag: ["css", "html"] })`    | `https://a.com/?tag=css&tag=html` |
+| `params("https://a.com/", { b: 1, a: 2 })`              | `https://a.com/?a=2&b=1`          |
+
+- **Both keep the fragment**, everything from the first `#`.
+- **`params` replaces every copy of a name** with one: `?x=1&x=2` with `{ x: 3 }` gives `?x=3`. `appendParams` does not replace: it adds a second one.
+- **New parameters come after those of the URL, sorted by name**, by character code: uppercase first, and `b10` before `b2`. The order of the map does not matter. <BloggerSource kind="observed" />
+- **Values** are written as text: strings, numbers as written, `1.50`, booleans, URLs and images. A list repeats the name for each item. Missing data and an empty list leave the parameter out, `""` writes the name alone, `?a`, and a map is written `null`. <BloggerSource kind="observed" />
+- **Encoding** is that of HTML forms: a space is `+`, and `&`, `=`, `#`, `+`, `%`, `"`, `<`, `>` and characters outside ASCII are percent-encoded. `?`, `:`, `@`, `,`, `;`, `$`, `/`, `*`, `~`, `!`, `'`, `(` and `)` are not. The parameters already in the URL are written again with the same encoding. <BloggerSource kind="observed" />
+- **Keys** follow the [rules of maps](./values.mdx#maps). Write them unquoted, `{ max-results: 8 }`: a quoted key keeps its quotes, and `{ "max-results": 8 }` writes `%22max-results%22=8`. <BloggerSource kind="observed" />
+- **The second argument must be a map.** `{}` is an empty list, and an error. The URL must not be `""` or missing data. <BloggerSource kind="observed" />
+
+Use `params` to build a URL from a base, a share link or `mailto:`, or to set a parameter whatever the URL holds. Use `appendParams` to add a parameter that may repeat.
+
+## `fragment`
+
+`fragment(url, name)` sets the `#fragment` of a URL, replacing everything from the first `#`: <BloggerSource kind="observed" />
+
+```xml
+<a expr:href='fragment(data:post.url.canonical, "comment")'>Leave a comment</a>
+<a expr:href='fragment(data:post.oldestLinkUrl, "comment")' rel='nofollow'>Oldest comments</a>
+```
+
+| Expression                                               | Result                                   |
+| -------------------------------------------------------- | ---------------------------------------- |
+| `fragment("https://www.example.com/a.html", "comment")`  | `https://www.example.com/a.html#comment` |
+| `fragment("https://www.example.com/a.html#top", "more")` | `https://www.example.com/a.html#more`    |
+| `fragment("https://www.example.com/a.html", "#more")`    | `https://www.example.com/a.html#more`    |
+| `fragment("https://www.example.com/a.html#top", "")`     | `https://www.example.com/a.html#`        |
+
+- A leading `#` in the name is dropped. An empty name, or missing data, leaves a bare `#`: `fragment` can not remove a fragment. <BloggerSource kind="observed" />
+- The name must be a string or missing data: a number or a boolean is an error. The URL must not be `""` or missing data. <BloggerSource kind="observed" />
+
+Blogger's own themes write the link to the rest of a post as `data:post.url fragment "more"`.
+
+## `format`
+
+`format(date, pattern)` writes a date with a pattern of letters: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<time expr:datetime='data:post.date.iso8601' expr:title='"Published on " + format(data:post.date, "MMMM d, yyyy")'><b:eval expr='format(data:post.date, "MMM d")'/></time>
+```
+
+```html title="Rendered for March 9, 2026"
+<time datetime="2026-03-09T08:30:00+05:30" title="Published on March 9, 2026">Mar 9</time>
+```
+
+</CodeTabs>
+
+The date must be a [date](./properties.mdx#dates) of Blogger, `data:post.date` or `data:post.lastUpdated`. A string, `.iso8601` included, a timestamp, a post or missing data is an error. The pattern is required. The result is a string. <BloggerSource kind="observed" />
+
+**The time is written in UTC**, whatever the time zone of the blog: a post published at 00:25 at UTC−7 is written `07:25`, and on the next day when that crosses midnight. <BloggerSource kind="observed" /> `.iso8601` uses the time zone of the blog, and `<data:post.date/>` writes the date in the Timestamp format chosen in the settings of the blog.
+
+### Pattern letters
+
+The letters are those of ICU date patterns. In the examples, the date is March 9, 2026, 03:00 UTC: <BloggerSource kind="observed" />
+
+| Letters          | Gives                                     | Example             |
+| ---------------- | ----------------------------------------- | ------------------- |
+| `yyyy`, `y`      | the year                                  | `2026`              |
+| `yy`             | the year, two digits                      | `26`                |
+| `MMMM`           | the name of the month                     | `March`             |
+| `MMM`            | the short name of the month               | `Mar`               |
+| `MM`, `M`        | the month, with or without a leading zero | `03`, `3`           |
+| `MMMMM`          | the first letter of the month             | `M`                 |
+| `dd`, `d`        | the day of the month                      | `09`, `9`           |
+| `D`              | the day of the year                       | `68`                |
+| `EEEE`           | the name of the weekday                   | `Monday`            |
+| `EEE`, `EE`, `E` | the short name of the weekday             | `Mon`               |
+| `EEEEE`          | the first letter of the weekday           | `M`                 |
+| `HH`, `H`        | the hour, 0 to 23                         | `03`, `3`           |
+| `hh`, `h`        | the hour, 1 to 12                         | `03`, `3`           |
+| `kk`, `k`        | the hour, 1 to 24                         | `03`, `3`           |
+| `mm`, `m`        | the minutes                               | `00`, `0`           |
+| `ss`, `s`        | the seconds                               | `00`, `0`           |
+| `SSS`            | the milliseconds                          | `000`               |
+| `a`              | `am` or `pm`, in lowercase                | `am`                |
+| `w`              | the week of the year                      |                     |
+| `z`, `Z`, `X`    | the time zone, always UTC                 | `UTC`, `+0000`, `Z` |
+
+- **`Y`** gave the same year as `y` in testing, on a date in August. Whether it is the year of the week, which differs near January 1, is not confirmed. Write `yyyy`.
+- **Every ASCII letter is a pattern letter.** `D` is the day of the year, `x` an offset, and `j`, `J`, `C`, `n`, `N`, `o`, `p`, `P`, `R`, `t`, `T`, `f`, `i` and `I` are errors. <BloggerSource kind="observed" /> Other characters, spaces, commas, dashes, `#`, `@`, are copied as they are.
+- **Text in single quotes is literal**, and `''` writes one quote. Put every word in quotes. Inside a single-quoted attribute, each quote is written `&apos;`:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:eval expr='format(data:post.date, "MMMM d, yyyy &apos;at&apos; h:mm a")'/>
+```
+
+```html title="Rendered"
+March 9, 2026 at 3:00 am
+```
+
+</CodeTabs>
+
+- **The pattern** can be data, or an expression in parentheses. An empty pattern, or missing data, writes nothing. <BloggerSource kind="observed" />
+- The names of months and days were tested on a blog in English. Whether they follow the language of the blog is not confirmed.
+
+## `resizeImage`
+
+`resizeImage(image, width, ratio)` gives the URL of an image hosted by Blogger at another width, cropped to a ratio when one is given: <BloggerSource kind="observed" />
+
+```xml
+<link expr:href='resizeImage(data:image, 180, "1:1")' rel='apple-touch-icon' sizes='180x180'/>
+<meta expr:content='resizeImage(data:post.featuredImage, 1280, "16:9")' property='og:image'/>
+<b:with value='resizeImage(data:blog.postImageUrl, 1280)' var='pin'>
+```
+
+| Argument | Is                                                                                 |
+| -------- | ---------------------------------------------------------------------------------- |
+| `image`  | an [image](./properties.mdx#images) of Blogger, or a string holding the URL of one |
+| `width`  | the width in pixels, as a number or a string of digits, or a list of widths        |
+| `ratio`  | optional: the shape of the crop, a string `"W:H"`                                  |
+
+### The width
+
+`640` and `"640"` are the same width. A decimal is rounded half up, `100.7` and `640.5` give `w101` and `w641`, `640.4` gives `w640`, and there is no maximum. <BloggerSource kind="observed" /> `0` gives `w0`, and `w0-h0-p-k-no-nu` with a ratio. <BloggerSource kind="observed" /> That `w0` serves the image at its original width is not confirmed.
+
+A negative width removes the size from the URL, without an error: `resizeImage(data:image, -5)` is the URL of the image with no size. With a ratio, a negative width crashes the page with [Blogger's generic error page](./evaluation.mdx#crashes). <BloggerSource kind="observed" />
+
+A boolean, `""`, a map, missing data, or a string with anything but digits, `" 640"` and `"6e2"` included, is an error when the page renders. <BloggerSource kind="observed" />
+
+A list of widths gives a list, one map per width, each with `url` and `size`: `resizeImage(data:image, [320, 640]).first.url`. <BloggerSource kind="observed" /> On a URL that is not resized, the result is the URL alone, not a list.
+
+### The ratio
+
+A ratio is two positive whole numbers separated by `:`, `"1:1"`, `"16:9"`, `"1280:720"`. Spaces around the numbers are allowed, `" 16 : 9 "`, and so are leading zeros, `"016:009"`. <BloggerSource kind="observed" />
+
+- **A landscape or square ratio crops** the image: the height is the width multiplied by `H / W`, rounded down. 100 at `"3:2"` is 66.67, so `h66`, and 300 at `"16:9"` is 168.75, so `h168`. <BloggerSource kind="observed" />
+- **A portrait ratio is ignored.** When `H` is larger than `W`, as in `"9:16"`, the URL only gets the width. <BloggerSource kind="observed" />
+- **A missing ratio is no ratio**, and so is `""`: `resizeImage(data:image, 640, data:missing)` is `resizeImage(data:image, 640)`.
+- **An invalid ratio** is an error: `"wide"`, `"1:0"`, `"0:1"`, `"0:0"`, `"-16:9"`, `"1.5:1"`, `"1.0:1"`, `"16:9:1"`, `"16x9"`, a number or a list. <BloggerSource kind="observed" /> Like a bad width, it saves and fails only when the page renders the call: the widget that holds it fails, or the whole page outside widgets, see [Errors](./evaluation.mdx#errors).
+- **The ratio can be computed**, in parentheses: `resizeImage(data:image, data:width, (data:width + ":" + data:height))`.
+
+### The URL
+
+An image of Blogger carries its size in its URL, either as a path segment before the file name or after an `=` at the end. `resizeImage` replaces it: <BloggerSource kind="observed" />
+
+| Expression                             | URL                                   |
+| -------------------------------------- | ------------------------------------- |
+| `resizeImage(data:image, 640)`         | `…/w640/photo.jpg`                    |
+| `resizeImage(data:image, 640, "16:9")` | `…/w640-h360-p-k-no-nu/photo.jpg`     |
+| `resizeImage(data:image, 144, "1:1")`  | `…/w144-h144-p-k-no-nu/photo.jpg`     |
+| `resizeImage(data:image, 0)`           | `…/w0/photo.jpg`                      |
+| `resizeImage(data:image, -5)`          | `…/photo.jpg`                         |
+| the same on `…/img/a/AVvXsEh=s1600`    | `…/img/a/AVvXsEh=w640-h360-p-k-no-nu` |
+
+A size already in the URL is replaced, in both shapes, `/s1600/` and `=s1600`, a crop included: `…/w400-h300-p-k-no-nu/photo.jpg` at 100 is `…/w100/photo.jpg`. The image of a YouTube video is cropped with `-n-k-no-nu` instead of `-p-k-no-nu`. <BloggerSource kind="observed" />
+
+The parts of `w640-h360-p-k-no-nu`, separated by dashes, are the width, the height, a smart crop, no animation (the first frame of a GIF), no play button over video thumbnails, and no upscaling past the original size.
+
+### Which images
+
+Blogger recognizes its images by the host and the shape of the path: <BloggerSource kind="observed" />
+
+- **`blogger.googleusercontent.com`**, with a path such as `/img/b/R29vZ2xl/AVvXsE…/s1600/photo.jpg` or `/img/a/AVvXsE…=s1600`, and **`bp.blogspot.com`**, with a size segment, are resized. A URL of the same host with another path shape, `/img/b/X/s1600/photo.jpg`, is returned unchanged.
+- **`lh3.googleusercontent.com`**: a size after `=` is replaced. A size in the path is not: `/w300` is added after the file name, `…/s1600/x.jpg/w300`.
+- **YouTube thumbnails** on `i.ytimg.com` are resized through Blogger's image proxy: the result is a `lh3.googleusercontent.com/blogger_img_proxy/…=w300` URL.
+- **Every other URL** is returned unchanged. Missing data and `""` give nothing, and a number, a boolean or a list is returned as it is.
+
+To pick another markup for images that can not be resized, test [`isResizable`](./properties.mdx#images), or compare the result with the original:
+
+```xml title="Whether Blogger can resize an image"
+<b:with value='resizeImage(data:image, 35, "1:1")' var='tiny'>
+  <b:with value='data:tiny != data:image' var='canResize'>
+    <img expr:src='data:canResize ? resizeImage(data:image, 640, "1:1") : data:image'/>
+  </b:with>
+</b:with>
+```
+
+The 35 px version also makes a light blurred placeholder. A string literal holding a Blogger image URL, or a Theme Designer image converted with [`snippet`](#snippet), is resized as well. <BloggerSource kind="observed" />
+
+### The result
+
+The result is an image. It has `.isResizable`, and `.width` and `.height`, the size asked for. `.height` gives nothing without a crop. On a URL of another host, the result is the URL as it was, and its `.isResizable` is missing, not `false`. <BloggerSource kind="observed" /> Themes give the size a fallback:
+
+```xml
+<b:with value='resizeImage(data:post.featuredImage, 1280, "16:9")' var='image'>
+  <meta expr:content='data:image' property='og:image'/>
+  <meta expr:content='data:image.width ?: 1280' property='og:image:width'/>
+  <meta expr:content='data:image.height ?: 720' property='og:image:height'/>
+</b:with>
+```
+
+## `sourceSet`
+
+`sourceSet(image, widths, ratio)` gives the value of a `srcset` attribute: the image resized to each width of the list, followed by the width: <BloggerSource kind="observed" />
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<img expr:src='resizeImage(data:image, 480, "16:9")' expr:srcset='sourceSet(data:image, [240, 480, 720], "16:9")' sizes='(max-width: 480px) 100vw, 480px'/>
+```
+
+```html title="Rendered srcset"
+…/w240-h135-p-k-no-nu/photo.jpg 240w, …/w480-h270-p-k-no-nu/photo.jpg 480w, …/w720-h405-p-k-no-nu/photo.jpg 720w
+```
+
+</CodeTabs>
+
+- **The widths are a list**: `sourceSet(data:image, 640)` is an error. Every width, and the ratio, follow the rules of [`resizeImage`](#resizeimage): `[100.6]` gives `w101 … 101w`. A wrong item makes the whole expression fail. <BloggerSource kind="observed" />
+- **An empty list gives an empty string.**
+- **A URL of another host gives nothing**, unlike `resizeImage`, and so do missing data and a number. <BloggerSource kind="observed" /> Test first, and add the attribute only when it helps: `<b:attr cond='data:canResize' expr:value='sourceSet(…)' name='srcset'/>`.
+- The `src` is still needed: `srcset` is a hint, and browsers without it use `src`.
+
+The Image widget has a ready `data:sourceSet` of its own, at nine widths from 72 to 1600, see [Image](../widget-types/image.mdx).
+
+## `snippet`
+
+`snippet(text, options)` keeps the text and a few tags of HTML, and cuts it at a length: <BloggerSource kind="observed" />
+
+```xml
+<meta expr:content='snippet(data:post.snippet, { length: 147, links: false, linebreaks: false, ellipsis: false })' name='description'/>
+<span class='author'><b:eval expr='snippet(data:post.author.name, { length: 60, ellipsis: true })'/></span>
+<div class='about'><b:eval expr='snippet(data:aboutme, { length: 200, links: true, linebreaks: true })'/></div>
+```
+
+### Options
+
+| Option       | Value     | Default  | Does                                                          |
+| ------------ | --------- | -------- | ------------------------------------------------------------- |
+| `length`     | a number  | no limit | the maximum number of characters, the ellipsis included       |
+| `ellipsis`   | a boolean | `true`   | adds `&#8230;`, the character `…`, when the text is cut       |
+| `links`      | a boolean | `true`   | keeps `<a>` elements. With `false`, only their text stays     |
+| `linebreaks` | a boolean | `true`   | keeps line breaks as `<br>`. With `false`, they become spaces |
+
+- **The map is optional.** Without it, or without `length`, the text is not cut. <BloggerSource kind="observed" />
+- **`length` under 50 counts as 50**, `0` and `-1` included. A decimal is rounded half up. There is no upper limit. <BloggerSource kind="observed" />
+- **`length` must be a number**, written or computed: `{ length: (data:view.isMobile ? 80 : 150) }`. A string, even of digits, `"60"`, is ignored, and the text is not cut. <BloggerSource kind="observed" />
+- **Only the boolean `false`** turns `ellipsis`, `links` or `linebreaks` off. `"false"`, `0` and `""` are ignored. <BloggerSource kind="observed" />
+- **Unknown keys are ignored**, and so are keys in another case, `LENGTH`. The options must be a map: a list, `{}` included, a string or missing data is an error. <BloggerSource kind="observed" />
+
+### What it does
+
+<BloggerSource kind="observed" />
+
+- **Kept tags**: `a`, with all its attributes, `b`, `i`, `strong`, `em` and `br`, written `<br>`. The names of tags and attributes are written in lowercase.
+- **Removed with their content**: `script`, `style`, `iframe` and `img`, and HTML comments.
+- **Removed, content kept**: every other tag, `p`, `div`, `span`, headings, lists, tables.
+- **Whitespace between two tags is removed**, no-break spaces included. Text with other characters keeps all its spaces: they are not collapsed. The end tag `</div>` adds one space, no other element does, so paragraphs join with nothing: `snippet("<p>Hello</p><p>World</p>")` is `HelloWorld`. The result is trimmed.
+- **Entities are decoded, then written again**: `&`, `<`, `>`, `"` and `'` as `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, and `&#233;` as `é`.
+- **`length` counts the written text**: `&amp;` counts 5, `&lt;` 4, a decoded `é` 1, and a tag 0. The cut can fall inside a word. The ellipsis comes after the cut, and counts as one character. A cut inside a link closes the link after the ellipsis, while `b`, `i` and `strong` are left open.
+- **Any value is text**: a number, a boolean, a list as it prints. Missing data and `""` give nothing.
+
+### As a conversion to text
+
+With one argument, `snippet` is also a way to turn a value into a string. Themes use it on Theme Designer values and URLs, before comparing or joining them: <BloggerSource kind="observed" />
+
+```xml
+<meta expr:content='snippet(data:skin.vars.status_light)' name='theme-color'/>
+<b:if cond='snippet(data:view.url) contains "https://"'>
+<b:with value='data:post.title + " " + snippet(data:blog.url.canonical, { length: 2048, links: false, linebreaks: false, ellipsis: false })' var='shareText'>
+```
+
+The Blog widget also gives ready excerpts, `data:post.snippets.short` and `data:post.snippets.long`. See [data:post](../data/post.mdx).
+
+The result is a string, with the [string properties](./properties.mdx#strings): `snippet(data:post.snippets.long, { length: 400 }).jsonEscaped`.

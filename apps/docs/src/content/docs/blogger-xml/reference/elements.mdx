@@ -1,0 +1,164 @@
+---
+title: Elements
+description: Every element of the theme language on one page, with its attributes, where it may go, what it may contain, and which attributes take expressions.
+published: 2026-10-26
+---
+
+This page is an inventory. Each element links to the page that explains it, with examples and sources. Here are the facts that apply across elements: which ones exist, where each may go, which must be empty, and how their attributes are read.
+
+## The `b:` elements
+
+Blogger knows a fixed set of `b:` elements, the ones in the tables below. An unknown name in the `b:` namespace, a misspelled `<b:includeable>` for example, saves and does nothing, and so does an attribute Blogger does not read on a known element, see [Blogger's elements](../basics/saving.mdx#bloggers-elements). <BloggerSource kind="observed" />
+
+The "Empty" column says what the element may contain:
+
+- **Required**: write the element self-closed. Content saves, but is dropped or ignored when rendered; in `<b:include>`, content other than whitespace is a [markup error](../basics/saving.mdx#markup-errors). See [Saving a theme](../basics/saving.mdx#empty-elements).
+- **Allowed**: the element may have content or none. Blogger saves an element with nothing inside as self-closed, `<b:if cond='true'/>`.
+
+### Document and skin
+
+| Element               | Required attributes                      | Optional attributes                                                                                                                             | Allowed in                                                 | Content                                                | Empty    | Page                                                    |
+| --------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ | -------- | ------------------------------------------------------- |
+| `<b:skin>`            |                                          | `version`                                                                                                                                       | Outside `<body>`, usually `<head>`; exactly one per theme  | Text and CDATA; `<Variable>` and `<Group>` in the text | Allowed  | [Skin](../styles/skin.mdx)                              |
+| `<b:template-skin>`   |                                          |                                                                                                                                                 | `<head>`, or an includable; not in layouts version 1       | Text and CDATA; `<b:variable>` in classic themes       | Allowed  | [Skin](../styles/skin.mdx#btemplate-skin)               |
+| `<b:variable>`        | `default`, `name`, `type`                |                                                                                                                                                 | `<b:template-skin>`, before the CDATA, classic themes only | None                                                   | Required | [Skin](../styles/skin.mdx#bvariable-in-classic-themes)  |
+| `<Variable>`          | `default`, `description`, `name`, `type` | `value`, `hideEditor`; `color` on backgrounds; `min`, `max` on lengths; `red`, `green`, `blue` on colors; `family`, `size` on fonts; `variants` | The text of `<b:skin>`, or a `<Group>`                     | None                                                   | Required | [Theme Designer](../styles/theme-designer.mdx#variable) |
+| `<Group>`             | `description`                            | `selector`                                                                                                                                      | The text of `<b:skin>`; not in another group               | `<Variable>`; other text is kept and not read          | Allowed  | [Theme Designer](../styles/theme-designer.mdx#group)    |
+| `<b:template-script>` | `name`                                   | `async`, `inline`, `version`                                                                                                                    | The end of `<body>`; an includable, for the inline form    | None                                                   | Required | [Structure](../basics/document.mdx#btemplate-script)    |
+
+### Layout
+
+| Element                | Required attributes | Optional attributes                                                                          | Allowed in                                                                                  | Content                                      | Empty    | Page                                                     |
+| ---------------------- | ------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------- | -------- | -------------------------------------------------------- |
+| `<b:section>`          | `id`                | `class`, `name`, `maxwidgets`, `showaddelement`, `preferred`, `ads`, `cond`, `tag`, `growth` | `<body>`, outside widgets and other sections; not `<head>`                                  | `<b:widget>`; anything else is deleted       | Allowed  | [Sections](../layout/sections.mdx)                       |
+| `<b:widget>`           | `id`, `type`        | `title`, `locked`, `visible`, `version`, `cond`, `mobile`; `pageType`, deleted when stored   | Directly in `<b:section>`; `<b:section-contents>` in classic themes                         | `<b:widget-settings>` once, `<b:includable>` | Allowed  | [Widgets](../layout/widgets.mdx)                         |
+| `<b:widget-settings>`  |                     |                                                                                              | Directly in `<b:widget>`, once                                                              | `<b:widget-setting>`; text is deleted        | Allowed  | [Widgets](../layout/widgets.mdx)                         |
+| `<b:widget-setting>`   | `name`              |                                                                                              | Directly in `<b:widget-settings>`                                                           | Text, often in CDATA                         | Allowed  | [Widgets](../layout/widgets.mdx)                         |
+| `<b:includable>`       | `id`                | `var`                                                                                        | Directly in `<b:widget>` or `<b:defaultmarkup>`; in `<body>` it saves and breaks every page | Any markup                                   | Allowed  | [Includables](../layout/includables.mdx)                 |
+| `<b:include>`          | `name`              | `cond`, `data`                                                                               | Anywhere markup is rendered                                                                 | Whitespace only                              | Required | [Includables](../layout/includables.mdx)                 |
+| `<b:defaultmarkups>`   |                     |                                                                                              | `<html>`, `<head>` or `<body>`, outside sections                                            | `<b:defaultmarkup>`; text is kept            | Allowed  | [Default markups](../layout/default-markups.mdx)         |
+| `<b:defaultmarkup>`    | `type`              |                                                                                              | Directly in `<b:defaultmarkups>`                                                            | `<b:includable>` only, no text               | Allowed  | [Default markups](../layout/default-markups.mdx)         |
+| `<b:section-contents>` | `id`                |                                                                                              | `<html>`, after `</body>`, classic themes                                                   | `<b:widget>`                                 | Allowed  | [Classic themes](./classic-themes.mdx#bsection-contents) |
+
+### Logic
+
+| Element       | Required attributes | Optional attributes | Allowed in                                                       | Content                                         | Empty    | Page                                     |
+| ------------- | ------------------- | ------------------- | ---------------------------------------------------------------- | ----------------------------------------------- | -------- | ---------------------------------------- |
+| `<b:if>`      | `cond`              |                     | Anywhere markup is rendered                                      | Any; `<b:elseif>` and `<b:else>` as separators  | Allowed  | [Conditionals](../tags/conditionals.mdx) |
+| `<b:elseif>`  | `cond`              |                     | Directly in `<b:if>`, before `<b:else>`                          | None                                            | Required | [Conditionals](../tags/conditionals.mdx) |
+| `<b:else>`    |                     |                     | Directly in `<b:if>`, last; the first one wins                   | None                                            | Required | [Conditionals](../tags/conditionals.mdx) |
+| `<b:switch>`  | `var`               |                     | Anywhere markup is rendered                                      | Any; `<b:case>` and `<b:default>` as separators | Allowed  | [Conditionals](../tags/conditionals.mdx) |
+| `<b:case>`    | `value`             |                     | Directly in `<b:switch>`, before `<b:default>`                   | None                                            | Required | [Conditionals](../tags/conditionals.mdx) |
+| `<b:default>` |                     |                     | Directly in `<b:switch>`, after a `<b:case>`; the first one wins | None                                            | Required | [Conditionals](../tags/conditionals.mdx) |
+| `<b:loop>`    | `values`, `var`     | `index`, `reverse`  | Anywhere markup is rendered                                      | Any                                             | Allowed  | [Loops](../tags/loops.mdx)               |
+| `<b:with>`    | `value`, `var`      |                     | Anywhere markup is rendered                                      | Any                                             | Allowed  | [Variables](../tags/variables.mdx)       |
+
+### Output
+
+| Element       | Required attributes | Optional attributes        | Allowed in                         | Content                   | Empty    | Page                                     |
+| ------------- | ------------------- | -------------------------- | ---------------------------------- | ------------------------- | -------- | ---------------------------------------- |
+| `<data:x/>`   |                     |                            | Anywhere markup is rendered        | None; content is ignored  | Required | [Output](../tags/output.mdx)             |
+| `<b:eval>`    | `expr`              |                            | Anywhere markup is rendered        | None; content is ignored  | Required | [Output](../tags/output.mdx)             |
+| `<b:attr>`    | `name`              | `cond`, `value`            | Directly in the element it changes | None                      | Required | [Attributes](../tags/attributes.mdx)     |
+| `<b:class>`   | `name`              | `cond`                     | Directly in the element it changes | None                      | Required | [Attributes](../tags/attributes.mdx)     |
+| `<b:tag>`     | `name`              | `cond`, any HTML attribute | Anywhere markup is rendered        | Any                       | Allowed  | [Dynamic tags](../tags/dynamic-tags.mdx) |
+| `<b:message>` | `name`              |                            | Anywhere markup is rendered        | `<b:param>` only, no text | Allowed  | [Messages](../tags/messages.mdx)         |
+| `<b:param>`   | `value`             | `name`                     | Directly in `<b:message>`          | None                      | Required | [Messages](../tags/messages.mdx)         |
+| `<b:comment>` |                     | `render`                   | Anywhere markup is rendered        | Any text and tags         | Allowed  | [Comments](../tags/comments.mdx)         |
+
+The page in the last column of each table describes the attributes of the element.
+
+### Classic themes only
+
+| Element              | Required attributes | Optional attributes | Allowed in                    | Content                             | Empty    | Page                                                               |
+| -------------------- | ------------------- | ------------------- | ----------------------------- | ----------------------------------- | -------- | ------------------------------------------------------------------ |
+| `<macro:includable>` | `id`, `var`         |                     | `<html>`, after `</body>`     | Markup, `<b:section>`, `<macro:if>` | Allowed  | [Classic themes](./classic-themes.mdx#macroincludable)             |
+| `<macro:include>`    | `id`, `name`        |                     | `<body>`                      | `<macro:param>`                     | Allowed  | [Classic themes](./classic-themes.mdx#macroinclude-and-macroparam) |
+| `<macro:param>`      | `default`, `name`   |                     | Directly in `<macro:include>` | None                                | Required | [Classic themes](./classic-themes.mdx#macroinclude-and-macroparam) |
+| `<macro:if>`         | `cond`              |                     | `<macro:includable>`          | Any; `<macro:else>` as separator    | Allowed  | [Classic themes](./classic-themes.mdx#macroif-and-macroelse)       |
+| `<macro:else>`       |                     |                     | Directly in `<macro:if>`      | None                                | Required | [Classic themes](./classic-themes.mdx#macroif-and-macroelse)       |
+
+"Anywhere markup is rendered" means `<head>`, `<body>` outside sections, the content of an includable, and directly in `<html>` for the tags that change it. No Blogger tag works inside a CDATA section or inside a skin, where Blogger reads text.
+
+## Where elements may go
+
+| Element                                                          | Directly in `<html>`               | `<head>`      | `<body>`                          | `<b:section>` | `<b:widget>` | Includable                | `<b:defaultmarkup>` |
+| ---------------------------------------------------------------- | ---------------------------------- | ------------- | --------------------------------- | ------------- | ------------ | ------------------------- | ------------------- |
+| `<b:skin>`                                                       | Yes, in a `<b:if>`                 | Yes           | No, refused                       |               |              |                           |                     |
+| `<b:template-skin>`                                              |                                    | Yes           |                                   |               |              | Yes, included in `<head>` |                     |
+| `<b:defaultmarkups>`                                             | Yes                                | Yes           | Yes                               | No, refused   | No, refused  | Saves, fails to render    |                     |
+| `<b:section>`                                                    | Classic, in `<macro:includable>`   | No, refused   | Yes                               | No, refused   |              | Common includables only   |                     |
+| `<b:widget>`                                                     | Classic, in `<b:section-contents>` |               |                                   | Yes           |              |                           |                     |
+| `<b:widget-settings>`                                            |                                    |               |                                   |               | Yes          |                           |                     |
+| `<b:includable>`                                                 |                                    |               | Saves, every page fails           |               | Yes          | Saves, fails to render    | Yes                 |
+| `<b:include>`                                                    | Yes                                | Yes           | Yes                               |               |              | Yes                       |                     |
+| `<b:if>`, `<b:switch>`, `<b:loop>`, `<b:with>`                   | Yes                                | Yes           | Yes                               |               |              | Yes                       |                     |
+| `<data:x/>`, `<b:eval>`, `<b:tag>`, `<b:message>`, `<b:comment>` | Yes                                | Yes           | Yes                               |               |              | Yes                       |                     |
+| `<b:attr>`, `<b:class>`                                          | Yes, for `<html>`                  | In an element | In an element, or `<body>` itself |               |              | In an element             |                     |
+| `<b:template-script>`                                            |                                    |               | Yes, at the end                   |               |              | Yes, inline form          |                     |
+| `<b:section-contents>`, `<macro:includable>`                     | Yes, after `</body>`               |               |                                   |               |              |                           |                     |
+
+<BloggerSource kind="observed" />
+
+The table gives the usual places. What Blogger does with an element out of its place, refused, deleted or saved and broken, is in [Layout nesting](../basics/saving.mdx#layout-nesting). The other rules are on the pages of the elements: <BloggerSource kind="observed" />
+
+- a section in `<head>`, in a Common includable or in an includable of a widget: [Content and placement](../layout/sections.mdx#content-and-placement);
+- a `<b:if>` or `<b:with>` directly in `<html>`, around `<head>` and `<body>`: [The head](../basics/document.mdx#the-head);
+- the separators of `<b:if>` and `<b:switch>`: [Placement of the separators](../tags/conditionals.mdx#placement-of-the-separators) and [Placement and matching](../tags/conditionals.mdx#placement-and-matching);
+- `<b:attr>` and `<b:class>` in a void element such as `<img>`: [Placement](../tags/attributes.mdx#placement);
+- how deep tags can be nested: [Nesting depth](./limits.mdx#nesting-depth).
+
+## How attributes are read
+
+The attributes of `b:` elements are of three kinds.
+
+**Expressions.** The value is an [expression](../expressions/index.mdx), evaluated when the page is rendered: `cond='data:view.isPost'`, `values='data:posts'`. Blogger does not read it when saving: an expression that does not parse saves, and fails only when a page reaches it. <BloggerSource kind="observed" />
+
+**Text.** The value is used as written: `name='postTitle'`, `value='2px'`. The `expr:` prefix computes it instead: `expr:name='data:platform.key + "Icon"'`. <BloggerSource kind="observed" />
+
+**No `expr:` form.** Some attributes are literal only, or their `expr:` form is deleted or not rendered. Blogger reads the `id` of `<b:section>`, and the `id` and `type` of `<b:widget>`, when the theme is saved, to build the list of sections and widgets. The last column of the table lists them, and [`expr:` forms of attributes](../basics/saving.mdx#expr-forms-of-attributes) says what saving and rendering do with each. <BloggerSource kind="observed" />
+
+| Element                | Expression          | Text, `expr:` computes it                             | No `expr:` form                                                         |
+| ---------------------- | ------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| `<b:section>`          | `cond`              | `name`, `tag`                                         | `id`; `class`, whose `expr:` form is not rendered                       |
+| `<b:widget>`           | `cond`              |                                                       | `id`, `type`, `title`, `locked`, `visible`, `version`, `cond`, `mobile` |
+| `<b:widget-setting>`   |                     | `name`                                                |                                                                         |
+| `<b:includable>`       |                     | `var`                                                 | `id`, not confirmed                                                     |
+| `<b:include>`          | `cond`, `data`      | `name`                                                |                                                                         |
+| `<b:defaultmarkup>`    |                     | `type`                                                |                                                                         |
+| `<b:if>`, `<b:elseif>` | `cond`              |                                                       |                                                                         |
+| `<b:switch>`           | `var`               |                                                       | `var`                                                                   |
+| `<b:case>`             |                     | `value`                                               |                                                                         |
+| `<b:loop>`             | `values`, `reverse` | `var`, `index`                                        |                                                                         |
+| `<b:with>`             | `value`             | `var`                                                 |                                                                         |
+| `<b:eval>`             | `expr`              |                                                       | `expr`                                                                  |
+| `<b:attr>`             | `cond`              | `name`, `value`                                       |                                                                         |
+| `<b:class>`            | `cond`              | `name`                                                |                                                                         |
+| `<b:tag>`              | `cond`              | `name`, and every HTML attribute                      |                                                                         |
+| `<b:message>`          |                     | `name`, a message such as `messages.numberOfComments` |                                                                         |
+| `<b:param>`            |                     | `name`, `value`                                       |                                                                         |
+| `<b:comment>`          |                     | `render`                                              |                                                                         |
+| `<b:skin>`             |                     | `version`                                             |                                                                         |
+| `<b:template-script>`  |                     | `name`, `version`, `async`, `inline`                  |                                                                         |
+
+`data` of `<b:include>` also takes a bare name or path, `data='post'`, a map literal or a [list in braces](../expressions/values.mdx#lists-in-braces); [Passing data](../layout/includables.mdx#passing-data) lists what it accepts and what fails. <BloggerSource kind="observed" />
+
+### `ATTR` and `expr:ATTR` together
+
+When an element has both `ATTR` and `expr:ATTR`, the `expr:` one wins, on HTML elements and on `b:` elements alike, and Blogger keeps both in the file. The exceptions, such as `<b:widget>`, whose `expr:` attributes are deleted, are in [`expr:` forms of attributes](../basics/saving.mdx#expr-forms-of-attributes); see also [`ATTR` and `expr:ATTR` together](../tags/attributes.mdx#attr-and-exprattr-together). <BloggerSource kind="observed" />
+
+### `expr:` on an expression attribute
+
+An `expr:` prefix on an attribute that is already an expression evaluates twice: the first result is read as an expression in turn. [Dynamic paths](../expressions/data-paths.mdx#dynamic-paths) shows how a theme uses it on text typed by the blog owner, and how to check that text first. <BloggerSource kind="observed" />
+
+## Other uses of `expr:`
+
+On HTML elements, `expr:` works on any attribute, including `data-*` and `aria-*` ones. These are from production themes: <BloggerSource kind="observed" />
+
+```xml
+<b:include expr:name='data:platform.key + "Icon"'/>
+<b:class expr:name='data:display + "-list"'/>
+<b:attr cond='data:sizes' expr:value='data:sizes' name='sizes'/>
+<b:tag expr:name='data:link ? "a" : "span"'>…</b:tag>
+<span class='views' expr:data-id='data:post.id'/>
+```

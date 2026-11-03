@@ -1,0 +1,209 @@
+---
+import Check from '@lucide/astro/icons/check';
+import ChevronsUpDown from '@lucide/astro/icons/chevrons-up-down';
+import CornerDownLeft from '@lucide/astro/icons/corner-down-left';
+import FileText from '@lucide/astro/icons/file-text';
+import Hash from '@lucide/astro/icons/hash';
+import LayoutGrid from '@lucide/astro/icons/layout-grid';
+import SearchIcon from '@lucide/astro/icons/search';
+import X from '@lucide/astro/icons/x';
+import LucideIcon from '@/components/ui/LucideIcon.astro';
+import { getSections, getTopicCatalog } from '@/lib/content/sections';
+import { menuItem, menuPanel } from '@/scripts/menu';
+import SearchBrowse from './SearchBrowse.astro';
+
+/**
+ * Search button and dialog (Pagefind). Any `[data-open-search]` element opens it, prefilled with its `data-search-query`.
+ * The index is built with the site, so search doesn't work in `astro dev`.
+ */
+const kbd = 'rounded border border-border px-1.5 font-sans text-xs';
+const catalog = getTopicCatalog();
+const sections = getSections();
+// The chosen section is tinted like the current one in the sidebar's section switcher
+const checkedItem =
+	'group/item aria-checked:bg-primary/10 aria-checked:hover:bg-primary/15';
+const checkedIcon =
+	'text-muted-foreground group-aria-checked/item:text-foreground';
+const checkedTick =
+	'text-primary opacity-0 group-aria-checked/item:opacity-100';
+const chip =
+	'shrink-0 cursor-pointer whitespace-nowrap rounded-md px-2.5 py-1 text-meta leading-5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground aria-pressed:bg-accent aria-pressed:font-medium aria-pressed:text-foreground';
+---
+
+<button
+	type="button"
+	class="flex h-8 w-full max-w-64 cursor-pointer items-center gap-2 rounded-lg border border-border bg-secondary px-2 text-sm text-muted-foreground transition-colors hover:bg-accent max-sm:w-8 max-sm:justify-center max-sm:border-transparent max-sm:bg-transparent max-sm:px-0"
+	data-open-search
+	aria-label="Search"
+	aria-keyshortcuts="Control+K Meta+K"
+>
+	<SearchIcon size={16} aria-hidden="true" />
+	<span class="max-sm:hidden">Search</span>
+	{/* Both shortcut labels share one grid cell; the script shows the Apple one on Apple devices */}
+	<kbd class:list={[kbd, 'ms-auto grid justify-items-center max-sm:hidden']}>
+		<span class="col-start-1 row-start-1" data-shortcut-ctrl>Ctrl K</span>
+		<span class="invisible col-start-1 row-start-1" data-shortcut-meta>⌘ K</span>
+	</kbd>
+</button>
+{/* The fade is shorter than the scale so the dialog doesn't flash. `starting:` sets the opening state; `overlay`
+    keeps it in the top layer while it animates out (Chromium only, others close instantly) */}
+<dialog
+	data-search-dialog
+	data-topics={JSON.stringify(catalog)}
+	class="mx-auto mt-[12vh] max-h-none w-[min(42rem,calc(100%-1rem))] max-w-none overflow-visible rounded-xl border border-border bg-popover p-0 text-foreground shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-[2px] max-sm:mt-4 scale-[1.03] opacity-0 [transition:opacity_180ms_ease-in,scale_220ms_cubic-bezier(0.4,0,1,1),overlay_220ms_allow-discrete,display_220ms_allow-discrete] open:scale-100 open:opacity-100 open:[transition:opacity_240ms_ease,scale_360ms_cubic-bezier(0.22,1,0.36,1),overlay_360ms_allow-discrete,display_360ms_allow-discrete] starting:open:scale-[1.03] starting:open:opacity-0 backdrop:opacity-0 backdrop:[transition:opacity_200ms_ease-in,overlay_220ms_allow-discrete,display_220ms_allow-discrete] open:backdrop:opacity-100 open:backdrop:[transition:opacity_300ms_ease,overlay_360ms_allow-discrete,display_360ms_allow-discrete] starting:open:backdrop:opacity-0 motion-reduce:transition-none! motion-reduce:backdrop:transition-none!"
+	aria-label="Search"
+>
+	<div class="flex max-h-[min(36rem,76dvh)] flex-col">
+		<div class="flex shrink-0 items-center gap-2 border-b border-border px-4">
+			<SearchIcon size={18} class="text-muted-foreground" aria-hidden="true" />
+			<input
+				type="search"
+				placeholder="Search the docs"
+				aria-label="Search the docs"
+				autocomplete="off"
+				spellcheck="false"
+				role="combobox"
+				aria-expanded="false"
+				aria-controls="search-results"
+				aria-autocomplete="list"
+				class="h-13 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+				data-search-input
+			/>
+			<button
+				type="button"
+				class="inline-flex cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+				data-close-search
+			>
+				<X size={16} aria-hidden="true" />
+				<span class="sr-only">Close</span>
+			</button>
+		</div>
+		{/* Filters: a section dropdown (only with several sections), then the chosen section's topics */}
+		<div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2">
+			{
+				sections.length > 1 && (
+					<div class="group/menu relative shrink-0" data-search-section>
+						<button
+							type="button"
+							class="flex h-8 max-w-52 cursor-pointer items-center gap-2 rounded-lg border border-border bg-secondary ps-2.5 pe-2 text-sm font-medium text-foreground transition-colors hover:bg-accent aria-expanded:bg-accent"
+							aria-haspopup="menu"
+							aria-expanded="false"
+							aria-controls="search-section-menu"
+							data-menu-button
+						>
+							{/* One icon per choice; the script shows the chosen one */}
+							<span class="flex text-muted-foreground" data-section-icon="">
+								<LayoutGrid size={15} aria-hidden="true" />
+							</span>
+							{sections.map((section) =>
+								section.icon ? (
+									<span class="flex text-muted-foreground" data-section-icon={section.name} hidden>
+										<LucideIcon name={section.icon} size={15} />
+									</span>
+								) : null,
+							)}
+							<span class="truncate" data-section-label>All sections</span>
+							<ChevronsUpDown size={14} class="text-muted-foreground" aria-hidden="true" />
+							<span class="sr-only">Change section</span>
+						</button>
+						<div
+							id="search-section-menu"
+							role="menu"
+							aria-label="Section"
+							class:list={[menuPanel, 'inset-s-0 max-h-[min(22rem,60dvh)] w-80 origin-top-left overflow-y-auto']}
+							data-menu
+						>
+							<button type="button" role="menuitemradio" aria-checked="true" tabindex="-1" class:list={[menuItem, checkedItem]} data-section-option="">
+								<LayoutGrid size={16} class={checkedIcon} aria-hidden="true" />
+								<span class="flex-1 font-medium">All sections</span>
+								<Check size={14} class={checkedTick} aria-hidden="true" />
+							</button>
+							<div class="my-1 h-px shrink-0 bg-border" aria-hidden="true" />
+							{sections.map((section) => (
+								<button
+									type="button"
+									role="menuitemradio"
+									aria-checked="false"
+									tabindex="-1"
+									class:list={[menuItem, checkedItem, 'items-start py-2']}
+									data-section-option={section.name}
+								>
+									{section.icon && <LucideIcon name={section.icon} size={16} class:list={['mt-0.5', checkedIcon]} />}
+									<span class="flex min-w-0 flex-1 flex-col">
+										<span class="font-medium">{section.name}</span>
+										{section.description && <span class="truncate text-xs text-muted-foreground">{section.description}</span>}
+									</span>
+									<Check size={14} class:list={['mt-1', checkedTick]} aria-hidden="true" />
+								</button>
+							))}
+						</div>
+					</div>
+				)
+			}
+			<span class="h-5 w-px shrink-0 bg-border" aria-hidden="true" data-topics-divider hidden />
+			{/* Scrolls sideways; the script fades whichever edge has more chips */}
+			<div
+				class="flex min-w-0 flex-1 gap-1.5 overflow-x-auto scrollbar-none [--fade-end:0px] [--fade-start:0px] [mask-image:linear-gradient(to_right,transparent,black_var(--fade-start),black_calc(100%-var(--fade-end)),transparent)] data-fade-end:[--fade-end:2rem] data-fade-start:[--fade-start:2rem]"
+				role="group"
+				aria-label="Topics"
+				data-search-topics
+			>
+				<button type="button" class={chip} aria-pressed="true" data-chip="all" hidden>All topics</button>
+				{catalog.flatMap((section) =>
+					section.topics.map((topic) => (
+						<button
+							type="button"
+							class={chip}
+							aria-pressed="false"
+							data-chip="topic"
+							data-value={topic.id}
+							data-section={section.name}
+							hidden
+						>
+							{topic.name}
+						</button>
+					)),
+				)}
+			</div>
+		</div>
+		<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2" data-search-body>
+			{
+				import.meta.env.DEV ? (
+					<p class="m-0 p-4 text-sm text-muted-foreground">
+						Search is only available in production builds, run <code>pnpm build</code> and <code>pnpm preview</code>.
+					</p>
+				) : (
+					<>
+						<SearchBrowse />
+						<p class="m-0 hidden p-4 text-center text-sm text-muted-foreground" data-search-status aria-live="polite" />
+						<ul id="search-results" role="listbox" aria-label="Results" class="m-0 hidden list-none flex-col gap-1 p-0" data-search-results />
+					</>
+				)
+			}
+		</div>
+		<div
+			class="flex shrink-0 items-center gap-4 border-t border-border px-4 py-2 text-xs text-muted-foreground max-sm:hidden"
+			aria-hidden="true"
+		>
+			<span class="flex items-center gap-1"><kbd class={kbd}>↑</kbd><kbd class={kbd}>↓</kbd> to move</span>
+			<span class="flex items-center gap-1">
+				<kbd class={kbd}><CornerDownLeft size={10} class="inline" /></kbd> to open
+			</span>
+			<span class="flex items-center gap-1"><kbd class={kbd}>Esc</kbd> to close</span>
+		</div>
+	</div>
+	<template data-icon-page><FileText size={16} aria-hidden="true" /></template>
+	<template data-icon-heading><Hash size={14} aria-hidden="true" /></template>
+</dialog>
+
+<script>
+	import { setupSearch } from '@/scripts/search';
+
+	// Runs once: the dialog is persisted across navigations (`transition:persist`)
+	const dialog = document.querySelector<HTMLDialogElement>(
+		'[data-search-dialog]',
+	);
+	if (dialog) {
+		setupSearch(dialog);
+	}
+</script>

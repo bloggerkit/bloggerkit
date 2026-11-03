@@ -1,0 +1,141 @@
+---
+title: Stats
+description: The Blog's Stats widget, a pageview counter with an optional sparkline, whose numbers are fetched by script after the page loads.
+published: 2026-10-26
+---
+
+`Stats` is the pageview counter, usually titled "Total Pageviews". It counts the views of the whole blog over all time, the last month or the last week, shown as plain text or as a graphical counter, with an optional small chart (a sparkline). The numbers are not in the template data. The theme writes a hidden placeholder and an address, `statsUrl`; a script asks that address for the numbers and reveals the counter.
+
+## Quick example
+
+<CodeTabs>
+
+```xml title="theme.xml" {11-12}
+<b:widget id='Stats1' locked='false' title='Total Pageviews' type='Stats' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='showAnimatedCounter'>false</b:widget-setting>
+    <b:widget-setting name='showGraphicalCounter'>false</b:widget-setting>
+    <b:widget-setting name='showSparkline'>true</b:widget-setting>
+    <b:widget-setting name='sparklineStyle'>BLACK_TRANSPARENT</b:widget-setting>
+    <b:widget-setting name='timeRange'>ALL_TIME</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:include name='widget-title'/>
+    <div class='views' expr:id='data:widget.instanceId + "_content"' style='display: none;'>
+      <span class='counter-wrapper text-counter-wrapper' expr:id='data:widget.instanceId + "_totalCount"'/>
+    </div>
+  </b:includable>
+</b:widget>
+```
+
+```html title="Rendered, before the script runs"
+<div class='widget Stats' data-version='2' id='Stats1'>
+<h3 class='title'>
+Total Pageviews
+</h3>
+<div class='views' id='Stats1_content' style='display: none;'>
+<span class='counter-wrapper text-counter-wrapper' id='Stats1_totalCount'></span>
+</div>
+</div>
+```
+
+</CodeTabs>
+
+The ids `Stats1_content` and `Stats1_totalCount` are where Blogger's script puts the count; the box stays hidden until the numbers arrive.
+
+## Placement and limits
+
+| Property                 | Value                                                                                                    | Source                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Type                     | `Stats`                                                                                                  | <BloggerSource kind="official" /> |
+| Per blog                 | 1. A second one is refused when saving, see [Widgets per type](../reference/limits.mdx#widgets-per-type) | <BloggerSource kind="observed" /> |
+| Suggested width          | 200 to 300px                                                                                             | <BloggerSource kind="observed" /> |
+| Title                    | Up to 100 characters, may be empty                                                                       | <BloggerSource kind="observed" /> |
+| Where Blogger puts it    | Any section. The 2017 themes do not style it                                                             | <BloggerSource kind="observed" /> |
+| Locked                   | Not by default                                                                                           | <BloggerSource kind="observed" /> |
+| Markup                   | Editable                                                                                                 | <BloggerSource kind="observed" /> |
+| Classic mobile view (v1) | Hidden unless enabled                                                                                    | <BloggerSource kind="official" /> |
+| Not available in         | Mobile Default 2010, Dynamic Views on mobile                                                             | <BloggerSource kind="observed" /> |
+
+## Widget settings
+
+| Setting                | Values                                   | Read as                                 | Meaning                                     | Source                            |
+| ---------------------- | ---------------------------------------- | --------------------------------------- | ------------------------------------------- | --------------------------------- |
+| `timeRange`            | `ALL_TIME`, `LAST_MONTH`, `LAST_WEEK`    | the `timeRange` parameter of `statsUrl` | The period counted                          | <BloggerSource kind="observed" /> |
+| `showSparkline`        | `true`, `false`                          | `showSparkline`                         | Draw the chart                              | <BloggerSource kind="observed" /> |
+| `sparklineStyle`       | `BLACK_TRANSPARENT`, `WHITE_TRANSPARENT` | the `style` parameter of `statsUrl`     | Chart colors, for light or dark backgrounds | <BloggerSource kind="observed" /> |
+| `showGraphicalCounter` | `true`, `false`                          | `showGraphicalCounter`                  | Digits in boxes instead of text             | <BloggerSource kind="observed" /> |
+| `showAnimatedCounter`  | `true`, `false`                          | `showAnimatedCounter`                   | Animate the graphical counter               | <BloggerSource kind="observed" /> |
+
+There is no `LAST_YEAR`, unlike the `timeRange` of [PopularPosts](./popular-posts.mdx).
+
+When the theme is saved: <BloggerSource kind="observed" />
+
+- A Stats widget written with no settings gets the title `Total Pageviews`, `showGraphicalCounter` `false`, `showAnimatedCounter` `false`, `showSparkline` `true`, `sparklineStyle` `BLACK_TRANSPARENT` and `timeRange` `ALL_TIME`.
+- The values are case-sensitive, and `LAST_DAY` is refused. Unlike the other types, an empty value is not refused: it becomes the default.
+- A second Stats widget is refused.
+
+## Widget data
+
+The data is the same in both widget versions.
+
+| Field                  | Type    | Content                                                                                                                                | Source                            |
+| ---------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `title`                | string  | Widget title                                                                                                                           | <BloggerSource kind="official" /> |
+| `showSparkline`        | boolean | The chart setting                                                                                                                      | <BloggerSource kind="observed" /> |
+| `showGraphicalCounter` | boolean | The counter style                                                                                                                      | <BloggerSource kind="observed" /> |
+| `showAnimatedCounter`  | boolean | The animation setting; it only matters with the graphical counter                                                                      | <BloggerSource kind="observed" /> |
+| `statsUrl`             | string  | The JSON address of the numbers: `//BLOG.blogspot.com/b/stats?style=STYLE&timeRange=RANGE&token=TOKEN`, with a token issued by Blogger | <BloggerSource kind="observed" /> |
+
+`timeRange` and `sparklineStyle` are not fields: they are already part of `statsUrl`.
+
+## Built-in includables
+
+| Includable | v1  | v2  | What it renders                                                       | Source                            |
+| ---------- | --- | --- | --------------------------------------------------------------------- | --------------------------------- |
+| `main`     | Yes | Yes | v1: the title and the placeholder. v2: `widget-title`, then `content` | <BloggerSource kind="observed" /> |
+| `content`  | No  | Yes | The placeholder                                                       | <BloggerSource kind="observed" /> |
+
+The placeholder, in a `div.widget-content`:
+
+| Element   | Id                                           | When            | Content                                                                                                             |
+| --------- | -------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `div`     | `ID_content`                                 | Always          | Hidden with `display: none` until the numbers arrive                                                                |
+| `script`  |                                              | `showSparkline` | Loads `https://www.gstatic.com/charts/loader.js`                                                                    |
+| Sparkline | `ID_sparkline` (v2), `ID_sparklinespan` (v1) | `showSparkline` | 75 by 30. An `img` with `alt='Sparkline'` in version 2, a `span` in version 1                                       |
+| `span`    | `ID_totalCount`                              | Always          | Class `counter-wrapper`, plus `graph-counter-wrapper` or `text-counter-wrapper` depending on `showGraphicalCounter` |
+
+`ID` is `data:widget.instanceId`. Comments in Blogger's markup say the counter and the image are injected later by an AJAX call, which fits the hidden box and the ids. Some exported version 2 widgets still carry the version 1 `span` for the sparkline; both forms are found.
+
+## Writing your own markup
+
+### Hand the address to your own script
+
+A theme without Blogger's widget script (`b:js='false'` on `<html>`) gets only the empty box. It can expose what the widget knows and fetch the numbers itself:
+
+```xml {10}
+<b:widget id='Stats1' locked='true' title='Stats' type='Stats' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='showAnimatedCounter'>false</b:widget-setting>
+    <b:widget-setting name='showGraphicalCounter'>false</b:widget-setting>
+    <b:widget-setting name='showSparkline'>true</b:widget-setting>
+    <b:widget-setting name='sparklineStyle'>BLACK_TRANSPARENT</b:widget-setting>
+    <b:widget-setting name='timeRange'>LAST_MONTH</b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <script id='stats-config' type='application/json'>{"url":"<data:statsUrl.jsonEscaped/>","sparkline":<b:eval expr='data:showSparkline ? "true" : "false"'/>}</script>
+  </b:includable>
+</b:widget>
+```
+
+`.jsonEscaped` makes the address safe inside a JSON string. The boolean is printed with [`b:eval`](../tags/output.mdx) and a ternary, so the JSON gets a bare `true` or `false`. The response format of `statsUrl` is not confirmed: check what it returns on your blog before you rely on a field.
+
+### The period comes from the settings
+
+The period and the chart colors are encoded in `statsUrl`. Changing them means changing the settings, in the Layout editor or in `<b:widget-settings>`; the template can not ask for another period.
+
+## Things to know
+
+- **Same numbers as the dashboard.** The counter shows the blog's stats; nothing in the template can read or change them.
+- **Keep the ids** when you keep Blogger's script: `_content`, `_totalCount` and the sparkline id.
+- **`quickedit`** in the version 1 `main` no longer does anything.

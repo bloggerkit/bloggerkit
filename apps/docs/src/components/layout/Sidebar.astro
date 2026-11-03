@@ -1,0 +1,162 @@
+---
+import { getPages } from '@/lib/content/pages';
+import type { Section } from '@/lib/content/sections';
+import type { NavLink } from '@/lib/types';
+import SectionSwitcher from './SectionSwitcher.astro';
+import SidebarTree from './SidebarTree.astro';
+
+interface Props {
+	section?: Section;
+	/** Current page slug, e.g. `blogger-xml/tags/loops`. */
+	current?: string;
+	/** Links shown instead of a section tree (used by `/docs`). */
+	links?: NavLink[];
+}
+
+/** Fixed on desktop, a full-screen overlay on small screens. */
+const { section, current, links } = Astro.props;
+const pages = await getPages();
+---
+
+{/*
+  Fixed, not sticky. A sticky sidebar flickered when the page scrolled ahead of the resize script. The footer covers
+  its bottom edge. The wrapper keeps the column width and draws the border. The sidebar is 1px narrower so the
+  section switcher doesn't cover that border. Only the pages below the switcher scroll.
+*/}
+<div class="md:w-70 md:shrink-0 md:border-e md:border-border print:hidden">
+<aside
+	id="sidebar"
+	class="fixed inset-x-0 top-14 bottom-0 z-15 hidden flex-col bg-background in-data-sidebar-open:flex md:inset-x-auto md:bottom-auto md:flex md:h-[calc(100dvh-3.5rem-var(--footer-overlap,0px))] md:w-[calc(var(--spacing)*70-1px)] md:bg-transparent"
+	data-sidebar={section?.id ?? 'docs'}
+	data-footer-fit
+>
+	<nav class="flex min-h-0 flex-1 flex-col" aria-label="Pages">
+		{section && <SectionSwitcher current={section} />}
+		<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-8 md:px-3 scrollbar-overlay mask-t-from-[calc(100%-16px)] mask-b-from-[calc(100%-32px)]" data-sidebar-scroll data-overlay-scroll>
+			{section && <SidebarTree nodes={section.folder.children} pages={pages} current={current} />}
+			{links && <SidebarTree nodes={links.map((link) => ({ type: 'link', ...link }))} pages={pages} />}
+		</div>
+	</nav>
+</aside>
+</div>
+
+<script>
+	import '@/scripts/overlay-scrollbar';
+	import { onPage } from '@/scripts/page';
+
+	// Keep the scroll position of the sidebar's pages when navigating within a section
+	let saved: { key: string; top: number } | undefined;
+	document.addEventListener('astro:before-swap', () => {
+		const sidebar = document.querySelector<HTMLElement>('[data-sidebar]');
+		const pages = sidebar?.querySelector<HTMLElement>('[data-sidebar-scroll]');
+		saved =
+			sidebar && pages
+				? {
+						key: sidebar.getAttribute('data-sidebar') ?? '',
+						top: pages.scrollTop,
+					}
+				: undefined;
+	});
+
+	onPage((signal) => {
+		// The home and 404 pages have no sidebar
+		const sidebar = document.querySelector<HTMLElement>('[data-sidebar]');
+		if (!sidebar) {
+			return;
+		}
+		// On small screens the header button opens the sidebar as an overlay
+		const button = document.querySelector<HTMLButtonElement>(
+			'[data-toggle-sidebar]',
+		);
+		const toggle = (open: boolean) => {
+			document.body.toggleAttribute('data-sidebar-open', open);
+			button?.setAttribute('aria-expanded', String(open));
+		};
+		button?.addEventListener('click', () =>
+			toggle(!document.body.hasAttribute('data-sidebar-open')),
+		);
+		document.addEventListener(
+			'keydown',
+			(event) => {
+				if (event.key !== 'Escape') {
+					return;
+				}
+				// Move focus back to the toggle button instead of losing it to <body>
+				const open = document.body.hasAttribute('data-sidebar-open');
+				const inside = sidebar.contains(document.activeElement);
+				toggle(false);
+				if (open && inside) {
+					button?.focus();
+				}
+			},
+			{ signal },
+		);
+		matchMedia('(min-width: 48rem)').addEventListener(
+			'change',
+			() => toggle(false),
+			{ signal },
+		);
+		for (const chevron of sidebar.querySelectorAll<HTMLButtonElement>(
+			'[data-sidebar-toggle]',
+		)) {
+			const panel = document.getElementById(
+				chevron.getAttribute('aria-controls') ?? '',
+			);
+			if (!panel) {
+				continue;
+			}
+			chevron.addEventListener('click', () => {
+				const open = chevron.getAttribute('aria-expanded') !== 'true';
+				chevron.setAttribute('aria-expanded', String(open));
+				panel.hidden = !open;
+			});
+		}
+		// Shrink the sidebar and TOC as the footer scrolls in, so they end above it instead of under the header
+		const footer = document.querySelector<HTMLElement>('[data-site-footer]');
+		const fitted = document.querySelectorAll<HTMLElement>('[data-footer-fit]');
+		let overlap = -1;
+		let frame = 0;
+		function fit() {
+			frame = 0;
+			const next = footer
+				? Math.max(
+						0,
+						Math.round(innerHeight - footer.getBoundingClientRect().top),
+					)
+				: 0;
+			if (next === overlap) {
+				return;
+			}
+			overlap = next;
+			// Set on the elements that use it, not on <html>. A variable on <html> restyles the whole page every frame,
+			// which dropped frames while scrolling
+			for (const element of fitted) {
+				element.style.setProperty('--footer-overlap', `${overlap}px`);
+			}
+		}
+		const schedule = () => (frame ||= requestAnimationFrame(fit));
+		addEventListener('scroll', schedule, { passive: true, signal });
+		addEventListener('resize', schedule, { signal });
+		// Cancel a pending frame on navigation, or it measures the next page
+		signal.addEventListener('abort', () => cancelAnimationFrame(frame));
+		fit();
+		// Restore the scroll, then center the current link if it's out of view
+		const pages = sidebar.querySelector<HTMLElement>('[data-sidebar-scroll]');
+		if (!pages) {
+			return;
+		}
+		if (saved && saved.key === sidebar.getAttribute('data-sidebar')) {
+			pages.scrollTop = saved.top;
+		}
+		const current = pages.querySelector<HTMLElement>('[aria-current="page"]');
+		if (current) {
+			const offset =
+				current.getBoundingClientRect().top - pages.getBoundingClientRect().top;
+			const visible =
+				offset >= 0 && offset + current.offsetHeight <= pages.clientHeight;
+			if (!visible) {
+				pages.scrollTop += offset - pages.clientHeight / 2;
+			}
+		}
+	});
+</script>

@@ -1,0 +1,469 @@
+---
+import ArrowUpRight from '@lucide/astro/icons/arrow-up-right';
+import Check from '@lucide/astro/icons/check';
+import ChevronDown from '@lucide/astro/icons/chevron-down';
+import Copy from '@lucide/astro/icons/copy';
+import FileText from '@lucide/astro/icons/file-text';
+import Link from '@lucide/astro/icons/link';
+import Mail from '@lucide/astro/icons/mail';
+import MessageCircle from '@lucide/astro/icons/message-circle';
+import Printer from '@lucide/astro/icons/printer';
+import Share from '@lucide/astro/icons/share';
+import Share2 from '@lucide/astro/icons/share-2';
+import Sparkles from '@lucide/astro/icons/sparkles';
+import X from '@lucide/astro/icons/x';
+import {
+	siBluesky,
+	siFacebook,
+	siReddit,
+	siTelegram,
+	siWhatsapp,
+	siX,
+} from 'simple-icons';
+import GithubIcon from '@/components/ui/GithubIcon.astro';
+import { contentDir, getPageMarkdownUrl, normalizePath } from '@/lib/routes';
+import { getSourceUrl } from '@/lib/site';
+import { menuItem, menuPanel } from '@/scripts/menu';
+
+interface Props {
+	slug: string;
+	/** The page's `<title>`, the title of what is shared. */
+	shareTitle: string;
+	/** The page summary, the text shared with the link. */
+	description?: string;
+	/** Source path from the project root; enables "Open in GitHub". */
+	filePath?: string;
+}
+
+/** "Copy Markdown", the "Open" menu (GitHub, raw Markdown, ChatGPT, Claude) and the share menu. */
+const { slug, shareTitle, description, filePath } = Astro.props;
+// The canonical URL, as in SeoHead
+const pageUrl = new URL(normalizePath(Astro.url.pathname), Astro.site).href;
+/** The title, the summary under it and the link, one block each, as messaging apps show them. */
+const message = (...lines: (string | undefined)[]) =>
+	lines.filter(Boolean).join('\n\n');
+// Bluesky takes 300 characters, so a long summary is left out there
+const blueskyText = [
+	message(shareTitle, description, pageUrl),
+	message(shareTitle, pageUrl),
+].find((text) => [...new Intl.Segmenter().segment(text)].length <= 300);
+// simple-icons no longer has LinkedIn's logo, so its path is here
+const linkedinPath =
+	'M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 1 1 0-4.125 2.062 2.062 0 0 1 0 4.125zM7.119 20.452H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z';
+const sharers = [
+	{
+		label: 'X',
+		path: siX.path,
+		href: `https://x.com/intent/post?${new URLSearchParams({ text: shareTitle, url: pageUrl })}`,
+	},
+	{
+		label: 'Bluesky',
+		path: siBluesky.path,
+		href: `https://bsky.app/intent/compose?${new URLSearchParams({ text: blueskyText ?? pageUrl })}`,
+	},
+	{
+		label: 'LinkedIn',
+		path: linkedinPath,
+		href: `https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url: pageUrl })}`,
+	},
+	{
+		label: 'Facebook',
+		path: siFacebook.path,
+		href: `https://www.facebook.com/sharer/sharer.php?${new URLSearchParams({ u: pageUrl })}`,
+	},
+	{
+		label: 'Reddit',
+		path: siReddit.path,
+		href: `https://www.reddit.com/submit?${new URLSearchParams({ url: pageUrl, title: shareTitle })}`,
+	},
+	{
+		label: 'WhatsApp',
+		path: siWhatsapp.path,
+		href: `https://wa.me/?${new URLSearchParams({ text: message(`*${shareTitle}*`, description, pageUrl) })}`,
+	},
+	{
+		label: 'Telegram',
+		path: siTelegram.path,
+		href: `https://t.me/share/url?${new URLSearchParams({ url: pageUrl, text: message(shareTitle, description) })}`,
+	},
+];
+// mailto doesn't take `+` for spaces
+const mailHref = `mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(message(description, pageUrl))}`;
+const markdownUrl = getPageMarkdownUrl(slug);
+const prompt = `Read ${new URL(markdownUrl, Astro.site).href}, I want to ask questions about it.`;
+const sourceUrl =
+	filePath && getSourceUrl(filePath.replace(`${contentDir}/`, ''));
+const options = [
+	...(sourceUrl
+		? [
+				{
+					label: 'Open in GitHub',
+					description: 'The source of this page',
+					href: sourceUrl,
+					Icon: GithubIcon,
+				},
+			]
+		: []),
+	{
+		label: 'View as Markdown',
+		description: 'This page as plain text',
+		href: markdownUrl,
+		Icon: FileText,
+	},
+	{
+		label: 'Open in ChatGPT',
+		description: 'Ask questions about this page',
+		href: `https://chatgpt.com/?${new URLSearchParams({ hints: 'search', q: prompt })}`,
+		Icon: MessageCircle,
+	},
+	{
+		label: 'Open in Claude',
+		description: 'Ask questions about this page',
+		href: `https://claude.ai/new?${new URLSearchParams({ q: prompt })}`,
+		Icon: Sparkles,
+	},
+];
+const button =
+	'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-secondary px-2.5 py-1 text-meta leading-5 font-medium text-secondary-foreground transition-colors hover:bg-accent aria-expanded:bg-accent';
+// The three copy icons share one grid cell and swap by state
+const swap =
+	'col-start-1 row-start-1 transition-[opacity,scale] duration-200 motion-reduce:transition-none';
+---
+
+
+<div class="not-content mt-4 border-b border-border pb-6 print:hidden" data-pagefind-ignore>
+	{/* z-12: menus open over the TOC bar below, but scroll under it once stuck, under the phone sidebar and the header */}
+	<div class="relative z-12 flex flex-wrap items-center gap-2" data-view-options>
+		<button type="button" class:list={[button, 'group/copy']} data-copy-markdown={markdownUrl}>
+			<span class="grid">
+				<Copy
+					size={14}
+					class:list={[
+						swap,
+						'group-data-copied/copy:scale-50 group-data-copied/copy:opacity-0 group-data-copy-failed/copy:scale-50 group-data-copy-failed/copy:opacity-0',
+					]}
+					aria-hidden="true"
+				/>
+				<Check
+					size={14}
+					class:list={[swap, 'scale-50 opacity-0 group-data-copied/copy:scale-100 group-data-copied/copy:opacity-100']}
+					aria-hidden="true"
+				/>
+				<X
+					size={14}
+					class:list={[swap, 'scale-50 opacity-0 group-data-copy-failed/copy:scale-100 group-data-copy-failed/copy:opacity-100']}
+					aria-hidden="true"
+				/>
+			</span>
+			<span class="group-data-copied/copy:hidden group-data-copy-failed/copy:hidden">Copy Markdown</span>
+			<span class="hidden group-data-copied/copy:inline">Copied Markdown</span>
+			<span class="hidden group-data-copy-failed/copy:inline">Copy failed</span>
+		</button>
+		{/* Always present, so screen readers announce text changes */}
+		<span class="sr-only" aria-live="polite" data-copy-status></span>
+		<div class="group/menu" data-view-menu>
+			<button
+				type="button"
+				class={button}
+				aria-haspopup="menu"
+				aria-expanded="false"
+				aria-controls="view-menu"
+				data-menu-button
+			>
+				Open
+				<ChevronDown
+					size={14}
+					class="transition-transform duration-200 group-data-open/menu:rotate-180 motion-reduce:transition-none"
+					aria-hidden="true"
+				/>
+			</button>
+			<div
+				id="view-menu"
+				role="menu"
+				aria-label="Open this page"
+				class:list={[menuPanel, 'inset-s-0 w-68 max-w-full origin-top-left']}
+				data-menu
+			>
+				<p class="m-0 px-2.5 pt-1.5 pb-1 text-xs font-medium text-muted-foreground" aria-hidden="true">Open this page</p>
+				{
+					options.map(({ label, description, href, Icon }) => (
+						<a
+							href={href}
+							target="_blank"
+							rel="noreferrer noopener"
+							role="menuitem"
+							tabindex="-1"
+							class:list={[menuItem, 'group/item gap-3']}
+						>
+							<span class="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground transition-colors group-hover/item:text-foreground group-focus-visible/item:text-foreground">
+								<Icon size={15} aria-hidden="true" />
+							</span>
+							<span class="flex min-w-0 flex-col">
+								<span class="font-medium">{label}</span>
+								<span class="text-xs text-muted-foreground">{description}</span>
+							</span>
+							<ArrowUpRight
+								size={14}
+								class="ms-auto shrink-0 -translate-x-1 translate-y-1 text-muted-foreground opacity-0 transition-[opacity,translate] duration-200 group-hover/item:translate-0 group-hover/item:opacity-100 group-focus-visible/item:translate-0 group-focus-visible/item:opacity-100 motion-reduce:transition-none"
+								aria-hidden="true"
+							/>
+						</a>
+					))
+				}
+			</div>
+		</div>
+		<div class="group/menu" data-share-menu>
+			{/* Shows a check (or a cross) for a moment after "Copy link" */}
+			<button
+				type="button"
+				class:list={[button, 'group/share px-1.75!']}
+				aria-label="Share"
+				title="Share"
+				aria-haspopup="menu"
+				aria-expanded="false"
+				aria-controls="share-menu"
+				data-menu-button
+				data-share-button
+			>
+				<span class="grid h-5 place-items-center">
+					<Share2
+						size={14}
+						class:list={[
+							swap,
+							'group-data-copied/share:scale-50 group-data-copied/share:opacity-0 group-data-copy-failed/share:scale-50 group-data-copy-failed/share:opacity-0',
+						]}
+						aria-hidden="true"
+					/>
+					<Check
+						size={14}
+						class:list={[swap, 'scale-50 opacity-0 group-data-copied/share:scale-100 group-data-copied/share:opacity-100']}
+						aria-hidden="true"
+					/>
+					<X
+						size={14}
+						class:list={[swap, 'scale-50 opacity-0 group-data-copy-failed/share:scale-100 group-data-copy-failed/share:opacity-100']}
+						aria-hidden="true"
+					/>
+				</span>
+			</button>
+			<div
+				id="share-menu"
+				role="menu"
+				aria-label="Share this page"
+				class:list={[menuPanel, 'inset-s-0 w-56 max-w-full origin-top-left']}
+				data-menu
+			>
+				<p class="m-0 px-2.5 pt-1.5 pb-1 text-xs font-medium text-muted-foreground" aria-hidden="true">Share this page</p>
+				{/* Shown only where the device has a share sheet */}
+				<button
+					type="button"
+					role="menuitem"
+					tabindex="-1"
+					class={menuItem}
+					hidden
+					data-share-native={JSON.stringify({ title: shareTitle, text: description, url: pageUrl })}
+				>
+					<Share size={16} class="shrink-0 text-muted-foreground" aria-hidden="true" />
+					Share via…
+				</button>
+				<button type="button" role="menuitem" tabindex="-1" class={menuItem} data-copy-link={pageUrl}>
+					<Link size={16} class="shrink-0 text-muted-foreground" aria-hidden="true" />
+					Copy link
+				</button>
+				<button type="button" role="menuitem" tabindex="-1" class={menuItem} data-print>
+					<Printer size={16} class="shrink-0 text-muted-foreground" aria-hidden="true" />
+					Print
+				</button>
+				<div class="mx-1 my-0.5 border-t border-border" role="separator"></div>
+				{
+					sharers.map(({ label, path, href }) => (
+						<a href={href} target="_blank" rel="noreferrer noopener" role="menuitem" tabindex="-1" class={menuItem}>
+							<svg
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="currentColor"
+								class="shrink-0 text-muted-foreground"
+								aria-hidden="true"
+							>
+								<path d={path} />
+							</svg>
+							{label}
+						</a>
+					))
+				}
+				<a href={mailHref} role="menuitem" tabindex="-1" class={menuItem}>
+					<Mail size={16} class="shrink-0 text-muted-foreground" aria-hidden="true" />
+					Email
+				</a>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	import { setupMenu } from '@/scripts/menu';
+	import { onPage } from '@/scripts/page';
+
+	/**
+	 * Copies the Markdown at `url`. Safari needs the clipboard write to start during the click, so a still-loading
+	 * promise goes into a `ClipboardItem`. Browsers that reject a promise there fall back to `writeText`.
+	 */
+	async function copyMarkdown(url: string): Promise<void> {
+		const text = fetch(url).then((response) => {
+			if (!response.ok) {
+				throw new Error(`Could not load ${url}: ${response.status}`);
+			}
+			return response.text();
+		});
+		if (
+			typeof ClipboardItem !== 'undefined' &&
+			'write' in navigator.clipboard
+		) {
+			try {
+				const blob = text.then(
+					(value) => new Blob([value], { type: 'text/plain' }),
+				);
+				await navigator.clipboard.write([
+					new ClipboardItem({ 'text/plain': blob }),
+				]);
+				return;
+			} catch {
+				// Promise not supported, or the fetch failed (then the fallback rethrows)
+			}
+		}
+		await navigator.clipboard.writeText(await text);
+	}
+
+	/**
+	 * Shows on `button` whether it worked, a check or a cross, for a moment, and says `message` or "Copy failed" in
+	 * the live region `status`. Showing it again keeps it longer.
+	 */
+	function showResult(
+		button: HTMLButtonElement,
+		status: Element | null | undefined,
+		done: boolean,
+		message: string,
+	): void {
+		clearTimeout(Number(button.dataset.reset));
+		button.toggleAttribute('data-copied', done);
+		button.toggleAttribute('data-copy-failed', !done);
+		if (status) {
+			status.textContent = done ? message : 'Copy failed';
+		}
+		button.dataset.reset = String(
+			setTimeout(() => {
+				button.removeAttribute('data-copied');
+				button.removeAttribute('data-copy-failed');
+				if (status) {
+					status.textContent = '';
+				}
+			}, 1500),
+		);
+	}
+
+	/**
+	 * Puts each menu in `row` under its button, moved back as far as needed to stay inside the row, so it never
+	 * reaches past the content (and makes the page scroll sideways) where the column is narrow.
+	 */
+	function placeMenus(row: HTMLElement): void {
+		const { left, width } = row.getBoundingClientRect();
+		for (const panel of row.querySelectorAll<HTMLElement>('[data-menu]')) {
+			const button = panel.parentElement?.querySelector('[data-menu-button]');
+			if (!button) {
+				continue;
+			}
+			const start = button.getBoundingClientRect().left - left;
+			panel.style.insetInlineStart = `${Math.max(0, Math.min(start, width - panel.offsetWidth))}px`;
+		}
+	}
+
+	onPage((signal) => {
+		for (const row of document.querySelectorAll<HTMLElement>(
+			'[data-view-options]',
+		)) {
+			// The buttons move when the row wraps, or when the font loads
+			const resized = new ResizeObserver(() => placeMenus(row));
+			resized.observe(row);
+			for (const button of row.querySelectorAll('button')) {
+				resized.observe(button);
+			}
+			signal.addEventListener('abort', () => resized.disconnect());
+		}
+		for (const button of document.querySelectorAll<HTMLButtonElement>(
+			'[data-copy-markdown]',
+		)) {
+			const url = button.getAttribute('data-copy-markdown');
+			const status = button.parentElement?.querySelector('[data-copy-status]');
+			if (!url) {
+				continue;
+			}
+			let copying = false;
+			button.addEventListener(
+				'click',
+				async () => {
+					if (copying) {
+						return;
+					}
+					copying = true;
+					// Set the state once the result is known, so repeated clicks keep "Copied Markdown" longer
+					const copied = await copyMarkdown(url).then(
+						() => true,
+						// No clipboard, permission denied, page not focused, or the fetch failed
+						() => false,
+					);
+					copying = false;
+					showResult(button, status, copied, 'Copied Markdown');
+				},
+				{ signal },
+			);
+		}
+		for (const menu of document.querySelectorAll<HTMLElement>(
+			'[data-view-menu]',
+		)) {
+			setupMenu(menu, signal);
+		}
+		for (const menu of document.querySelectorAll<HTMLElement>(
+			'[data-share-menu]',
+		)) {
+			const trigger = menu.querySelector<HTMLButtonElement>(
+				'[data-share-button]',
+			);
+			const native = menu.querySelector<HTMLButtonElement>(
+				'[data-share-native]',
+			);
+			const copyLink = menu.querySelector<HTMLButtonElement>('[data-copy-link]');
+			const url = copyLink?.dataset.copyLink;
+			const status = menu.parentElement?.querySelector('[data-copy-status]');
+			if (!trigger || !native || !copyLink || !url) {
+				continue;
+			}
+			const data: ShareData = JSON.parse(native.dataset.shareNative ?? '{}');
+			native.hidden = !(
+				'share' in navigator && navigator.canShare?.(data) !== false
+			);
+			setupMenu(menu, signal);
+			// Closing the share sheet without sharing is not a failure
+			native.addEventListener(
+				'click',
+				() => navigator.share(data).catch(() => {}),
+				{ signal },
+			);
+			// Print after the menu closes
+			menu
+				.querySelector('[data-print]')
+				?.addEventListener('click', () => setTimeout(print), { signal });
+			copyLink.addEventListener(
+				'click',
+				async () => {
+					const copied = await navigator.clipboard.writeText(url).then(
+						() => true,
+						() => false,
+					);
+					showResult(trigger, status, copied, 'Copied link');
+				},
+				{ signal },
+			);
+		}
+	});
+</script>

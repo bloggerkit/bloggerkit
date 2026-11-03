@@ -1,0 +1,271 @@
+---
+title: Comment data
+description: The comments of a post, their fields, threads, comment paging and the comment form, for widget versions 1 and 2, with the patterns themes use to render them.
+level: intermediate
+published: 2026-10-26
+---
+
+The comments of a post are in `data:post.comments`, a list of comments that the Blog widget fills on posts and static pages. A theme can print the thread Blogger renders itself, `data:post.commentHtml`, or walk the list and write its own markup. Walking the list gives full control, starting with a two-level thread:
+
+<CodeTabs>
+
+```xml title="A two-level thread"
+<b:with value='data:post.comments filter (c => !c.inReplyTo or c.inReplyTo == 0)' var='topComments'>
+  <ol class='comments'>
+    <b:loop values='data:topComments' var='comment'>
+      <li class='comment' expr:id='"c" + data:comment.id'>
+        <b:include data='comment' name='comment-body'/>
+        <b:with value='data:post.comments filter (r => r.inReplyTo == data:comment.id)' var='replies'>
+          <b:if cond='data:replies.notEmpty'>
+            <ol class='replies'>
+              <b:loop values='data:replies' var='reply'>
+                <li class='comment' expr:id='"c" + data:reply.id'><b:include data='reply' name='comment-body'/></li>
+              </b:loop>
+            </ol>
+          </b:if>
+        </b:with>
+      </li>
+    </b:loop>
+  </ol>
+</b:with>
+```
+
+```xml title="comment-body"
+<b:includable id='comment-body' var='comment'>
+  <b:message name='messages.authorSaid'>
+    <b:param expr:value='data:comment.author' name='authorName'/>
+  </b:message>
+  <div class='comment-text'><data:comment.body/></div>
+  <a class='comment-time' expr:href='data:comment.url'><data:comment.timestamp/></a>
+</b:includable>
+```
+
+```html title="Rendered, one comment"
+<li class='comment' id='c7390014528839016652'>
+  Marta said…
+  <div class='comment-text'>The tram 28 at 7 am is the trick, thank you!</div>
+  <a class='comment-time' href='https://example.blogspot.com/2026/05/week-end-lisbonne.html?showComment=1747650120000#c7390014528839016652'>May 19, 2026 at 11:22 AM</a>
+</li>
+```
+
+</CodeTabs>
+
+## Where comments exist
+
+`data:post.comments` is filled on posts and static pages only, `item` and `static_page`, in the Blog widget. <BloggerSource kind="official" /> On lists it is empty and only the count, `data:post.numberOfComments`, is set. A page holds 200 comments at most, oldest first; beyond that the comments are split into pages, see [comment paging](#comment-paging).
+
+The list is filled only when the post shows its comments, `data:post.allowComments`. The comment settings of a post, its count and the URL where comments are written are on [Posts](./post.mdx#comment-settings-and-urls).
+
+## Comment fields
+
+| Field               | Type    | Versions | Meaning                                                                                                                        | Source                              |
+| ------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| `id`                | string  | 1, 2     | The id of the comment                                                                                                          | <BloggerSource kind="official" />   |
+| `inReplyTo`         | string  | 1, 2     | The id of the parent comment, on replies only                                                                                  | <BloggerSource kind="official" />   |
+| `body`              | HTML    | 1, 2     | The text of the comment, up to 1 MB                                                                                            | <BloggerSource kind="official" />   |
+| `isDeleted`         | boolean | 1, 2     | The comment was deleted and its body replaced with a notice. Empty otherwise                                                   | <BloggerSource kind="official" />   |
+| `timestamp`         | string  | 1, 2     | The date and time, in the comment time format of the Blog widget                                                               | <BloggerSource kind="official" />   |
+| `timestampValue`    | number  | 1, 2     | The same moment in milliseconds since 1970, the last 4 digits rounded to `0`                                                   | <BloggerSource kind="observed" />   |
+| `timestampAbs`      | number  | 1, 2     | The same moment in milliseconds since 1970, exact                                                                              | <BloggerSource kind="observed" />   |
+| `url`               | string  | 1, 2     | The permalink of the comment, with `?showComment=` and `#c` and the id                                                         | <BloggerSource kind="observed" />   |
+| `anchorName`        | string  | 1, 2     | The anchor name of the comment, used as `<a name>` by version 1 themes                                                         | <BloggerSource kind="observed" />   |
+| `cmtBodyIdPostfix`  | string  | 1, 2     | An id suffix for the body, `_cmt-` and the id                                                                                  | <BloggerSource kind="observed" />   |
+| `author`            | string  | 1, 2     | The display name, or `Anonymous` translated                                                                                    | <BloggerSource kind="official" />   |
+| `authorUrl`         | string  | 1, 2     | The profile or site of the author, when the comment is not anonymous                                                           | <BloggerSource kind="official" />   |
+| `authorAvatarSrc`   | string  | 1, 2     | The avatar of the author, 35 px                                                                                                | <BloggerSource kind="observed" />   |
+| `authorAvatarImage` | HTML    | 1, 2     | The same avatar as an `<img>`                                                                                                  | <BloggerSource kind="observed" />   |
+| `authorPhoto`       | map     | 1, 2     | The photo of the author: `url`, 113 × 113, with `width` and `height`; `thumbUrl`, 50 × 50, with `thumbWidth` and `thumbHeight` | <BloggerSource kind="observed" />   |
+| `authorUserType`    | string  | 2        | `blogger` for a Google account, `anonymous` otherwise                                                                          | <BloggerSource kind="observed" />   |
+| `favicon`           | string  | 1        | The icon of the service the author signed in with                                                                              | <BloggerSource kind="observed" />   |
+| `deleteUrl`         | string  | 1, 2     | The address that deletes the comment                                                                                           | <BloggerSource kind="deprecated" /> |
+| `adminClass`        | string  | 1, 2     | The class of the delete link, such as `blog-admin pid-123456`, shown to admins                                                 | <BloggerSource kind="deprecated" /> |
+| `authorClass`       | string  | 1        | A class that depends on who wrote the comment, `blog-author` for the author of the blog                                        | <BloggerSource kind="deprecated" /> |
+| `extraIconClass`    | string  | 2        | The same class in version 2                                                                                                    | <BloggerSource kind="deprecated" /> |
+
+### `author` and `authorUrl`
+
+`author` is `Anonymous`, in the language of the blog, when the commenter gave no name. A comment is anonymous when that name comes with no `authorUrl`: `data:comment.author == "Anonymous" and !data:comment.authorUrl`. <BloggerSource kind="observed" /> Two messages print the name, with or without a link:
+
+```xml
+<b:if cond='!data:comment.authorUrl'>
+  <b:message name='messages.authorSaid'>
+    <b:param expr:value='data:comment.author' name='authorName'/>
+  </b:message>
+<b:else/>
+  <b:message name='messages.authorSaidWithLink'>
+    <b:param expr:value='data:comment.author' name='authorName'/>
+    <b:param expr:value='data:comment.authorUrl' name='authorUrl'/>
+  </b:message>
+</b:if>
+```
+
+### Avatars
+
+Avatars appear only when `data:blog.enabledCommentProfileImages` is true, which it is for every blog created after 2012. Three facts matter when using `authorAvatarSrc`: <BloggerSource kind="observed" />
+
+- It can be empty.
+- It can point to a placeholder whose path ends with `/img/blank.gif`, a transparent pixel: the commenter has no photo, or the comment is anonymous.
+- It can be protocol-relative, `//blogger.googleusercontent.com/…`, which `resizeImage` and many scripts expect with a scheme.
+
+```xml title="An avatar, or an empty circle" {3}
+<b:with value='data:comment.authorAvatarSrc' var='avatar'>
+  <b:if cond='data:avatar and data:avatar not contains "/img/blank"'>
+    <img class='avatar' expr:alt='data:comment.author.escaped' expr:src='resizeImage(((data:avatar contains "https://" or data:avatar contains "http://") ? data:avatar : "https:" + data:avatar), 70, "1:1")' height='35' width='35'/>
+  <b:else/>
+    <span class='avatar avatar-empty'/>
+  </b:if>
+</b:with>
+```
+
+The 70 px source is twice the displayed size, for high-density screens. In the comment feed, a commenter without a photo gets the placeholder `https://img1.blogblog.com/img/b16-rounded.gif`.
+
+### `isDeleted`
+
+A comment removed by its author or by an admin can stay in the list, its body replaced by a notice. It still holds its place in a thread, which matters when it has replies:
+
+```xml
+<li class='comment' expr:id='"c" + data:comment.id'>
+  <b:class cond='data:comment.isDeleted' name='comment-deleted'/>
+  …
+</li>
+```
+
+A theme can offer the reply button on a deleted comment only when it has replies. <BloggerSource kind="observed" />
+
+### Comments by the author of the post
+
+`authorClass`, in version 1, and `extraIconClass`, in version 2, are not empty on comments written by the author of the blog. Both are deprecated, yet they remain the only way to spot these comments, and themes in production still read them: <BloggerSource kind="observed" />
+
+```xml
+<b:class cond='data:comment.extraIconClass or data:comment.authorClass' name='by-author'/>
+```
+
+Some themes also require the name to match, `data:post.author.name == data:comment.author`, so that only the author of this post is marked on a blog with several authors. <BloggerSource kind="observed" />
+
+### Links in comments
+
+The body is HTML and can contain links. To keep spam links off the page, a theme can print the comments of other readers through `snippet` with `links: false`, which keeps the text of each link and drops the tag: <BloggerSource kind="observed" />
+
+```xml
+<b:if cond='data:comment.extraIconClass or (data:comment.body + "") not contains "&lt;a"'>
+  <data:comment.body/>
+<b:else/>
+  <b:eval expr='snippet((data:comment.body + ""), { links: false })'/>
+</b:if>
+```
+
+`+ ""` turns the body into a string before `contains` and `snippet`, as production themes do. Some also pass `length: 4096`, so that `snippet` does not cut a long comment; without `length`, `snippet` does not cut at all, see [`snippet`](../expressions/functions.mdx#snippet). <BloggerSource kind="observed" /> How a theme tells the author, anonymous and deleted comments apart in its markup is in [Who wrote it](../guides/comments.mdx#who-wrote-it).
+
+## Threads
+
+Since 2012 Blogger can show each reply under the comment it answers. <BloggerSource kind="official" /> Two post fields decide how comments are rendered:
+
+| Field                  | Type    | Meaning                               | Source                            |
+| ---------------------- | ------- | ------------------------------------- | --------------------------------- |
+| `showThreadedComments` | boolean | Comments are shown as threads         | <BloggerSource kind="official" /> |
+| `commentHtml`          | HTML    | The whole thread, rendered by Blogger | <BloggerSource kind="official" /> |
+
+Google gives the conditions for threaded comments as an embedded comment form, a public blog and full feeds. <BloggerSource kind="official" /> In practice `showThreadedComments` is false when comments are not allowed, when the blog is private, when the feeds of the blog are short or off, or when the form is not embedded. `commentHtml` also needs Blogger's scripts: with `b:js='false'`, its reply links do nothing. <BloggerSource kind="observed" /> Printing it is shown in [Blogger's own thread](../guides/comments.mdx#bloggers-own-thread).
+
+In version 2, Blogger's themes pick between two includables with `showThreadedComments`: `threadedComments`, which prints `commentHtml` in an element with the id `comment-holder` followed by the reply form, and `comments`, which loops over the list. Google advises styling the rendered thread with CSS rather than replacing it, since a hand-written thread does not get Blogger's later changes.
+
+### Writing your own thread
+
+`data:post.comments` holds every comment of the page in time order, replies included, and each reply names its parent in `inReplyTo`. <BloggerSource kind="official" /> A top-level comment has no `inReplyTo`, or `0`. <BloggerSource kind="observed" /> The thread at the top of this page builds two levels with `filter`; a thread computed once with `map`, with flags for each comment, is in [Threads](../guides/comments.mdx#threads). Inside a lambda, the parameter can be read bare or with `data:`, see [The parameter](../expressions/lambdas.mdx#the-parameter).
+
+## Comment paging
+
+A page shows 200 comments at most. Beyond that, the comments are split into pages of 200 and the post has paging fields. <BloggerSource kind="observed" />
+
+| Field                                                                | Type    | Versions | Meaning                                                                   |
+| -------------------------------------------------------------------- | ------- | -------- | ------------------------------------------------------------------------- |
+| `commentPagingRequired`                                              | boolean | 1, 2     | The post has more than 200 comments                                       |
+| `commentRangeText`                                                   | string  | 1, 2     | The comments shown, such as `201 - 400 of 952`                            |
+| `hasOlderLinks`                                                      | boolean | 1, 2     | Older comment pages exist                                                 |
+| `hasNewerLinks`                                                      | boolean | 1, 2     | Newer comment pages exist                                                 |
+| `oldestLinkUrl`, `olderLinkUrl`                                      | URL     | 1, 2     | The first and the previous comment page                                   |
+| `newerLinkUrl`, `newestLinkUrl`                                      | URL     | 1, 2     | The next and the last comment page                                        |
+| `oldLinkClass`, `newLinkClass`                                       | string  | 1, 2     | `paging-control`, or `unneeded-paging-control` when there is no such page |
+| `oldestLinkText`, `olderLinkText`, `newerLinkText`, `newestLinkText` | string  | 1        | `«Oldest`, `‹Older`, `Newer›`, `Newest»`                                  |
+
+Version 2 takes the link texts from `data:messages`:
+
+```xml title="Comment pages" /fragment/
+<b:if cond='data:post.commentPagingRequired'>
+  <nav class='comment-pages'>
+    <b:if cond='data:post.hasOlderLinks'>
+      <a expr:href='fragment(data:post.oldestLinkUrl, "comments")'><data:messages.oldest/></a>
+    </b:if>
+    <span><data:post.commentRangeText/></span>
+    <b:if cond='data:post.hasNewerLinks'>
+      <a expr:href='fragment(data:post.newestLinkUrl, "comments")'><data:messages.newest/></a>
+    </b:if>
+  </nav>
+</b:if>
+```
+
+`fragment` makes each link land on the comments rather than at the top of the post, when the comment section has `id='comments'`. `data:post.numberOfComments` is the total of the post, on every comment page. The built-in `comments` includable of the Blog widget renders such a pager, in both versions. <BloggerSource kind="observed" /> These links page the **comments** of one post; the older and newer **posts** are `data:olderPageUrl` and `data:newerPageUrl` of the Blog widget, see [Blog](../widget-types/blog.mdx).
+
+A reply belongs on the same page as its parent, so a theme can offer the reply button only while the post is not paged: `data:post.comments.length &lt; 200 and !data:post.hasNewerLinks`. <BloggerSource kind="observed" />
+
+## The comment form
+
+Readers write comments in a form that Blogger serves in an `<iframe>`. Where it appears follows the comment location in Settings > Comments: under the post, on a full Blogger page, in a popup window, or nowhere.
+
+Fields of the post:
+
+| Field                               | Type        | Versions | Meaning                                                                                                                                                                      | Source                            |
+| ----------------------------------- | ----------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `embedCommentForm`                  | boolean     | 1, 2     | The form is embedded under the post                                                                                                                                          | <BloggerSource kind="observed" /> |
+| `allowNewComments`                  | boolean     | 1, 2     | New comments are accepted                                                                                                                                                    | <BloggerSource kind="observed" /> |
+| `noNewCommentsText`                 | string      | 1, 2     | `New comments are not allowed.`                                                                                                                                              | <BloggerSource kind="observed" /> |
+| `commentFormIframeSrc`              | string      | 1, 2     | The address of the form, `//www.blogger.com/comment-iframe.g?blogID=…&postID=…`, with `pageID=` on static pages. Set when the form is embedded and new comments are accepted | <BloggerSource kind="observed" /> |
+| `appRpcRelayPath`                   | string      | 1, 2     | `https://www.blogger.com/rpc_relay.html`, passed to the script that creates the form                                                                                         | <BloggerSource kind="observed" /> |
+| `cmtfpIframe`                       | HTML        | 1, 2     | Printed after the form by Blogger's themes. Renders nothing, and its purpose is not documented                                                                               | <BloggerSource kind="observed" /> |
+| `commentsUrl`, `commentsUrlOnclick` | URL, string | 2        | The link to the form when it is not embedded, see [Posts](./post.mdx#comment-settings-and-urls)                                                                              | <BloggerSource kind="observed" /> |
+
+Fields of the Blog widget:
+
+| Field                    | Type    | Versions | Meaning                                                                                                                                        | Source                            |
+| ------------------------ | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `cmtIframeInitialHeight` | string  | 1, 2     | The initial height of the form, in px                                                                                                          | <BloggerSource kind="observed" /> |
+| `messages.blogComment`   | string  | 2        | The message the owner writes above the form, Settings > Comments > Comment form message, up to 4,096 characters                                | <BloggerSource kind="observed" /> |
+| `blogCommentMessage`     | string  | 1        | Same as `messages.blogComment`                                                                                                                 | <BloggerSource kind="observed" /> |
+| `blogTeamBlogMessage`    | string  | 1        | `Note: Only a member of this blog may post a comment.`, when only members can comment. Version 2 has `data:messages.onlyTeamMembersCanComment` | <BloggerSource kind="observed" /> |
+| `showCmtPopup`           | boolean | 1, 2     | Tested by Blogger's themes before adding a `#comment-popup` iframe. Inactive                                                                   | <BloggerSource kind="observed" /> |
+
+### The state of the comments, the form and links
+
+Four settings decide whether a post shows its comments and the form: the comments option of the Blog widget, `allowComments`, `allowNewComments` and the location of the form. How a theme turns them into one state is in [When a post has comments](../guides/comments.mdx#when-a-post-has-comments). Loading the form, with or without Blogger's scripts, replies with `parentID`, the link used when the form is not embedded, and the height messages of the iframe are in [The comment form](../guides/comments.mdx#the-comment-form), and the links to a comment, `#c` and the id or `?showComment=`, in [Deep links](../guides/comments.mdx#deep-links). Inside the Blog widget, the note above the form is read as `data:this.messages.blogComment`, see [Widget messages](./messages.mdx#widget-messages).
+
+## Older comment fields
+
+Blogger replaced the scripts of its threaded comments in 2018. These post fields fed the old script; they now render empty, and the 2017 themes still print some of them: <BloggerSource kind="deprecated" />
+
+| Field                                        | Type   | Meaning                                                                                        |
+| -------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------- |
+| `commentSrc`                                 | string | Described by Google as the source of the script that handles comment actions. Empty since 2018 |
+| `commentJso`, `commentMsgs`, `commentConfig` | string | Inputs of the old script, `blogger.widgets.blog.initThreadedComments(…)`. Empty                |
+| `commentSource`                              | number | `1` for Google+ comments, always `0` since 2019                                                |
+
+One field of the same family is still useful: `data:post.avatarIndentClass`, a class for indenting comments that have avatars, which version 1 themes put on their comment list. <BloggerSource kind="observed" />
+
+## Comment feed
+
+Each post has a feed of its comments, given in `data:post.feedLinks`: one item with `url` (`https://example.blogspot.com/feeds/POST_ID/comments/default`), `name` (`Post Comments`), `feedType` (`Atom`) and `mimeType` (`application/atom+xml`). Static pages have none. On posts the same feed is one of the `<link>` tags of [`data:blog.feedLinks`](./blog.mdx#datablogfeedlinks).
+
+The feed carries the same facts under other names: <BloggerSource kind="observed" />
+
+| Comment field     | In the feed                                                        |
+| ----------------- | ------------------------------------------------------------------ |
+| `isDeleted`       | the `blogger.contentRemoved` property                              |
+| `inReplyTo`       | the `related` link, pointing to the parent                         |
+| `timestamp`       | the `blogger.displayTime` property, the time as displayed          |
+| `authorAvatarSrc` | the `gd$image` of the author, or the `b16-rounded.gif` placeholder |
+
+See [feeds](../guides/feeds.mdx).
+
+## Notes
+
+- **The type of `id`.** Google calls the comment id numeric. Themes treat it as a string and join it to text, `"c" + data:comment.id`, and both work.
+- **`commentSrc` and `cmtfpIframe`.** Google describes `commentSrc` as a script. In practice both render nothing.

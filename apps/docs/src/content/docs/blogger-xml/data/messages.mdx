@@ -1,0 +1,276 @@
+---
+title: data:messages
+description: 'The global dictionary of interface texts in the language of the blog: all 95 keys, their English text, the parameters some take, and where themes use them.'
+level: intermediate
+published: 2026-10-26
+---
+
+`data:messages` is a dictionary of short interface texts, "Home", "Older Posts", "Post a Comment", already translated into the language of the blog. A theme that prints them instead of writing its own words speaks the language of every blog it is installed on, with nothing to configure.
+
+<CodeTabs>
+
+```xml title="Links between pages of posts"
+<nav class='blog-pager'>
+  <b:if cond='data:newerPageUrl'>
+    <a class='newer' expr:href='data:newerPageUrl' rel='prev'><data:messages.newerPosts/></a>
+  </b:if>
+  <a class='home' expr:href='data:blog.homepageUrl'><data:messages.home/></a>
+  <b:if cond='data:olderPageUrl'>
+    <a class='older' expr:href='data:olderPageUrl' rel='next'><data:messages.olderPosts/></a>
+  </b:if>
+</nav>
+```
+
+```html title="Rendered on the second page, English blog"
+<nav class='blog-pager'>
+  <a class='newer' href='https://example.blogspot.com/search?…' rel='prev'>Newer Posts</a>
+  <a class='home' href='https://example.blogspot.com/'>Home</a>
+  <a class='older' href='https://example.blogspot.com/search?updated-max=2026-04-11T08:15:00%2B01:00&amp;max-results=7' rel='next'>Older Posts</a>
+</nav>
+```
+
+</CodeTabs>
+
+`data:messages` is global: it can be read anywhere under `<html>`, but not inside `<![CDATA[ ]]>`. Google does not document it. This page lists **95 keys**. <BloggerSource kind="observed" />
+
+## Printing a message
+
+A message prints like any data, with a data tag or `<b:eval>`, or through [`<b:message>`](../tags/messages.mdx#output), which is required for messages that take parameters. The `name` of `<b:message>` is the path without `data:`, `<b:message name='messages.share'/>`. The language is the language of the blog, or the one given with `?hl=` in the URL, see [`data:blog.locale`](./blog.mdx#databloglocale).
+
+A message without parameters reads like a string. Themes write `.escaped` on it in an attribute and `.jsonEscaped` in JSON: <BloggerSource kind="observed" />
+
+```xml {2}
+<button class='share-button' expr:aria-label='data:messages.share.escaped' type='button'/>
+<script id='messages' type='application/json'>{"copied":"<data:messages.linkCopiedToClipboard.jsonEscaped/>","loading":"<data:messages.loading.jsonEscaped/>"}</script>
+```
+
+The second line hands translated texts to client scripts, which can not read `data:messages` themselves. A theme can write several dozen keys into such a block. <BloggerSource kind="observed" /> Whether the escapes change the text of a message is not confirmed, and a message with parameters, printed by `<b:message>`, can not take them.
+
+## Messages with parameters
+
+Ten messages have a slot for a value, the name of an author or a number. They are printed with `<b:message>`, one `<b:param>` per value:
+
+<CodeTabs>
+
+```xml title="theme.xml"
+<b:message name='messages.numberOfComments'>
+  <b:param expr:value='data:post.numberOfComments' name='numComments'/>
+</b:message>
+```
+
+```html title="Rendered with 3 comments"
+3 comments
+```
+
+</CodeTabs>
+
+| Key                    | Parameters                | What they are                                                       | Seen in Blogger's themes | Source                            |
+| ---------------------- | ------------------------- | ------------------------------------------------------------------- | ------------------------ | --------------------------------- |
+| `authorSaid`           | `authorName`              | The name of the commenter                                           | yes                      | <BloggerSource kind="observed" /> |
+| `authorSaidWithLink`   | `authorName`, `authorUrl` | The name and address of the commenter                               | yes                      | <BloggerSource kind="observed" /> |
+| `byAuthor`             | `authorName`              | The name of the author of the post                                  | no                       | <BloggerSource kind="observed" /> |
+| `byAuthorLink`         | `authorName`, `authorUrl` | The name and profile of the author of the post                      | no                       | <BloggerSource kind="observed" /> |
+| `numberOfComments`     | `numComments`             | A count: `No comments` for 0, `1 comment` for 1, `3 comments` for 3 | yes                      | <BloggerSource kind="observed" /> |
+| `postedByAuthor`       | `authorName`              | The name of the author of the post                                  | no                       | <BloggerSource kind="observed" /> |
+| `postedByAuthorLink`   | two, names not confirmed  | The name, then the profile, of the author of the post               | no                       | <BloggerSource kind="observed" /> |
+| `poweredByBloggerLink` | one, name not confirmed   | The address of Blogger, `data:blog.bloggerUrl`                      | no                       | <BloggerSource kind="observed" /> |
+| `templateImagesBy`     | one, name not confirmed   | The name of the author of the theme images                          | yes                      | <BloggerSource kind="observed" /> |
+| `templateImagesByLink` | two, names not confirmed  | The address, then the name, of the author of the theme images       | yes                      | <BloggerSource kind="observed" /> |
+
+Blogger's themes confirm the parameter names of `authorSaid`, `authorSaidWithLink` and `numberOfComments`, and a test confirmed `authorName` for `postedByAuthor`. For the others, the names Blogger expects are not confirmed. <BloggerSource kind="observed" /> A `<b:param>` without a `name` also fills the next slot, and some of the linked messages failed in tests: see [Named and positional parameters](../tags/messages.mdx#named-and-positional-parameters).
+
+`numberOfComments` picks the singular or plural form itself. Test the count only to show something else for zero, such as `data:messages.postAComment`.
+
+## All keys
+
+Every key with its English text. _name_ and _n_ mark where a parameter goes. "Used in" lists the Blogger includables that print the key, `<body>` for the body of Blogger's themes, and _themes_ when a custom theme reads it. <BloggerSource kind="observed" />
+
+### Lists and navigation
+
+| Key                        | English text                 | Used in                                              | Source                            |
+| -------------------------- | ---------------------------- | ---------------------------------------------------- | --------------------------------- |
+| `archive`                  | Archive                      | `main`, `widget-title`; themes                       | <BloggerSource kind="observed" /> |
+| `blogArchive`              | Blog Archive                 | themes                                               | <BloggerSource kind="observed" /> |
+| `featured`                 | Featured                     | `main`, `widget-title`                               | <BloggerSource kind="observed" /> |
+| `home`                     | Home                         | `homePageLink`; themes                               | <BloggerSource kind="observed" /> |
+| `keepReading`              | Keep reading                 | themes                                               | <BloggerSource kind="observed" /> |
+| `labels`                   | Labels                       | `main`, `normalPost`, `post`, `widget-title`; themes | <BloggerSource kind="observed" /> |
+| `latestPosts`              | Latest Posts                 | `main`; themes                                       | <BloggerSource kind="observed" /> |
+| `loadMorePosts`            | Load more posts              | themes                                               | <BloggerSource kind="observed" /> |
+| `moreEllipsis`             | More…                        | `overflowButton`; themes                             | <BloggerSource kind="observed" /> |
+| `morePosts`                | More posts                   | `nextPageLink`                                       | <BloggerSource kind="observed" /> |
+| `newer`                    | Newer                        | `comments`; themes                                   | <BloggerSource kind="observed" /> |
+| `newerPosts`               | Newer Posts                  | `previousPageLink`; themes                           | <BloggerSource kind="observed" /> |
+| `newest`                   | Newest                       | `comments`; themes                                   | <BloggerSource kind="observed" /> |
+| `noResultsFound`           | No results found             | `main`, `noContentPlaceholder`; themes               | <BloggerSource kind="observed" /> |
+| `noTitle`                  | No title                     |                                                      | <BloggerSource kind="observed" /> |
+| `older`                    | Older                        | `comments`; themes                                   | <BloggerSource kind="observed" /> |
+| `olderPosts`               | Older Posts                  | `nextPageLink`; themes                               | <BloggerSource kind="observed" /> |
+| `oldest`                   | Oldest                       | `comments`; themes                                   | <BloggerSource kind="observed" /> |
+| `popularPosts`             | Popular Posts                | `main`, `widget-title`                               | <BloggerSource kind="observed" /> |
+| `popularPostsFromThisBlog` | Popular posts from this blog | `main`, `widget-title`                               | <BloggerSource kind="observed" /> |
+| `posts`                    | Posts                        | `<body>`; themes                                     | <BloggerSource kind="observed" /> |
+| `readMore`                 | Read more                    |                                                      | <BloggerSource kind="observed" /> |
+| `recentPosts`              | Recent posts                 | `main`                                               | <BloggerSource kind="observed" /> |
+| `theresNothingHere`        | There's nothing here!        | `main`, `noContentPlaceholder`; themes               | <BloggerSource kind="observed" /> |
+| `youMayLikeThesePosts`     | You may like these posts     | themes                                               | <BloggerSource kind="observed" /> |
+
+### Showing, hiding and describing
+
+| Key                 | English text         | Used in                   | Source                            |
+| ------------------- | -------------------- | ------------------------- | --------------------------------- |
+| `hidden`            | Hidden               |                           | <BloggerSource kind="observed" /> |
+| `image`             | Image                | `responsiveImage`; themes | <BloggerSource kind="observed" /> |
+| `loading`           | Loading…             | themes                    | <BloggerSource kind="observed" /> |
+| `photo`             | Photo                |                           | <BloggerSource kind="observed" /> |
+| `showAll`           | Show all             | `<body>`; themes          | <BloggerSource kind="observed" /> |
+| `showLess`          | Show less            | `extendableItems`; themes | <BloggerSource kind="observed" /> |
+| `showMore`          | Show more            | `extendableItems`; themes | <BloggerSource kind="observed" /> |
+| `skipToMainContent` | Skip to main content | `skipNavigation`          | <BloggerSource kind="observed" /> |
+| `title`             | Title                |                           | <BloggerSource kind="observed" /> |
+| `viewAll`           | View all             | `<body>`; themes          | <BloggerSource kind="observed" /> |
+| `visible`           | Visible              |                           | <BloggerSource kind="observed" /> |
+
+### Authors and bylines
+
+| Key                     | English text                      | Parameters                | Used in                                      | Source                            |
+| ----------------------- | --------------------------------- | ------------------------- | -------------------------------------------- | --------------------------------- |
+| `at`                    | at                                |                           |                                              | <BloggerSource kind="observed" /> |
+| `blogAuthors`           | Contributors                      |                           | `main`, `widget-title`                       | <BloggerSource kind="observed" /> |
+| `by`                    | By                                |                           |                                              | <BloggerSource kind="observed" /> |
+| `byAuthor`              | By _name_                         | `authorName`              |                                              | <BloggerSource kind="observed" /> |
+| `byAuthorLink`          | By _name_, the name linked        | `authorName`, `authorUrl` |                                              | <BloggerSource kind="observed" /> |
+| `myPhoto`               | My photo                          |                           | `authorProfileImage`, `main`                 | <BloggerSource kind="observed" /> |
+| `on`                    | on                                |                           |                                              | <BloggerSource kind="observed" /> |
+| `postedBy`              | Posted by                         |                           | themes                                       | <BloggerSource kind="observed" /> |
+| `postedByAuthor`        | Posted by _name_                  | one                       |                                              | <BloggerSource kind="observed" /> |
+| `postedByAuthorLink`    | Posted by _name_, the name linked | two                       |                                              | <BloggerSource kind="observed" /> |
+| `viewMyCompleteProfile` | View my complete profile          |                           | `viewProfileLink`; themes                    | <BloggerSource kind="observed" /> |
+| `visitProfile`          | Visit profile                     |                           | `teamProfileLink`, `viewProfileLink`; themes | <BloggerSource kind="observed" /> |
+| `visitSite`             | Visit site                        |                           |                                              | <BloggerSource kind="observed" /> |
+
+### Comments
+
+| Key                         | English text                                         | Parameters                | Used in                                                                     | Source                            |
+| --------------------------- | ---------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------- | --------------------------------- |
+| `authorSaid`                | _name_ said…                                         | `authorName`              | `commentItem`                                                               | <BloggerSource kind="observed" /> |
+| `authorSaidWithLink`        | _name_ said…, the name linked                        | `authorName`, `authorUrl` | `commentItem`                                                               | <BloggerSource kind="observed" /> |
+| `comments`                  | Comments                                             |                           | `commentsTitle`; themes                                                     | <BloggerSource kind="observed" /> |
+| `deleteComment`             | Delete Comment                                       |                           | `commentDeleteIcon`; themes                                                 | <BloggerSource kind="observed" /> |
+| `joinTheConversation`       | Join the conversation                                |                           | themes                                                                      | <BloggerSource kind="observed" /> |
+| `numberOfComments`          | No comments, 1 comment, _n_ comments                 | `numComments`             | `commentsLink`; themes                                                      | <BloggerSource kind="observed" /> |
+| `onlyTeamMembersCanComment` | Note: Only a member of this blog may post a comment. |                           |                                                                             | <BloggerSource kind="observed" /> |
+| `postAComment`              | Post a Comment                                       |                           | `addComments`, `commentForm`, `commentsLink`, `threadedCommentForm`; themes | <BloggerSource kind="observed" /> |
+
+### Sharing
+
+| Key                     | English text              | Used in                                                                | Source                            |
+| ----------------------- | ------------------------- | ---------------------------------------------------------------------- | --------------------------------- |
+| `copy`                  | Copy                      | themes                                                                 | <BloggerSource kind="observed" /> |
+| `copyToClipboard`       | Copy to clipboard         | themes                                                                 | <BloggerSource kind="observed" /> |
+| `emailPost`             | Email Post                | `emailPostIcon`; themes                                                | <BloggerSource kind="observed" /> |
+| `linkCopiedToClipboard` | Link copied to clipboard! | themes                                                                 | <BloggerSource kind="observed" /> |
+| `postLink`              | Post Link                 | themes                                                                 | <BloggerSource kind="observed" /> |
+| `share`                 | Share                     | `sharingButtonContent`, `sharingButtons`, `sharingButtonsMenu`; themes | <BloggerSource kind="observed" /> |
+| `shareOtherApps`        | not confirmed             | `otherSharingButton`                                                   | <BloggerSource kind="observed" /> |
+| `shareToOtherApps`      | not confirmed             | `otherSharingButton`; themes                                           | <BloggerSource kind="observed" /> |
+
+### Search and subscriptions
+
+| Key                     | English text            | Used in                        | Source                                                                |
+| ----------------------- | ----------------------- | ------------------------------ | --------------------------------------------------------------------- |
+| `emailAddress`          | Email Address           | themes                         | <BloggerSource kind="deprecated" /> <BloggerSource kind="observed" /> |
+| `getEmailNotifications` | Get email notifications |                                | <BloggerSource kind="deprecated" /> <BloggerSource kind="observed" /> |
+| `search`                | Search                  | `main`, `searchSubmit`; themes | <BloggerSource kind="observed" />                                     |
+| `searchBlog`            | Search blog             |                                | <BloggerSource kind="observed" />                                     |
+| `searchThisBlog`        | Search this blog        | `searchForm`; themes           | <BloggerSource kind="observed" />                                     |
+| `subscribe`             | Subscribe               |                                | <BloggerSource kind="observed" />                                     |
+| `subscribeTo`           | Subscribe to:           | `feedLinksBody`; themes        | <BloggerSource kind="observed" />                                     |
+| `subscribeToThisBlog`   | Subscribe to this blog  |                                | <BloggerSource kind="observed" />                                     |
+
+### Widgets, previews and the dashboard
+
+| Key                           | English text                                                                                                                                                | Used in                                           | Source                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| `adsGoHere`                   | Ads go here                                                                                                                                                 | `inlineAd`, `widgetNotAvailableInPreview`; themes | <BloggerSource kind="observed" />                                     |
+| `configurationRequired`       | Configuration required                                                                                                                                      |                                                   | <BloggerSource kind="observed" />                                     |
+| `dynamicViewsNotAvailable`    | This theme is not compatible with the blog's current settings. If you would like to use this theme, please ensure the blog is public and allows blog feeds. | `<body>`                                          | <BloggerSource kind="observed" />                                     |
+| `edit`                        | Edit                                                                                                                                                        | themes                                            | <BloggerSource kind="deprecated" /> <BloggerSource kind="observed" /> |
+| `myBlogList`                  | My Blog List                                                                                                                                                |                                                   | <BloggerSource kind="observed" />                                     |
+| `myFavoriteSites`             | My favorite sites                                                                                                                                           |                                                   | <BloggerSource kind="observed" />                                     |
+| `reportAbuse`                 | Report Abuse                                                                                                                                                | `reportAbuse`                                     | <BloggerSource kind="observed" />                                     |
+| `someOfMyFavoriteSites`       | Some of my favorite sites                                                                                                                                   |                                                   | <BloggerSource kind="observed" />                                     |
+| `widget`                      | Gadget                                                                                                                                                      | `widget-title`                                    | <BloggerSource kind="observed" />                                     |
+| `widgetNotAvailableInPreview` | This content is not available in blog preview.                                                                                                              | `widgetNotAvailableInPreview`                     | <BloggerSource kind="observed" />                                     |
+
+### Attribution
+
+| Key                    | English text                   | Parameters | Used in        | Source                            |
+| ---------------------- | ------------------------------ | ---------- | -------------- | --------------------------------- |
+| `poweredByBlogger`     | Powered by Blogger             |            | `main`; themes | <BloggerSource kind="observed" /> |
+| `poweredByBloggerLink` | Powered by Blogger, linked     | one        |                | <BloggerSource kind="observed" /> |
+| `templateImagesBy`     | Theme images by _name_         | one        | `main`         | <BloggerSource kind="observed" /> |
+| `templateImagesByLink` | Theme images by _name_, linked | two        | `main`         | <BloggerSource kind="observed" /> |
+
+### Notices and dialogs
+
+The cookie notice Blogger shows to readers in the European Union, and buttons for dialogs.
+
+| Key                          | English text                                                                                                                                                                                                                                                                                               | Used in | Source                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ----------------------------------- |
+| `euCookieNotice`             | This site uses cookies from Google to deliver its services, to personalize ads and to analyze traffic. Information about your use of this site is shared with Google. By using this site, you agree to its use of cookies.                                                                                 |         | <BloggerSource kind="deprecated" /> |
+| `euCookieNotice2018`         | This site uses cookies from Google to deliver its services and to analyze traffic. Your IP address and user-agent are shared with Google along with performance and security metrics to ensure quality of service, generate usage statistics, and to detect and address abuse.                             |         | <BloggerSource kind="observed" />   |
+| `euCookieNoticeCloseButton`  | Got it                                                                                                                                                                                                                                                                                                     |         | <BloggerSource kind="observed" />   |
+| `euCookieResponsibility`     | It is your responsibility to notify your visitors about cookies used on your blog. See http://www.blogger.com/go/cookiechoices for more details.                                                                                                                                                           |         | <BloggerSource kind="deprecated" /> |
+| `euCookieResponsibility2018` | It is your responsibility to notify your visitors about cookies used and data collected on your blog. Blogger makes a standard notification available for you to use on your blog, and you can customize it or replace with your own notice. See http://www.blogger.com/go/cookiechoices for more details. |         | <BloggerSource kind="observed" />   |
+| `gotIt`                      | Got it                                                                                                                                                                                                                                                                                                     |         | <BloggerSource kind="observed" />   |
+| `learnMore`                  | Learn More                                                                                                                                                                                                                                                                                                 |         | <BloggerSource kind="observed" />   |
+| `ok`                         | Ok                                                                                                                                                                                                                                                                                                         | themes  | <BloggerSource kind="observed" />   |
+
+## Notes on the keys
+
+- **Retired keys.** `edit`, `emailAddress`, `euCookieResponsibility` and `getEmailNotifications` are no longer used by Blogger, and `euCookieNotice` is not used by the 2017 themes. They still return their text. `deleteComment` is still printed by the delete icon of the 2017 themes.
+- **Two cookie notices.** `euCookieNotice` and `euCookieResponsibility` are the old texts, the `2018` keys the current ones. `euCookieNoticeCloseButton` and `gotIt` both give "Got it".
+- **`widget`** gives "Gadget", the word of the Blogger dashboard.
+- **`shareOtherApps` and `shareToOtherApps`** appear in the hidden "other apps" share button of Blogger's themes. Their text is not confirmed.
+- **Outside the 95.** Some classic themes read `data:messages.moveToPage`, and a key `widgetNotAvailableOnHttps` exists. The text of either is not confirmed.
+
+## Texts the theme defines
+
+The dictionary is fixed: a theme can not add a key to it. For its own words, a theme can declare string variables in its skin, one per text, and the owner translates them in Edit HTML, in the `value` of each variable. A `string` variable gets no form in the Theme Designer, see [Types](../styles/theme-designer.mdx#types): <BloggerSource kind="observed" />
+
+```xml
+<b:skin><![CDATA[/*
+<Variable default="" description="For: Reply" name="m.reply" type="string" value="Reply"/>
+<Variable default="" description="For: New!" name="m.new" type="string" value="New!"/>
+*/]]></b:skin>
+
+<button class='reply-button' expr:aria-label='data:skin.vars.m_reply' type='button'><data:skin.vars.m_reply/></button>
+```
+
+Use `data:messages` wherever a key fits, since it follows the language of each blog by itself, and variables for the rest. See [data:skin](./skin.mdx).
+
+## Widget messages
+
+Texts that the owner writes, or that belong to one widget, are widget data rather than keys of the dictionary:
+
+- **The Blog widget, version 2,** has its own `data:messages` with one member, `blogComment`: the note written above the comment form in Settings > Comments. Inside the Blog widget, `data:messages` still gives the global texts in Blogger's themes, and the widget's note is read through the name of the widget data, `data:this.messages.blogComment`. How the two are combined is not confirmed.
+- **Version 1 widgets** receive their texts as widget data, such as `data:homeMsg` or `data:postCommentMsg` in the Blog widget and `data:viewProfileMsg` in the Profile widget. Version 2 replaced most of them with global keys:
+
+| Version 1 widget data                                                         | Global key                           |
+| ----------------------------------------------------------------------------- | ------------------------------------ |
+| `homeMsg`                                                                     | `home`                               |
+| `postCommentMsg`                                                              | `postAComment`                       |
+| `feedLinksMsg`                                                                | `subscribeTo`                        |
+| `commentPostedByMsg`                                                          | `authorSaid`                         |
+| `blogTeamBlogMessage`                                                         | `onlyTeamMembersCanComment`          |
+| `shareMsg`                                                                    | `share`                              |
+| `emailPostMsg`                                                                | `emailPost`                          |
+| `deleteCommentMsg`                                                            | `deleteComment`                      |
+| `editPostMsg`                                                                 | `edit`                               |
+| `newerPageTitle`, `olderPageTitle`                                            | `newerPosts`, `olderPosts`           |
+| `posts[i].oldestLinkText`, `olderLinkText`, `newerLinkText`, `newestLinkText` | `oldest`, `older`, `newer`, `newest` |
+| `viewProfileMsg`, in Profile                                                  | `viewMyCompleteProfile`              |
+| `loadingMsg`                                                                  | `loading`                            |
+
+The words of the byline, "By", "at", "Labels:", are set by the owner in the Blog widget. They are in [`data:widgets.Blog.first.allBylineItems`](./widgets.mdx#post-options), not here: the keys `by`, `at` and `postedBy` only give the default words.

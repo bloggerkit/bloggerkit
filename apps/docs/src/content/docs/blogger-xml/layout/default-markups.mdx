@@ -1,0 +1,260 @@
+---
+title: b:defaultmarkups
+description: Give every widget of a type the theme's own includables, and define Common includables that any widget, or the theme itself, can include.
+level: advanced
+prerequisites:
+  - blogger-xml/layout/widgets
+  - blogger-xml/layout/includables
+published: 2026-10-26
+---
+
+A theme can not know which widgets the blog owner will add later. Default markups are how it prepares for them: for each widget type, a `<b:defaultmarkup>` holds the includables a new widget of that type gets. With `type='Common'`, it holds includables that belong to no type and can be included from anywhere in the theme. <BloggerSource kind="observed" />
+
+```xml title="The theme's markup for HTML widgets"
+<b:defaultmarkups>
+  <b:defaultmarkup type='HTML'>
+    <b:includable id='main'>
+      <b:include cond='data:title not contains "[NoTitle]"' name='widget-title'/>
+      <div class='widget-content'>
+        <data:content/>
+      </div>
+    </b:includable>
+    <b:includable id='content'/>
+  </b:defaultmarkup>
+</b:defaultmarkups>
+```
+
+When the owner adds an HTML widget in the Layout editor, Blogger writes the new widget with these includables, and its settings:
+
+```xml title="The widget Blogger adds"
+<b:widget id='HTML3' locked='false' title='Newsletter' type='HTML' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='content'><![CDATA[<p>One email a month.</p>]]></b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <b:include cond='data:title not contains "[NoTitle]"' name='widget-title'/>
+    <div class='widget-content'>
+      <data:content/>
+    </div>
+  </b:includable>
+  <b:includable id='content'/>
+</b:widget>
+```
+
+Without the default markup, the widget would have Blogger's built-in includables for the type, with Blogger's classes and structure. Google does not document these tags. Every version 3 theme of Blogger has a `<b:defaultmarkups>` block; classic themes have none. <BloggerSource kind="observed" />
+
+## How default markups apply
+
+When a widget is added, or reset to its default markup, Blogger builds its includables: <BloggerSource kind="observed" />
+
+1. It starts from its own built-in includables for the type.
+2. An includable of the theme's default markups with the **same id** as a built-in one replaces it.
+3. An includable with a **new id** is added.
+
+The result is written into the `<b:widget>` element. From then on the widget has its own copy: its includables can be edited in the widget, and they no longer depend on the default markup. That is also why an exported theme shows the same includables twice, once in `<b:defaultmarkups>` and once in every widget of the type.
+
+Inside these includables, `super.NAME` still calls Blogger's original `NAME`, not the theme's. See [`super.` includes](./includables.mdx#super-includes).
+
+<Callout title="Widgets already on the blog">
+Default markups are copied when a widget is added or reset. Whether saving a theme with new default markups also changes the widgets already on the blog is not confirmed. After changing a default markup, check the existing widgets of that type, and edit or reset them. A widget whose `main` only includes a Common includable avoids the question, see [One markup for every widget of a type](#one-markup-for-every-widget-of-a-type).
+</Callout>
+
+## Placement and content
+
+- `<b:defaultmarkups>` is a child of `<html>`, of `<head>` or of `<body>`. In a section it is refused: `b:defaultmarkups tags can not be contained within widgets or sections.` Directly in a widget it is refused as any other element: `The widget with id "HTML5" cannot contain element: "b:defaultmarkups". A widget can only contain b:includable elements.` In an includable of a widget it saves, but the widget then fails with `The tag 'defaultmarkups' is not a known Blogger tag.` <BloggerSource kind="observed" />
+- Blogger's own themes put it in `<head>`, after `<b:template-skin>`. Some themes put it first in `<html>`, before anything else; others put it in `<body>`. All work. <BloggerSource kind="observed" />
+- A theme can have several `<b:defaultmarkups>` blocks, and several `<b:defaultmarkup>` elements for `Common` or for one type. For example, a theme can have one Common block for its page structure, one for its components and one for its JSON. <BloggerSource kind="observed" />
+- Two includables with the same id in one `<b:defaultmarkup>` are refused: `Invalid default markup for type(s) 'Common'`. The same id in two Common blocks saves, and the last one wins. <BloggerSource kind="observed" />
+- Nothing is rendered where `<b:defaultmarkups>` is written. <BloggerSource kind="observed" />
+
+Content, checked when saving: <BloggerSource kind="observed" />
+
+- `<b:defaultmarkup>` contains only `<b:includable>` elements. Text or another element in it is refused: `Invalid default markup for type(s) 'HTML'`. So is a `<b:defaultmarkup>` inside another.
+- `<b:defaultmarkups>` is meant to contain only `<b:defaultmarkup>` elements, but Blogger does not check it: text in it saves and is kept, and so does an `<b:includable>` written directly in it. Whether such an includable can be included is not confirmed.
+- Spaces and line breaks are fine between them.
+
+Default markups are a feature of version 3 themes with version 2 widgets. Whether they apply in older themes is not confirmed.
+
+## The type attribute
+
+| Attribute | Required | Value                                                           | Default | Description                         | Source                            |
+| --------- | -------- | --------------------------------------------------------------- | ------- | ----------------------------------- | --------------------------------- |
+| `type`    | Yes      | a widget type, a list of types separated by commas, or `Common` |         | The widgets the includables are for | <BloggerSource kind="observed" /> |
+
+Write `type` as plain text. Whether `expr:type` has any effect is not confirmed.
+
+### A single type
+
+A [widget type](../widget-types/index.mdx), written as in the `type` of a `<b:widget>`, with the same case: `Blog`, `Label`, `PopularPosts`. Another name, or a known one in another case, is refused: `Default Markup tag contained unknown widget type: label`. Without `type`, Blogger refuses with `Default Markup tags must specify the widget type ('type' attribute) value`. <BloggerSource kind="observed" />
+
+```xml
+<b:defaultmarkup type='Label'>…</b:defaultmarkup>
+```
+
+### A list of types
+
+Several types separated by commas. The includables are given to the widgets of every type in the list. Blogger's own themes write the list without spaces. Spaces around the commas are accepted, `'Label, Blog'`, but an empty part is not: `'Common,'` is refused with `Default Markup tag contained unknown widget type: `. <BloggerSource kind="observed" />
+
+```xml
+<b:defaultmarkup type='Blog,FeaturedPost,PopularPosts'>…</b:defaultmarkup>
+```
+
+Blog, FeaturedPost and PopularPosts widgets all render posts, and have built-in includables of the same names, such as `postLabels` or `headerByline`. One list changes them in all three. A type can be in a single default markup and in lists at the same time, but must not get the same includable id twice.
+
+### The Common type
+
+`type='Common'` holds includables that are not tied to a type. They can be included from any widget, and from the `<head>` and `<body>` of the theme. It is also where a theme replaces Blogger's built-in Common includables. See [Common](#common).
+
+### All
+
+Whether Blogger accepts a type such as `All`, for every type at once, is not confirmed, and no theme uses one. Use a list of types.
+
+## Common
+
+The includables of `<b:defaultmarkup type='Common'>` are shared by the whole theme: <BloggerSource kind="observed" />
+
+- They can be included from any widget, and outside widgets, in `<head>` and `<body>`.
+- A new id creates a new includable, available everywhere.
+- An id that is the id of one of Blogger's [Common includables](./includables.mdx#common-includables), such as `widget-title`, replaces it everywhere. `super.` then calls Blogger's original. A Common `reportAbuse` even replaces the `main` of the ReportAbuse widget, and can be included outside widgets.
+- The id of a universal includable, such as `all-head-content`, is ignored: the include still renders Blogger's.
+- In a widget, the widget's own includable wins over the default markup of its type, which wins over Common.
+- They are not copied into widgets: a change to a Common includable applies at once to every place that includes it.
+
+```xml
+<b:defaultmarkups>
+  <b:defaultmarkup type='Common'>
+    <b:includable id='theme:meta'>
+      <meta content='width=device-width, initial-scale=1' name='viewport'/>
+      <b:if cond='data:view.description'>
+        <meta expr:content='data:view.description.escaped' name='description'/>
+      </b:if>
+    </b:includable>
+  </b:defaultmarkup>
+</b:defaultmarkups>
+<head>
+  <b:include data='blog' name='all-head-content'/>
+  <b:include name='theme:meta'/>
+</head>
+```
+
+### Data in a Common includable
+
+A Common includable always sees the global data: `data:blog`, `data:view`, `data:widgets`, `data:messages`. The data of a widget, `data:title`, `data:posts`, `data:widget`, only exists when it is included from a widget, and it is then the data of that widget. <BloggerSource kind="observed" />
+
+One includable can therefore serve every widget, and tell them apart with [`data:widget`](./widgets.mdx#datawidget). A theme can show a notice in widgets of the types it does not style, with the place and the id of the widget, so the owner knows which one to remove:
+
+```xml
+<b:includable id='Group.widgetNotSupportedMessage'>
+  <p class='note'>
+    [<data:widget.sectionId/>.<data:widget.instanceId/>] This theme does not support <data:widget.type/> widgets.
+    <a expr:href='"https://www.blogger.com/blog/layout/" + data:blog.blogId' target='_blank'>Open the Layout</a> to remove it.
+  </p>
+</b:includable>
+```
+
+### The whole theme in Common includables
+
+A Common includable can hold anything, sections included. Some themes keep their entire page in a few of them, and the rest of the theme only decides which ones to include: <BloggerSource kind="observed" />
+
+```xml
+<b:defaultmarkups>
+  <b:defaultmarkup type='Common'>
+    <b:includable id='theme:head'>…</b:includable>
+    <b:includable id='theme:body'>
+      <header>…</header>
+      <main>
+        <b:section id='theme_section_main' name='Main' showaddelement='true'>…</b:section>
+      </main>
+    </b:includable>
+    <b:includable id='theme:skin'>
+      <b:skin><![CDATA[…]]></b:skin>
+      <b:template-skin><![CDATA[…]]></b:template-skin>
+    </b:includable>
+  </b:defaultmarkup>
+</b:defaultmarkups>
+<b:if cond='data:view.isLayoutMode'>
+  <head>
+    <b:include name='theme:skin'/>
+  </head>
+  <body>
+    <b:include name='theme:head'/>
+    <b:include name='theme:body'/>
+  </body>
+<b:else/>
+  …
+</b:if>
+```
+
+Whether a `<b:skin>` inside a Common includable is read as the theme's skin is not confirmed.
+
+In the Layout editor this renders the sections of the head and of the body inside `<body>`, so the owner can edit all of them. On the blog the same includables build the page another way. The widgets of `theme:head` are described in [Sections that render no wrapper](./sections.mdx#sections-that-render-no-wrapper).
+
+## In Blogger's own themes
+
+Every version 3 theme of Blogger has a Common default markup, and default markups for the post widgets (`Blog`, `FeaturedPost`, `PopularPosts` and lists of them), `AdSense,Blog`, `BlogArchive`, `BlogSearch`, `Header`, `Label`, `PageList` and `Profile`. <BloggerSource kind="observed" />
+
+Most of their includables change a detail and call `super.` for the rest: a class around the header title, a `<details>` around the labels, labels hidden on the homepage. Some are empty, to remove a part of Blogger's markup. Their Common default markups are short, often only a version of `widgetNotAvailableInPreview`; one of them keeps the whole markup of a post in Common includables, so its three post widgets render posts the same way. <BloggerSource kind="observed" />
+
+## Patterns
+
+### One markup for every widget of a type
+
+Keep the markup of a type in a Common includable, and give the type a default markup whose `main` only includes it. Replace Blogger's other built-in includables of the type with empty ones, so nothing of Blogger's markup is left in the widget: <BloggerSource kind="observed" />
+
+```xml {13-15}
+<b:defaultmarkups>
+  <b:defaultmarkup type='Common'>
+    <b:includable id='LinkList.main'>
+      <b:include cond='data:title not contains "[NoTitle]"' name='widget-title'/>
+      <ul class='link-list'>
+        <b:loop values='data:links' var='link'>
+          <li><a expr:href='data:link.target'><data:link.name/></a></li>
+        </b:loop>
+      </ul>
+    </b:includable>
+  </b:defaultmarkup>
+  <b:defaultmarkup type='LinkList'>
+    <b:includable id='main'>
+      <b:include name='LinkList.main'/>
+    </b:includable>
+    <b:includable id='content'/>
+  </b:defaultmarkup>
+</b:defaultmarkups>
+```
+
+Every LinkList widget then holds a two-line `main`, and the markup lives in one place. A change to `LinkList.main` reaches the widgets added before it as well as the new ones, because they all include it.
+
+The built-in includables of each type, to replace with empty ones, are listed on the page of the type in [Widget types](../widget-types/index.mdx). A Blog widget has more than sixty.
+
+### A notice for unsupported widgets
+
+A theme that only styles some types can still give the others a default markup, which renders a notice instead of Blogger's markup. For example, a theme can do it for ContactForm, Translate, Stats, Subscribe, BlogList, Feed, Wikipedia, ReportAbuse and BloggerButton widgets added from the Layout editor: <BloggerSource kind="observed" />
+
+```xml
+<b:defaultmarkup type='Stats'>
+  <b:includable id='main'>
+    <b:include name='Group.widgetNotSupportedMessage'/>
+  </b:includable>
+  <b:includable id='content'/>
+</b:defaultmarkup>
+```
+
+`Group.widgetNotSupportedMessage` is the Common includable shown in [Data in a Common includable](#data-in-a-common-includable).
+
+### Changing the post widgets together
+
+Use a list type to change an includable of the Blog, FeaturedPost and PopularPosts widgets at once, and test `data:widget.type` inside it when one of them must differ. Here only the Blog widget keeps Blogger's share buttons:
+
+```xml {3}
+<b:defaultmarkup type='Blog,FeaturedPost,PopularPosts'>
+  <b:includable id='postShareButtons'>
+    <b:if cond='data:widget.type == "Blog"'>
+      <b:include name='super.postShareButtons'/>
+    </b:if>
+  </b:includable>
+</b:defaultmarkup>
+```
+
+### Shared components
+
+Put the markup used in many places, icons, images, cards, breadcrumbs, in `Common` and include it with a map as options. See [Includables as components](./includables.mdx#includables-as-components).
