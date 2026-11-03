@@ -3,7 +3,7 @@ import { renderPage } from '@/lib/agents/llms';
 import { getPages, type Page } from '@/lib/content/pages';
 import { docsContentRoute, getPageMarkdownUrl } from '@/lib/routes';
 
-/** `/llms.mdx/docs/blogger-xml/tags/loops/content.md` */
+/** `/llms.mdx/docs/theme-xml/tags/loops/content.md` */
 export const getStaticPaths = (async () => {
 	const pages = await getPages();
 	return [...pages].map(([slug, page]) => ({

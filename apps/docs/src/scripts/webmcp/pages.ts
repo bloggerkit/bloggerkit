@@ -5,7 +5,7 @@ import { base, cleanUrl } from '../pagefind';
 const docs = `${base}${docsRoute}`;
 
 /**
- * Normalizes a path or same-origin URL to a docs path without hash or query: `/docs/blogger-xml/tags/loops`.
+ * Normalizes a path or same-origin URL to a docs path without hash or query: `/docs/theme-xml/tags/loops`.
  * Defaults to the current page; throws for anything outside `/docs`.
  */
 export function docsPath(value: unknown): string {

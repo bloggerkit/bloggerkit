@@ -158,7 +158,7 @@ function wire({
 		),
 	);
 	let section: string | undefined;
-	/** A topic id, e.g. `blogger-xml/tags`. */
+	/** A topic id, e.g. `theme-xml/tags`. */
 	let topic: string | undefined;
 	/** The page section the filters were last scoped to, see `open()`. */
 	let scopedTo: string | undefined;

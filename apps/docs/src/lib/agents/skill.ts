@@ -41,7 +41,7 @@ ${sections.join('\n')}
 ## Finding a page
 
 1. Read the index, ${url(resources.llms)}: every section, folder and page, with its URL and a one-line description. Pick the pages that match the question.
-2. Read a page as Markdown: its URL with \`${docsRoute}\` replaced by \`${docsContentRoute}\`, and \`/content.md\` added. ${url(getPageUrl('blogger-xml/tags/loops'))} is ${url(getPageMarkdownUrl('blogger-xml/tags/loops'))}. A folder, such as ${url(getPageUrl('blogger-xml/tags'))}, has no Markdown: its pages are in the index.
+2. Read a page as Markdown: its URL with \`${docsRoute}\` replaced by \`${docsContentRoute}\`, and \`/content.md\` added. ${url(getPageUrl('theme-xml/tags/loops'))} is ${url(getPageMarkdownUrl('theme-xml/tags/loops'))}. A folder, such as ${url(getPageUrl('theme-xml/tags'))}, has no Markdown: its pages are in the index.
 3. For a broad question, ${url(resources.llmsFull)} holds every page in one file. It is large: prefer the pages you need.
 
 In a browser with WebMCP, the pages of the site register tools that do the same: ${webMcpToolNames.map((name) => `\`${name}\``).join(', ')}. \`search_docs\` searches the full text, \`read_page\` returns the Markdown of a page and \`get_code_examples\` its code blocks.

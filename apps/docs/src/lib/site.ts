@@ -35,7 +35,7 @@ const gitConfig = {
 	projectDir: 'apps/docs',
 };
 export const githubUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
-/** `file` is relative to `src/content/docs`, e.g. `blogger-xml/tags/loops.mdx`. */
+/** `file` is relative to `src/content/docs`, e.g. `theme-xml/tags/loops.mdx`. */
 export function getSourceUrl(file: string): string {
 	return `${githubUrl}/blob/${gitConfig.branch}/${gitConfig.projectDir}/${contentDir}/${file}`;
 }
