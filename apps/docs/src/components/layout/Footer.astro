@@ -10,6 +10,7 @@ import {
 	author,
 	copyrightSince,
 	githubUrl,
+	license,
 	publisher,
 } from '@/lib/site';
 import type { NavLink } from '@/lib/types';
@@ -102,12 +103,23 @@ const pill =
 				>
 					{author.name}
 				</a>
-				{' '}<span class={separator}>•</span>{' '}
+				{' '}and contributors{' '}<span class={separator}>•</span>{' '}
 				{/* Narrow screens break at a separator, not inside a name */}
 				<span class="whitespace-nowrap">
 					Made by{' '}
 					<a href={publisher.url} rel="noreferrer noopener" target="_blank" class="text-foreground no-underline hover:underline">
 						{publisher.name}
+					</a>
+				</span>
+				{' '}<span class={separator}>•</span>{' '}
+				<span class="whitespace-nowrap">
+					Text{' '}
+					<a href={license.text.url} rel="license noreferrer noopener" target="_blank" class="text-foreground no-underline hover:underline">
+						{license.text.name}
+					</a>
+					{', code '}
+					<a href={license.code.url} rel="noreferrer noopener" target="_blank" class="text-foreground no-underline hover:underline">
+						{license.code.name}
 					</a>
 				</span>
 			</p>

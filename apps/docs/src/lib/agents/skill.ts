@@ -7,6 +7,7 @@ import {
 } from '../routes';
 import { appName, site } from '../site';
 import { BLOGGER_SOURCES } from '../ui/blogger-sources';
+import { licenseNote } from './license-note';
 import { webMcpToolNames } from './webmcp';
 
 /** Also the folder under `/skills/`. Agent Skills allow only lowercase letters and hyphens. */
@@ -55,5 +56,6 @@ ${[...BLOGGER_SOURCES.values()]
   Say so when an answer rests on observed behavior, and do not recommend what is deprecated.
 - Theme XML in the examples puts single quotes around attributes that hold expressions, as in \`<b:if cond='data:view.isPost'>\`; keep them when adapting an example.
 - Link the pages you used, by their URL under ${url(docsRoute)}, so the reader can check them.
+- ${licenseNote}
 `;
 }

@@ -35,6 +35,21 @@ const gitConfig = {
 	projectDir: 'apps/docs',
 };
 export const githubUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
+/** As in `LICENSE.md`. */
+export const copyrightNotice = `Copyright (c) ${copyrightSince}-present ${author.name} (${publisher.name}) and ${appName} contributors`;
+
+/** The text of the docs is under `text`; the code examples and the site source under `code`. See `LICENSE.md`. */
+export const license = {
+	text: {
+		name: 'CC BY 4.0',
+		url: 'https://creativecommons.org/licenses/by/4.0/',
+	},
+	code: {
+		name: 'MIT',
+		url: `${githubUrl}/blob/${gitConfig.branch}/${gitConfig.projectDir}/LICENSE.md`,
+	},
+};
+
 /** `file` is relative to `src/content/docs`, e.g. `theme-xml/tags/loops.mdx`. */
 export function getSourceUrl(file: string): string {
 	return `${githubUrl}/blob/${gitConfig.branch}/${gitConfig.projectDir}/${contentDir}/${file}`;

@@ -94,7 +94,7 @@ describe('cli', () => {
 			assert.strictEqual(version.code, 0);
 			assert.match(
 				version.output,
-				/^\n {2}blogger-hbs v\d+\.\d+\.\d+\n─+\nCopyright \(c\) 2026-present Deo Kumar <https:\/\/github\.com\/kumardeo>\nReleased under the MIT License, provided as is, without warranty\.\nhttps:\/\/github\.com\/bloggerkit\/bloggerkit\n\nNode\.js v[\d.]+ on [\w-]+\n$/,
+				/^\n {2}blogger-hbs v\d+\.\d+\.\d+\n─+\nCopyright \(c\) 2026-present Deo Kumar <https:\/\/github\.com\/kumardeo> \(Fineshop Design <https:\/\/fineshopdesign\.com>\) and Blogger Kit contributors <https:\/\/github\.com\/bloggerkit\/bloggerkit>\nReleased under the MIT License, provided as is, without warranty\.\nhttps:\/\/github\.com\/bloggerkit\/bloggerkit\n\nNode\.js v[\d.]+ on [\w-]+\n$/,
 			);
 		}
 	});

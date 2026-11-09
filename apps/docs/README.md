@@ -61,7 +61,7 @@ level: beginner
 | `updated`       | no       | When the facts or examples change, not for typos. Must be later than `published`                                       |
 | `authors`       | no       | GitHub usernames, or `{ name, github, url }` objects, see below. Add yourself when you write or largely rewrite a page |
 | `level`         | no       | `beginner`, `intermediate` or `advanced`                                                                               |
-| `prerequisites` | no       | Slugs of pages to read first, `theme-xml/tags/loops`                                                                 |
+| `prerequisites` | no       | Slugs of pages to read first, `theme-xml/tags/loops`                                                                   |
 | `icon`          | no       | A Lucide name, for pages at the top of a section's sidebar                                                             |
 
 An author needs a `name`, a `github` username, or both. The GitHub username gives the photo, and the name when `name` is left out. The name links to `url`, or to the GitHub profile without one:
@@ -163,3 +163,12 @@ body {
 
 </CodeTabs>
 ````
+
+## License
+
+Copyright (c) 2026-present [Deo Kumar](https://github.com/kumardeo) ([Fineshop Design](https://fineshopdesign.com)) and [Blogger Kit contributors](https://github.com/bloggerkit/bloggerkit).
+
+- The text of the docs, the pages in `src/content/docs` and the files made from them, is under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): you may share and adapt it, with credit to Blogger Kit and a link.
+- The code examples in the docs and the source of the site are under the MIT License.
+
+By contributing, you license your text under CC BY 4.0 and your code under the MIT License. See [LICENSE.md](./LICENSE.md).

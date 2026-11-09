@@ -5,7 +5,7 @@ import { normalizePath, resources, siteImageUrl } from '@/lib/routes';
 import { HEIGHT, WIDTH } from '@/lib/seo/og';
 import { buildStructuredData } from '@/lib/seo/structured-data';
 import { getPageHeading, getPageTitle } from '@/lib/seo/title';
-import { appDescription, appName, appTagline, site } from '@/lib/site';
+import { appDescription, appName, appTagline, license, site } from '@/lib/site';
 import type { NavLink, PageAuthor, PageLink } from '@/lib/types';
 import type { Level } from '@/lib/ui/levels';
 
@@ -121,5 +121,6 @@ const jsonLd = buildStructuredData({
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 {markdownUrl && <link rel="alternate" type="text/markdown" href={markdownUrl} title="Markdown" />}
 <link rel="sitemap" href={resources.sitemap} />
+<link rel="license" href={license.text.url} />
 <link rel="ard" href={ardPath} type="application/json" />
 <script type="application/ld+json" set:html={jsonLd} />

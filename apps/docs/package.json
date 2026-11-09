@@ -1,6 +1,7 @@
 {
   "name": "@bloggerkit/docs",
   "private": true,
+  "license": "MIT AND CC-BY-4.0",
   "type": "module",
   "scripts": {
     "dev": "astro dev",

@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026-present Deo Kumar <https://github.com/kumardeo>
+Copyright (c) 2026-present Deo Kumar <https://github.com/kumardeo> (Fineshop Design <https://fineshopdesign.com>) and Blogger Kit contributors <https://github.com/bloggerkit/bloggerkit>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

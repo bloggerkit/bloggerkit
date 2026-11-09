@@ -39,3 +39,7 @@ A plugin that allows you to use modern frontend frameworks inside a Blogger temp
 Blogger Kit is an independent, community-developed project providing tools and utilities for working with Blogger and developing Blogger themes. It is **not affiliated with, endorsed by, sponsored by, or otherwise associated with Google LLC or Blogger**.
 
 "Blogger" and related names are trademarks of Google LLC.
+
+## License
+
+There is no license for the repository as a whole. Each package, and the docs in [apps/docs](./apps/docs), has its own license: read the `LICENSE.md` in its folder.

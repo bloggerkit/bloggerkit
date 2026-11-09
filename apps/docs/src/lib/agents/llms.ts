@@ -16,6 +16,7 @@ import {
 } from '../routes';
 import { appDescription, appName, site } from '../site';
 import { BLOGGER_SOURCES } from '../ui/blogger-sources';
+import { licenseNote } from './license-note';
 
 const absolute = (path: string) => new URL(path, site).href;
 
@@ -199,6 +200,8 @@ export async function renderIndex(): Promise<string> {
 
 Every page is linked below as Markdown: a page's URL with \`.md\` added. A fact on a page can be marked with its source: ${sourceNote}.
 
+${licenseNote}
+
 ${sections.join('\n\n')}
 
 ## Optional
@@ -221,7 +224,7 @@ export async function renderFull(): Promise<string> {
 
 > ${appDescription}
 
-The index of these pages is [llms.txt](${absolute(resources.llms)}).
+The index of these pages is [llms.txt](${absolute(resources.llms)}). ${licenseNote}
 
 ${body.join('\n')}`;
 }

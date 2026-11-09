@@ -1,4 +1,11 @@
-import { appDescription, appName, author, publisher } from '../site';
+import {
+	appDescription,
+	appName,
+	author,
+	copyrightNotice,
+	license,
+	publisher,
+} from '../site';
 import type { Author, NavLink, PageLink } from '../types';
 import { LEVELS, type Level } from '../ui/levels';
 
@@ -92,6 +99,8 @@ export function buildStructuredData({
 		author: { '@id': person['@id'] },
 		publisher: { '@id': organization['@id'] },
 		copyrightHolder: { '@id': person['@id'] },
+		copyrightNotice,
+		license: license.text.url,
 	};
 	const graph: Record<string, unknown>[] = [website, person, organization];
 	if (describePage) {
@@ -111,6 +120,7 @@ export function buildStructuredData({
 			isPartOf: { '@id': website['@id'] },
 			about: blogger,
 			isAccessibleForFree: true,
+			license: license.text.url,
 			// The site author is referenced by `@id`; others are inlined
 			author: (authors ?? [author]).map((who) =>
 				who === author
