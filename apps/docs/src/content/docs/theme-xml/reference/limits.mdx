@@ -2,6 +2,7 @@
 title: Limits
 description: The limits of the theme language and of the data, from the size of an expression to the number of widgets of a type, and the limits that are not confirmed.
 published: 2026-10-26
+updated: 2026-11-10
 ---
 
 Google documents few limits of the theme language. This page collects the ones that are known, each with its source, and lists the ones that are not confirmed.
@@ -152,11 +153,15 @@ The bounds of a `length` variable are set by the theme with `min` and `max`, and
 
 A theme is one XML file. Blogger stores nothing else for it: scripts, stylesheets and fonts come from absolute URLs on another host. Images can be uploaded through a widget, such as an Image widget, which gives them a Blogger URL. <BloggerSource kind="observed" />
 
+### Theme file
+
+A theme may be at most **2,000,000 bytes**. A larger file is refused when saved: `The blog's theme is too large. It has a size of N bytes, but the largest allowed size is 2000000 bytes.` The N in the message is 12 or 13 bytes less than the size of the file sent, so a file of 1,999,872 bytes saves and one of 2,000,896 is refused. See [Size](../basics/saving.mdx#size). <BloggerSource kind="observed" />
+
 ## Limits not confirmed
 
 No limit is confirmed for:
 
-- the size of the theme file, of a skin, or of the content of an HTML widget;
+- the size of a skin, or of the content of an HTML widget, other than the limit of the [theme file](#theme-file);
 - the number of sections, includables or widgets in a theme;
 - the number of skin variables;
 - the length of an attribute value.

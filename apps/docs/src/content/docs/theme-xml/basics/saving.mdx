@@ -3,6 +3,7 @@ title: Saving a theme
 description: What Blogger checks when a theme is saved, the mistakes that make it refuse the file, the ones that fail later, and how it rewrites the theme it keeps.
 level: beginner
 published: 2026-10-26
+updated: 2026-11-10
 ---
 
 Clicking **Save** in Edit HTML sends the whole theme to Blogger. Blogger parses it, checks part of it, and then does one of two things:
@@ -19,6 +20,7 @@ This page lists what is refused, what is saved but deleted, and what saves but f
 | Check                                                           | In short                                                             |
 | --------------------------------------------------------------- | -------------------------------------------------------------------- |
 | [Declaration and doctype](#the-xml-declaration-and-the-doctype) | The declaration first, an uppercase `<!DOCTYPE`, both optional       |
+| [Size](#size)                                                   | At most 2,000,000 bytes                                              |
 | [Well-formed XML](#well-formed-xml)                             | Closed tags, quoted attribute values, escaped `&` and `<`            |
 | [Entities](#entities)                                           | Five named entities and numeric references, nothing else             |
 | [The root element](#the-root-element)                           | Its `b:` attributes are not checked                                  |
@@ -59,6 +61,10 @@ Both are optional. A theme without the declaration saves, and Blogger adds it ba
 The values are not checked. `version="1.1"`, `encoding="ISO-8859-1"`, `encoding="utf-8"`, no encoding, `standalone="yes"` and single quotes all save, and the declaration is always stored as `<?xml version="1.0" encoding="UTF-8" ?>`. The doctype's root name is not checked either: `<!DOCTYPE foo>` saves and is stored as `<!DOCTYPE html>`, and a public or system identifier is dropped. A doctype after a blank line, or on the same line as the declaration, saves too. See [Declaration and doctype](#declaration-and-doctype). <BloggerSource kind="observed" />
 
 A refused declaration or doctype shows the parser's message, with a line and a column, such as `org.xml.sax.SAXParseException; lineNumber: 1; columnNumber: 1; Content is not allowed in prolog.` for a byte order mark, or `The markup in the document preceding the root element must be well-formed.` for `<!doctype html>`. <BloggerSource kind="observed" />
+
+### Size
+
+A theme over 2,000,000 bytes is refused: `The blog's theme is too large. It has a size of N bytes, but the largest allowed size is 2000000 bytes.` Blogger counts 12 or 13 bytes fewer than the file has, so stay a little under the limit rather than aiming at it exactly. See [Theme file](../reference/limits.mdx#theme-file). <BloggerSource kind="observed" />
 
 ### Well-formed XML
 
